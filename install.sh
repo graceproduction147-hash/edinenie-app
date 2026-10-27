@@ -17,8 +17,13 @@ apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip caddy sqlite3 curl ufw
 
 say "Копирую приложение в $APP_DIR"
-mkdir -p "$APP_DIR"
-if [ "$SRC_DIR" != "$APP_DIR" ]; then cp -r "$SRC_DIR"/. "$APP_DIR"/; fi
+mkdir -p "$APP_DIR/app" "$APP_DIR/static"
+# файлы могут лежать в папках app/ и static/ или все вместе в корне репозитория
+place() { local src="$1"
+  for f in "$src"/*.py; do [ -e "$f" ] && cp "$f" "$APP_DIR/app/"; done
+  for f in "$src"/*.html "$src"/*.js "$src"/*.css; do [ -e "$f" ] && cp "$f" "$APP_DIR/static/"; done; return 0; }
+place "$SRC_DIR"; [ -d "$SRC_DIR/app" ] && place "$SRC_DIR/app"; [ -d "$SRC_DIR/static" ] && place "$SRC_DIR/static"
+cp "$SRC_DIR/requirements.txt" "$APP_DIR/"
 id -u edinenie >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin edinenie
 mkdir -p "$APP_DIR/data/uploads" "$APP_DIR/backups"
 
