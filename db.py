@@ -107,6 +107,9 @@ def connect():
 def init():
     con = connect()
     con.executescript(SCHEMA)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(members)")}
+    if "role" not in cols:  # команда клуба: вход по секретной ссылке
+        con.execute("ALTER TABLE members ADD COLUMN role TEXT DEFAULT ''")
     if not con.execute("SELECT 1 FROM point_rules LIMIT 1").fetchone():
         con.executemany("INSERT INTO point_rules(code,title,hint,points,kind,sort) VALUES(?,?,?,?,?,?)", RULES)
     if not con.execute("SELECT 1 FROM shop LIMIT 1").fetchone():
@@ -146,3 +149,17 @@ def get_setting(con, key, default=None):
 
 def set_setting(con, key, value):
     con.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+
+
+def team_ids(con):
+    return [r[0] for r in con.execute("SELECT tg_id FROM members WHERE role='team'")]
+
+
+def team_code(con, regenerate=False):
+    import secrets
+    code = get_setting(con, "team_code")
+    if regenerate or not code:
+        code = secrets.token_urlsafe(12).replace("-", "a").replace("_", "b")
+        set_setting(con, "team_code", code)
+        con.commit()
+    return code

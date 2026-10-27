@@ -64,7 +64,13 @@ async def send(chat_id, text, button=None, token=None):
 
 async def notify_team(text):
     """Сообщение менеджерам от team-бота."""
-    for chat in MANAGER_CHAT_IDS:
+    from . import db
+    con = db.connect()
+    try:
+        chats = set(MANAGER_CHAT_IDS) | set(db.team_ids(con))
+    finally:
+        con.close()
+    for chat in chats:
         await send(chat, text, token=TEAM_BOT_TOKEN or BOT_TOKEN)
 
 

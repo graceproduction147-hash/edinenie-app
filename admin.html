@@ -74,6 +74,11 @@ a{color:var(--accent)}
 
     <section id="t-today" class="list">
       <div class="grid" id="kpis"></div>
+      <div class="card"><h2>Команда клуба</h2>
+        <p class="muted">Кто откроет эту ссылку в Telegram, станет частью команды: приложение откроется без оплаты, придут уведомления об оплатах и баллах. Отправляйте ее только своим.</p>
+        <div class="actions"><input id="teamLink" readonly style="max-width:520px"><button class="btn primary" id="teamCopy">Скопировать</button><button class="btn" id="teamRegen">Сменить ссылку</button></div>
+        <p class="muted" style="font-size:12.5px">«Сменить ссылку» отключает старую. Те, кто уже в команде, остаются.</p>
+        <div class="list" id="teamList" style="margin-top:8px"></div></div>
       <div class="card"><h2>Random Coffee</h2><p class="muted" id="coffeeInfo"></p>
         <button class="btn primary" id="runCoffee">Составить пары сейчас</button>
         <p class="muted" style="font-size:12.5px">Обычно пары составляются сами в понедельник в 10:00. Кнопка нужна, если хотите запустить раньше.</p></div>
@@ -143,7 +148,7 @@ async function api(p,o={}){const h={"Authorization":"Bearer "+TOKEN};if(o.json!=
   if(r.status===401){TOKEN="";sessionStorage.removeItem("t");$("#app").hidden=true;$("#login").hidden=false;throw new Error("Войдите снова")}
   const d=await r.json().catch(()=>null);if(!r.ok)throw new Error((d&&d.detail)||"Ошибка");return d}
 $("#lGo").onclick=async()=>{try{const r=await fetch("/admin/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("#lPass").value,name:$("#lName").value})});
-  const d=await r.json();if(!r.ok)throw new Error(d.detail);TOKEN=d.token;sessionStorage.setItem("t",TOKEN);open()}catch(e){toast(e.message)}};
+  const d=await r.json().catch(()=>({detail:"Сервер не ответил, попробуйте еще раз"}));if(!r.ok)throw new Error(d.detail||"Не получилось войти");TOKEN=d.token;sessionStorage.setItem("t",TOKEN);open()}catch(e){toast(e.message)}};
 $("#lPass").onkeydown=e=>{if(e.key==="Enter")$("#lGo").click()};
 function tab(t){$$("#nav button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.t===t));$$("section[id^=t-]").forEach(s=>s.hidden=s.id!=="t-"+t);
   ({today:loadToday,claims:()=>loadClaims("pending"),members:loadMembers,events:loadEvents,payments:loadPayments}[t]||(()=>{}))()}
@@ -152,7 +157,12 @@ const name=m=>esc([m.first_name,m.last_name].filter(Boolean).join(" ")||"Без 
 const tgLink=m=>m.username?`<a href="https://t.me/${esc(m.username)}" target="_blank" rel="noopener">@${esc(m.username)}</a>`:`<span class="muted">id ${m.tg_id}</span>`;
 const dt=s=>s?new Date(s).toLocaleString("ru-RU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",timeZone:"Europe/Moscow"}):"";
 
-async function loadToday(){const o=await api("/admin/api/overview");
+async function loadTeam(){const t=await api("/admin/api/team");$("#teamLink").value=t.link;
+  $("#teamList").innerHTML=t.people.map(p=>`<div class="actions" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:8px"><span><b>${name(p)}</b> ${tgLink(p)}</span><button class="btn bad" data-rm="${p.tg_id}">Убрать из команды</button></div>`).join("")||'<p class="muted">По ссылке пока никто не заходил.</p>';
+  $$("[data-rm]").forEach(b=>b.onclick=async()=>{await api("/admin/api/team/"+b.dataset.rm,{method:"DELETE"});toast("Убрано из команды");loadTeam()})}
+$("#teamCopy").onclick=()=>{const v=$("#teamLink").value;try{navigator.clipboard.writeText(v).then(()=>toast("Ссылка скопирована")).catch(()=>{$("#teamLink").select()})}catch(e){$("#teamLink").select()}};
+$("#teamRegen").onclick=async()=>{const r=await api("/admin/api/team/regenerate",{method:"POST"});$("#teamLink").value=r.link;toast("Новая ссылка готова, старая больше не работает")};
+async function loadToday(){loadTeam();const o=await api("/admin/api/overview");
   $("#kpis").innerHTML=[["members","Активных участников"],["inside","Из них Inside"],["no_profile","Без анкеты",1],["pending_claims","Баллы ждут решения",1],["matches","Взаимных знакомств"],["coffee_pairs","Пар Random Coffee на неделе"]]
     .map(([k,l,attn])=>`<div class="card kpi${attn&&o[k]?" attn":""}"><b>${o[k]}</b><span>${l}</span></div>`).join("");
   $("#coffeeInfo").textContent=`Неделя ${o.coffee_week.split("-W")[1]}: ${o.coffee_pairs?`составлено пар: ${o.coffee_pairs}`:"пары еще не составлены"}.`}

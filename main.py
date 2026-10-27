@@ -60,9 +60,13 @@ def upsert_member(con, u, **extra):
     return tg_id
 
 
+def is_team(m):
+    return m["tg_id"] in ADMIN_IDS or (m.get("role") or "") == "team"
+
+
 def refresh_status(con, m):
-    """Подписка закончилась — статус expired. Админы всегда активны."""
-    if m["tg_id"] in ADMIN_IDS:
+    """Подписка закончилась — статус expired. Команда клуба всегда активна."""
+    if is_team(m):
         return "active"
     if m["status"] == "active" and m["paid_until"]:
         try:
@@ -95,7 +99,7 @@ def member(m=Depends(current_user)):
 
 
 def is_inside(m):
-    return m["level"] == "inside" or m["tg_id"] in ADMIN_IDS
+    return m["level"] == "inside" or is_team(m)
 
 
 def public_card(m):
@@ -110,7 +114,7 @@ def me(m=Depends(current_user), con=Depends(get_con)):
         "coffee": con.execute("SELECT COUNT(*) FROM coffee_pairs WHERE (a=? AND met_a=1) OR (b=? AND met_b=1)", (m["tg_id"], m["tg_id"])).fetchone()[0],
     }
     return {"me": m, "points": db.balance(con, m["tg_id"]), "stats": stats, "join": JOIN_URL,
-            "is_admin": m["tg_id"] in ADMIN_IDS}
+            "is_admin": is_team(m)}
 
 
 @app.put("/api/me")
@@ -408,9 +412,18 @@ async def bot_update(req: Request, con=Depends(get_con)):
         extra = {"bot_started": 1}
         if arg.startswith("ref_") and (not exists or not exists["source"]) and arg[4:] != str(u["id"]):
             extra["source"] = arg
+        joined_team = False
+        if arg.startswith("team_") and secrets.compare_digest(arg[5:].encode(), db.team_code(con).encode()):
+            extra["role"] = "team"
+            joined_team = True
         upsert_member(con, u, **extra)
         m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (u["id"],)).fetchone())
         status = refresh_status(con, m)
+        if joined_team:
+            await tg.send(u["id"], "Вы в команде клуба Единение. Приложение открыто полностью, уведомления об оплатах и заявках на баллы будут приходить от team-бота: нажмите /start в @edinenie_team1_bot.",
+                          tg.app_button("Открыть клуб"))
+            await tg.notify_team(f"В команду клуба добавлен(а) {u.get('first_name') or ''} {'@' + u['username'] if u.get('username') else ''} (id {u['id']}).")
+            return {"ok": True}
         if status == "active":
             await tg.send(u["id"], f"{u.get('first_name') or 'Привет'}, вы в клубе Единение. Здесь знакомства, эфиры, библиотека и ваши баллы.",
                           tg.app_button("Открыть клуб"))
@@ -435,7 +448,7 @@ def admin(authorization: str = Header("")):
 @app.post("/admin/api/login")
 async def admin_login(req: Request):
     data = await req.json()
-    if not ADMIN_PASSWORD or not secrets.compare_digest(data.get("password", ""), ADMIN_PASSWORD):
+    if not ADMIN_PASSWORD or not secrets.compare_digest(str(data.get("password", "")).strip().encode(), ADMIN_PASSWORD.strip().encode()):
         raise HTTPException(401, "Неверный пароль")
     tok = secrets.token_urlsafe(32)
     TOKENS[tok] = data.get("name") or "команда"
@@ -522,6 +535,25 @@ async def admin_event(req: Request, _=Depends(admin), con=Depends(get_con)):
                           (*vals, db.now())).lastrowid
     con.commit()
     return {"id": eid}
+
+
+@app.get("/admin/api/team")
+def admin_team(_=Depends(admin), con=Depends(get_con)):
+    people = db.rows(con.execute("SELECT tg_id, first_name, last_name, username FROM members WHERE role='team' ORDER BY updated_at"))
+    return {"link": f"https://t.me/edinenie_club_bot?start=team_{db.team_code(con)}", "people": people,
+            "fixed": ADMIN_IDS}
+
+
+@app.post("/admin/api/team/regenerate")
+def admin_team_regen(_=Depends(admin), con=Depends(get_con)):
+    return {"link": f"https://t.me/edinenie_club_bot?start=team_{db.team_code(con, regenerate=True)}"}
+
+
+@app.delete("/admin/api/team/{tg_id}")
+def admin_team_remove(tg_id: int, _=Depends(admin), con=Depends(get_con)):
+    con.execute("UPDATE members SET role='' WHERE tg_id=?", (tg_id,))
+    con.commit()
+    return {"ok": True}
 
 
 @app.get("/admin/api/events-list")
