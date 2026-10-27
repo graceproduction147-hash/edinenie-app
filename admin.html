@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Единение · Кабинет</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#F6F5F8;--card:#fff;--fg:#1C1A22;--muted:#75707F;--line:#E7E4EC;--accent:#7A5FA0;--accent-soft:#F0EBF6;--ok:#3E8E68;--bad:#B5536A;--warn:#B8873A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14.5px/1.5 Manrope,system-ui,sans-serif}
+[hidden]{display:none!important}
+.wrap{max-width:1100px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left,0px)) 60px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+h2{margin:0 0 12px;font-size:17px;font-weight:700}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button,.btn{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:8px 14px;font:600 13px Manrope,sans-serif;cursor:pointer}
+nav button[aria-pressed=true]{background:var(--fg);color:#fff;border-color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.bad{color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kpi b{display:block;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi span{color:var(--muted);font-size:13px}
+.kpi.attn{border-color:var(--warn);background:#FFF9EF}
+.list{display:flex;flex-direction:column;gap:10px}
+.claim{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start}
+.claim .meta{color:var(--muted);font-size:13px}
+.claim img{max-width:180px;border-radius:10px;margin-top:8px;display:block}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.actions input{width:70px}
+input,textarea,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px Manrope,sans-serif;background:#fff;color:var(--fg)}
+label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.form .full{grid-column:1/-1}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:#fff}
+table{border-collapse:collapse;width:100%;min-width:900px;font-size:13.5px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#FAF9FC;position:sticky;top:0}
+td select,td input{padding:5px 8px;font-size:13px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.pill.inside{background:#FBF1E6;color:#9A6A2E}.pill.expired,.pill.guest{background:#F4F2F6;color:var(--muted)}
+.muted{color:var(--muted)}
+.login{max-width:360px;margin:12vh auto;display:flex;flex-direction:column;gap:12px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:#fff;padding:10px 16px;border-radius:999px;opacity:0;transition:.2s;pointer-events:none}
+.toast.on{opacity:1}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="login card" id="login">
+    <h1>Кабинет клуба</h1>
+    <p class="muted">Вход для команды Единения.</p>
+    <label>Ваше имя<input id="lName" autocomplete="name"></label>
+    <label>Пароль<input id="lPass" type="password" autocomplete="current-password"></label>
+    <button class="btn primary" id="lGo">Войти</button>
+  </div>
+
+  <div id="app" hidden>
+    <header>
+      <h1>Единение · Кабинет</h1>
+      <nav id="nav">
+        <button data-t="today" aria-pressed="true">Сегодня</button>
+        <button data-t="claims" aria-pressed="false">Баллы</button>
+        <button data-t="members" aria-pressed="false">Участники</button>
+        <button data-t="events" aria-pressed="false">Эфиры</button>
+        <button data-t="library" aria-pressed="false">Библиотека</button>
+        <button data-t="payments" aria-pressed="false">Оплаты</button>
+      </nav>
+    </header>
+
+    <section id="t-today" class="list">
+      <div class="grid" id="kpis"></div>
+      <div class="card"><h2>Random Coffee</h2><p class="muted" id="coffeeInfo"></p>
+        <button class="btn primary" id="runCoffee">Составить пары сейчас</button>
+        <p class="muted" style="font-size:12.5px">Обычно пары составляются сами в понедельник в 10:00. Кнопка нужна, если хотите запустить раньше.</p></div>
+    </section>
+
+    <section id="t-claims" hidden>
+      <div class="actions" style="margin-bottom:12px"><button class="btn" data-cs="pending">На проверке</button><button class="btn" data-cs="approved">Подтвержденные</button><button class="btn" data-cs="rejected">Отклоненные</button></div>
+      <div class="list" id="claims"></div>
+    </section>
+
+    <section id="t-members" hidden>
+      <div class="actions" style="margin-bottom:12px"><input id="mSearch" placeholder="Поиск по имени, городу, сфере" style="max-width:340px">
+        <select id="mFilter" style="max-width:220px"><option value="all">Все</option><option value="active">Активные</option><option value="noprofile">Без анкеты</option><option value="inside">Inside</option><option value="expired">Закончилась оплата</option><option value="guest">Не оплатили</option></select></div>
+      <div class="tablewrap"><table><thead><tr><th>Участник</th><th>Уровень</th><th>Статус</th><th>Город · сфера</th><th>Ищет / может</th><th>Баллы</th><th>Вовлеченность</th><th>Заметка</th></tr></thead><tbody id="members"></tbody></table></div>
+    </section>
+
+    <section id="t-events" hidden class="list">
+      <div class="card"><h2 id="evFormTitle">Новый эфир</h2>
+        <div class="form">
+          <input type="hidden" id="eId">
+          <label class="full">Название<input id="eTitle"></label>
+          <label>Рубрика<input id="eRubric" placeholder="Кейс участника"></label>
+          <label>Спикер<input id="eSpeaker"></label>
+          <label>Дата и время (МСК)<input id="eStart" type="datetime-local"></label>
+          <label>Место<input id="ePlace" value="Zoom"></label>
+          <label>Ссылка на Zoom<input id="eJoin"></label>
+          <label>Только Inside<select id="eInside"><option value="0">Нет</option><option value="1">Да</option></select></label>
+          <label class="full">Описание<textarea id="eDesc" rows="2"></textarea></label>
+          <label>Ссылка на запись<input id="eRec"></label>
+          <label>Ссылка на подкаст<input id="ePod"></label>
+          <label class="full">Главное из эфира (каждая мысль с новой строки)<textarea id="eSum" rows="4"></textarea></label>
+          <label class="full">Таймкоды (каждый с новой строки: 04:10 Тема)<textarea id="eTs" rows="4"></textarea></label>
+        </div>
+        <div class="actions" style="margin-top:12px"><button class="btn primary" id="eSave">Сохранить эфир</button><button class="btn" id="eNew">Очистить</button></div>
+      </div>
+      <div class="list" id="eventsList"></div>
+    </section>
+
+    <section id="t-library" hidden class="list">
+      <div class="card"><h2>Добавить материал</h2>
+        <div class="form">
+          <label>Тип<select id="lType"><option value="note">Конспект</option><option value="rec">Запись эфира</option><option value="pod">Подкаст</option><option value="clip">Нарезка</option><option value="guide">Гайд спикера</option><option value="case">Кейс участника</option></select></label>
+          <label>Автор<input id="lAuthor"></label>
+          <label class="full">Название<input id="lTitle"></label>
+          <label>Подпись (длительность, формат)<input id="lMeta" placeholder="6 мин чтения"></label>
+          <label>Ссылка<input id="lUrl"></label>
+          <label>Только Inside<select id="lInside"><option value="0">Нет</option><option value="1">Да</option></select></label>
+          <label class="full">Текст (если материал читается прямо в приложении)<textarea id="lBody" rows="6"></textarea></label>
+        </div>
+        <button class="btn primary" id="lSave" style="margin-top:12px">Добавить в библиотеку</button>
+      </div>
+    </section>
+
+    <section id="t-payments" hidden>
+      <div class="tablewrap"><table><thead><tr><th>Дата</th><th>Telegram ID</th><th>Событие</th><th>Сумма</th><th>Период</th><th>До</th><th>Подпись</th></tr></thead><tbody id="payments"></tbody></table></div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let TOKEN=sessionStorage.getItem("t")||"";
+let tt;function toast(t){$("#toast").textContent=t;$("#toast").classList.add("on");clearTimeout(tt);tt=setTimeout(()=>$("#toast").classList.remove("on"),2400)}
+async function api(p,o={}){const h={"Authorization":"Bearer "+TOKEN};if(o.json!==undefined){h["Content-Type"]="application/json";o.body=JSON.stringify(o.json)}
+  const r=await fetch(p,{method:o.method||(o.body?"POST":"GET"),headers:h,body:o.body});
+  if(r.status===401){TOKEN="";sessionStorage.removeItem("t");$("#app").hidden=true;$("#login").hidden=false;throw new Error("Войдите снова")}
+  const d=await r.json().catch(()=>null);if(!r.ok)throw new Error((d&&d.detail)||"Ошибка");return d}
+$("#lGo").onclick=async()=>{try{const r=await fetch("/admin/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("#lPass").value,name:$("#lName").value})});
+  const d=await r.json();if(!r.ok)throw new Error(d.detail);TOKEN=d.token;sessionStorage.setItem("t",TOKEN);open()}catch(e){toast(e.message)}};
+$("#lPass").onkeydown=e=>{if(e.key==="Enter")$("#lGo").click()};
+function tab(t){$$("#nav button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.t===t));$$("section[id^=t-]").forEach(s=>s.hidden=s.id!=="t-"+t);
+  ({today:loadToday,claims:()=>loadClaims("pending"),members:loadMembers,events:loadEvents,payments:loadPayments}[t]||(()=>{}))()}
+$$("#nav button").forEach(b=>b.onclick=()=>tab(b.dataset.t));
+const name=m=>esc([m.first_name,m.last_name].filter(Boolean).join(" ")||"Без имени");
+const tgLink=m=>m.username?`<a href="https://t.me/${esc(m.username)}" target="_blank" rel="noopener">@${esc(m.username)}</a>`:`<span class="muted">id ${m.tg_id}</span>`;
+const dt=s=>s?new Date(s).toLocaleString("ru-RU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",timeZone:"Europe/Moscow"}):"";
+
+async function loadToday(){const o=await api("/admin/api/overview");
+  $("#kpis").innerHTML=[["members","Активных участников"],["inside","Из них Inside"],["no_profile","Без анкеты",1],["pending_claims","Баллы ждут решения",1],["matches","Взаимных знакомств"],["coffee_pairs","Пар Random Coffee на неделе"]]
+    .map(([k,l,attn])=>`<div class="card kpi${attn&&o[k]?" attn":""}"><b>${o[k]}</b><span>${l}</span></div>`).join("");
+  $("#coffeeInfo").textContent=`Неделя ${o.coffee_week.split("-W")[1]}: ${o.coffee_pairs?`составлено пар: ${o.coffee_pairs}`:"пары еще не составлены"}.`}
+$("#runCoffee").onclick=async()=>{try{const r=await api("/admin/api/coffee/run",{method:"POST"});toast(r.ok?`Пар: ${r.pairs}, без пары: ${r.left}`:r.note);loadToday()}catch(e){toast(e.message)}};
+
+const RULE={insight:"Инсайт",result:"Результат",thanks:"Благодарность",story:"Сторис",invite:"Приглашение",coffee:"Random Coffee"};
+async function loadClaims(st){$$("[data-cs]").forEach(b=>b.classList.toggle("primary",b.dataset.cs===st));
+  const cs=await api("/admin/api/claims?status="+st);
+  $("#claims").innerHTML=cs.length?cs.map(c=>`<div class="card claim"><div><b>${esc(c.title||RULE[c.rule_code]||c.rule_code)}</b> · ${name(c)} ${c.username?"@"+esc(c.username):""}
+    <div class="meta">${dt(c.created_at)} · ${c.points} баллов</div>${c.text?`<p style="margin:8px 0 0;white-space:pre-wrap">${esc(c.text)}</p>`:""}${c.file?`<img data-file="${esc(c.file)}" alt="Скриншот">`:""}</div>
+    ${st==="pending"?`<div class="actions"><input type="number" value="${c.points}" id="pts${c.id}" aria-label="Баллы"><button class="btn ok" data-ok="${c.id}">Подтвердить</button><button class="btn bad" data-no="${c.id}">Отклонить</button></div>`:""}</div>`).join("")
+    :`<p class="muted">${st==="pending"?"Все заявки разобраны.":"Здесь пусто."}</p>`;
+  $$("[data-file]").forEach(async img=>{try{const r=await fetch("/admin/api/uploads/"+img.dataset.file,{headers:{"Authorization":"Bearer "+TOKEN}});img.src=URL.createObjectURL(await r.blob())}catch(e){}});
+  $$("[data-ok],[data-no]").forEach(b=>b.onclick=async()=>{const id=b.dataset.ok||b.dataset.no;
+    try{await api("/admin/api/claims/"+id,{json:{approve:!!b.dataset.ok,points:Number($("#pts"+id).value)}});toast(b.dataset.ok?"Подтверждено, участник получил уведомление":"Отклонено");loadClaims("pending")}catch(e){toast(e.message)}})}
+$$("[data-cs]").forEach(b=>b.onclick=()=>loadClaims(b.dataset.cs));
+
+let MEMBERS=[];
+async function loadMembers(){MEMBERS=await api("/admin/api/members");renderMembers()}
+function renderMembers(){const q=$("#mSearch").value.toLowerCase(),f=$("#mFilter").value;
+  const list=MEMBERS.filter(m=>(!q||[m.first_name,m.last_name,m.username,m.city,m.sphere,m.project].join(" ").toLowerCase().includes(q))&&
+    (f==="all"||(f==="active"&&m.status==="active")||(f==="noprofile"&&m.status==="active"&&!m.profile_done)||(f==="inside"&&m.level==="inside")||m.status===f&&["expired","guest"].includes(f)));
+  $("#members").innerHTML=list.map(m=>`<tr data-id="${m.tg_id}"><td><b>${name(m)}</b><br>${tgLink(m)}<div class="muted" style="font-size:12px">с ${dt(m.created_at)}</div></td>
+    <td><select data-f="level"><option value="club"${m.level==="club"?" selected":""}>Club</option><option value="inside"${m.level==="inside"?" selected":""}>Inside</option></select></td>
+    <td><span class="pill ${esc(m.status)}">${{active:"активен",expired:"оплата закончилась",guest:"не оплатил"}[m.status]||esc(m.status)}</span>${m.paid_until?`<div class="muted" style="font-size:12px">до ${new Date(m.paid_until).toLocaleDateString("ru-RU")}</div>`:""}</td>
+    <td>${esc(m.city)||"<span class=muted>—</span>"}<div class="muted">${esc(m.sphere)}</div></td>
+    <td style="max-width:260px"><div>${esc(m.seek)}</div><div class="muted">${esc(m.give)}</div>${m.profile_done?"":'<span class="pill guest">нет анкеты</span>'}</td>
+    <td>${m.points.balance}${m.points.pending?`<div class="muted">+${m.points.pending} ждут</div>`:""}</td>
+    <td><select data-f="engagement">${["новый","в работе","активный","звезда","молчит"].map(v=>`<option${m.engagement===v?" selected":""}>${v}</option>`).join("")}</select></td>
+    <td><input data-f="note" value="${esc(m.note)}" placeholder="Заметка"></td></tr>`).join("")||'<tr><td colspan="8" class="muted">Никого не нашлось</td></tr>';
+  $$("#members [data-f]").forEach(el=>el.onchange=async()=>{const id=el.closest("tr").dataset.id;
+    try{await api("/admin/api/members/"+id,{method:"PATCH",json:{[el.dataset.f]:el.value}});const m=MEMBERS.find(x=>x.tg_id==id);m[el.dataset.f]=el.value;toast("Сохранено")}catch(e){toast(e.message)}})}
+$("#mSearch").oninput=renderMembers;$("#mFilter").onchange=renderMembers;
+
+let EVENTS=[];
+async function loadEvents(){const d=await (await fetch("/admin/api/events-list",{headers:{"Authorization":"Bearer "+TOKEN}})).json().catch(()=>[]);EVENTS=d||[];
+  $("#eventsList").innerHTML=EVENTS.map(e=>`<div class="card claim"><div><b>${esc(e.title)}</b><div class="meta">${dt(e.starts_at)} · ${esc(e.rubric)} · ${esc(e.speaker)} ${e.inside_only?"· Inside":""}</div>
+    <div class="meta">Записались: ${e.going} ${e.recording_url?"· есть запись":""}</div></div><div class="actions"><button class="btn" data-edit="${e.id}">Изменить</button></div></div>`).join("")||'<p class="muted">Эфиров пока нет.</p>';
+  $$("[data-edit]").forEach(b=>b.onclick=()=>editEvent(EVENTS.find(e=>e.id==b.dataset.edit)))}
+function toLocal(iso){if(!iso)return"";const d=new Date(iso);const m=new Date(d.toLocaleString("en-US",{timeZone:"Europe/Moscow"}));const p=n=>String(n).padStart(2,"0");return `${m.getFullYear()}-${p(m.getMonth()+1)}-${p(m.getDate())}T${p(m.getHours())}:${p(m.getMinutes())}`}
+function editEvent(e){$("#evFormTitle").textContent="Изменить эфир";$("#eId").value=e.id;$("#eTitle").value=e.title;$("#eRubric").value=e.rubric;$("#eSpeaker").value=e.speaker;$("#eStart").value=toLocal(e.starts_at);
+  $("#ePlace").value=e.place;$("#eJoin").value=e.join_url;$("#eInside").value=e.inside_only?1:0;$("#eDesc").value=e.description;$("#eRec").value=e.recording_url;$("#ePod").value=e.podcast_url;
+  $("#eSum").value=(e.summary||[]).join("\n");$("#eTs").value=(e.timecodes||[]).map(t=>t.join(" ")).join("\n");window.scrollTo(0,0)}
+$("#eNew").onclick=()=>{$$("#t-events .form input,#t-events .form textarea").forEach(i=>i.value="");$("#ePlace").value="Zoom";$("#eId").value="";$("#evFormTitle").textContent="Новый эфир"};
+$("#eSave").onclick=async()=>{if(!$("#eTitle").value||!$("#eStart").value){toast("Нужны название и дата");return}
+  const body={title:$("#eTitle").value,rubric:$("#eRubric").value,speaker:$("#eSpeaker").value,starts_at:new Date($("#eStart").value+":00+03:00").toISOString(),
+    place:$("#ePlace").value,join_url:$("#eJoin").value,inside_only:Number($("#eInside").value),description:$("#eDesc").value,recording_url:$("#eRec").value,podcast_url:$("#ePod").value,
+    summary:$("#eSum").value.split("\n").map(s=>s.trim()).filter(Boolean),timecodes:$("#eTs").value.split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{const i=s.indexOf(" ");return i>0?[s.slice(0,i),s.slice(i+1)]:[s,""]})};
+  if($("#eId").value)body.id=Number($("#eId").value);
+  try{await api("/admin/api/events",{json:body});toast("Эфир сохранен, участники увидят его в приложении");$("#eNew").click();loadEvents()}catch(e){toast(e.message)}};
+
+$("#lSave").onclick=async()=>{if(!$("#lTitle").value){toast("Нужно название");return}
+  try{await api("/admin/api/library",{json:{type:$("#lType").value,title:$("#lTitle").value,author:$("#lAuthor").value,meta:$("#lMeta").value,url:$("#lUrl").value,body:$("#lBody").value,inside_only:Number($("#lInside").value)}});
+    toast("Материал в библиотеке");$$("#t-library input,#t-library textarea").forEach(i=>i.value="")}catch(e){toast(e.message)}};
+
+async function loadPayments(){const ps=await api("/admin/api/payments");
+  $("#payments").innerHTML=ps.map(p=>`<tr><td>${dt(p.created_at)}</td><td>${p.tg_id||"—"}</td><td>${esc(p.event)}</td><td>${p.amount??"—"} ₽</td><td>${p.period_months||"?"} мес.</td><td>${p.expires_at?new Date(p.expires_at).toLocaleDateString("ru-RU"):""}</td>
+    <td>${p.verified===0?'<span class="pill expired" style="color:var(--bad)">неверная</span>':p.verified===1?"ок":"не проверялась"}</td></tr>`).join("")||'<tr><td colspan="7" class="muted">Оплат пока нет</td></tr>'}
+
+function open(){$("#login").hidden=true;$("#app").hidden=false;tab("today")}
+if(TOKEN)open();
+</script>
+</body>
+</html>

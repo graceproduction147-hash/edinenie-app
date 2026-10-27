@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Единение</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<style>[hidden]{display:none!important}body{margin:0}</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+<div class="app">
+  <header class="top">
+    <div class="brand"><svg id="logo" viewBox="0 0 40 40" aria-hidden="true"></svg><span class="word">Единение</span></div>
+    <button class="pill" id="ptsPill" aria-label="Баллы" hidden><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 7.1L21 12l-7.1 2.9L12 22l-1.9-7.1L3 12l7.1-2.9z"/></svg><span class="ptsv">0</span></button>
+  </header>
+
+  <div id="boot" class="loading">Открываем клуб</div>
+
+  <!-- нет доступа -->
+  <section id="gate" class="gate" hidden>
+    <span class="eyebrow">Клуб Единение</span>
+    <h2 id="gateTitle">Приложение для участников клуба</h2>
+    <p id="gateText">Оно откроется, как только пройдет оплата участия.</p>
+    <a class="btn" id="gateJoin" href="https://edinenie-club.com" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Вступить в клуб</a>
+  </section>
+
+  <!-- первая анкета -->
+  <section id="onboard" class="gate" hidden>
+    <span class="eyebrow">Добро пожаловать</span>
+    <h2>Расскажите о себе</h2>
+    <p>По анкете мы подбираем знакомства и пару Random Coffee. Ее видят только участники клуба.</p>
+    <div class="panel">
+      <label class="f" for="oName">ИМЯ<input type="text" id="oName" autocomplete="given-name"></label>
+      <label class="f" for="oSphere">СФЕРА<input type="text" id="oSphere" placeholder="Например: психолог, продюсер, дизайнер"></label>
+      <label class="f" for="oProject">ПРОЕКТ<input type="text" id="oProject" placeholder="Чем вы сейчас заняты"></label>
+      <label class="f" for="oCity">ГОРОД<input type="text" id="oCity" placeholder="Нужен для офлайн-встреч"></label>
+      <label class="f" for="oSeek">КОГО ИЩУ<textarea id="oSeek" rows="2" placeholder="Кто вам сейчас нужен: партнеры, клиенты, специалисты"></textarea></label>
+      <label class="f" for="oGive">ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН<textarea id="oGive" rows="2" placeholder="С чем вы можете помочь другим"></textarea></label>
+      <div class="switch"><span>Готов(а) к офлайн-встречам</span><button class="toggle" id="oOff" aria-pressed="true" aria-label="Готов к офлайн-встречам"></button></div>
+      <label class="check"><input type="checkbox" id="oConsent"><span>Согласен(на) на обработку персональных данных и показ анкеты участникам клуба</span></label>
+      <button class="btn" id="oSave">Войти в клуб</button>
+    </div>
+  </section>
+
+  <div id="main" hidden>
+    <div class="pagehead"><span class="eyebrow" id="eyebrow">Клуб</span><h1 id="title">Главная</h1></div>
+
+    <!-- ГЛАВНАЯ -->
+    <section class="view on" id="v-home">
+      <div id="heroBox"></div>
+      <div class="panel">
+        <div class="row2"><span>Ваши баллы</span><span><b class="ptsv">0</b><span id="goalOf"></span></span></div>
+        <div class="progress"><i id="prog" style="width:0"></i></div>
+        <p class="sub" id="goalText"></p>
+      </div>
+      <div class="panel"><h3>Задания недели</h3><div id="tasks"></div></div>
+      <div class="panel" id="homeCoffee"></div>
+      <h2 class="sec">Новое в библиотеке</h2>
+      <div class="list" id="homeLib"></div>
+    </section>
+
+    <!-- ЭФИРЫ -->
+    <section class="view" id="v-events">
+      <div class="seg" role="group" aria-label="Эфиры">
+        <button aria-pressed="true" data-es="soon">Скоро</button>
+        <button aria-pressed="false" data-es="rec">Записи</button>
+      </div>
+      <div class="list" id="evSoon"></div>
+      <div class="list" id="evRec" hidden></div>
+    </section>
+
+    <!-- БИБЛИОТЕКА -->
+    <section class="view" id="v-lib">
+      <input type="search" id="libSearch" placeholder="Поиск по конспектам, эфирам, спикерам" aria-label="Поиск по библиотеке">
+      <div class="chips" id="libChips" role="group" aria-label="Тип материала"></div>
+      <div class="list" id="libList"></div>
+    </section>
+
+    <!-- ЛЮДИ -->
+    <section class="view" id="v-people">
+      <div class="seg" role="group" aria-label="Люди">
+        <button aria-pressed="true" data-ps="feed">Найди своих</button>
+        <button aria-pressed="false" data-ps="coffee">Кофе</button>
+        <button aria-pressed="false" data-ps="matches">Взаимные<span id="mBadge"></span></button>
+      </div>
+      <div id="p-feed" style="display:flex;flex-direction:column;gap:14px">
+        <div class="chips" role="group" aria-label="Фильтр">
+          <button class="chip" data-f="all" aria-pressed="true">Все</button>
+          <button class="chip" data-f="city" aria-pressed="false">Мой город</button>
+          <button class="chip" data-f="offline" aria-pressed="false">Готовы к офлайну</button>
+        </div>
+        <div class="deck" id="deck"></div>
+        <div class="actions">
+          <button class="round no" id="bNo" aria-label="Дальше"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          <button class="round yes" id="bYes" aria-label="Хочу познакомиться"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.6 4.5 7.1 4.5c2 0 3.6 1.1 4.9 2.8 1.3-1.7 2.9-2.8 4.9-2.8 3.5 0 5.7 3.5 4.4 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+        </div>
+        <p class="hint">Свайп вправо — хочу познакомиться. Контакт откроется, если интерес взаимный.</p>
+      </div>
+      <div id="p-coffee" hidden style="display:flex;flex-direction:column;gap:14px"></div>
+      <div id="p-matches" hidden style="display:flex;flex-direction:column;gap:14px">
+        <p class="sub">Здесь те, кому вы тоже понравились. Пишите первыми, бот уже предупредил их о вас.</p>
+        <div class="list" id="matchList"></div>
+        <div class="panel" id="likedYou" hidden></div>
+      </div>
+    </section>
+
+    <!-- ПРОФИЛЬ -->
+    <section class="view" id="v-profile">
+      <div class="panel" id="meCard"></div>
+      <div class="panel inside" id="insideCard" hidden>
+        <span class="eyebrow">Edinenie Inside</span>
+        <h3>365 дней в самом сердце «Единения»</h3>
+        <ul><li>Все возможности Club на 12 месяцев</li><li>Куратор, который знакомит с нужными людьми</li><li>Закрытые выступления и материалы методологии</li></ul>
+        <button class="btn" id="toInside">Узнать условия</button>
+      </div>
+      <h2 class="sec">Обменять баллы</h2>
+      <div class="list" id="shop"></div>
+      <div class="panel">
+        <h3>Правила клуба</h3>
+        <details class="rule"><summary>Club-level</summary><p>Участие на 1, 3 или 6 месяцев. Открывает эфиры, библиотеку, знакомства и Random Coffee. Условия, купленные по специальной цене, сохраняются при продлении.</p></details>
+        <details class="rule"><summary>Inside-level</summary><p>Годовой формат: все возможности Club и более личное участие в жизни экосистемы. Куратор помогает сориентироваться в сообществе и найти людей, знакомство с которыми полезно именно вам. Никаких обязательств выступать, организовывать события или привлекать участников.</p></details>
+        <details class="rule"><summary>За что начисляются баллы</summary><p>Не за присутствие в Zoom, а за действия: отзыв и инсайт после эфира, благодарность участнику, результат, которым вы делитесь, сторис о клубе с хештегом, приглашенный участник, встреча по Random Coffee. Каждое начисление подтверждает команда клуба.</p></details>
+        <details class="rule"><summary>Как знакомиться</summary><p>Контакт человека открывается только при взаимном интересе. Пишите от себя, коротко и по делу: кто вы, что увидели в анкете, что предлагаете.</p></details>
+      </div>
+      <div class="panel">
+        <h3>Анкета</h3>
+        <label class="f" for="pName">ИМЯ<input type="text" id="pName"></label>
+        <label class="f" for="pSphere">СФЕРА<input type="text" id="pSphere"></label>
+        <label class="f" for="pProject">ПРОЕКТ<input type="text" id="pProject"></label>
+        <label class="f" for="pCity">ГОРОД<input type="text" id="pCity"></label>
+        <label class="f" for="pSeek">КОГО ИЩУ<textarea id="pSeek" rows="2"></textarea></label>
+        <label class="f" for="pGive">ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН<textarea id="pGive" rows="2"></textarea></label>
+        <div class="switch"><span>Участвую в Random Coffee</span><button class="toggle" id="pCoffee" aria-pressed="true" aria-label="Участвую в Random Coffee"></button></div>
+        <div class="switch"><span>Готов(а) к офлайн-встречам</span><button class="toggle" id="pOff" aria-pressed="true" aria-label="Готов к офлайн-встречам"></button></div>
+        <button class="btn" id="saveProfile">Сохранить анкету</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Разделы" hidden>
+  <div class="in" role="tablist">
+    <button role="tab" data-v="home" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1z"/></svg>Главная</button>
+    <button role="tab" data-v="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10.5l5-3v9l-5-3"/></svg>Эфиры</button>
+    <button role="tab" data-v="lib" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5.5C6.5 4.5 9.5 4.5 12 6c2.5-1.5 5.5-1.5 8-.5v13c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5z"/><path d="M12 6v13"/></svg>Библиотека</button>
+    <button role="tab" data-v="people" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.5"/><circle cx="16.5" cy="10" r="2.8"/><path d="M3 19c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5M15 14.8c2.6-.3 4.8 1 5.6 3.7"/></svg>Люди<span class="badge" id="badge" hidden>0</span></button>
+    <button role="tab" data-v="profile" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/></svg>Профиль</button>
+  </div>
+</nav>
+
+<div class="overlay" id="matchOv" hidden>
+  <div class="box">
+    <div class="pair"><div class="ava" id="ovMe"></div><div class="ava" id="ovAva"></div></div>
+    <h2>Это взаимно</h2>
+    <p class="sub" id="ovText"></p>
+    <div class="btns"><button class="btn" id="ovWrite">Написать</button><button class="btn ghost" id="ovClose">Листать дальше</button></div>
+  </div>
+</div>
+<div class="sheetwrap" id="sheetWrap" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
