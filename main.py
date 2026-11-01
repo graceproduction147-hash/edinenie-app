@@ -470,7 +470,8 @@ async def tribute(req: Request, con=Depends(get_con)):
         if event in NEW_SUB:
             spawn(tg.send(tg_id, f"Добро пожаловать в Единение{', ' + name if name else ''}!\n\n"
                                  "Откройте клуб и заполните анкету: по ней мы подбираем знакомства и пару Random Coffee.",
-                          tg.app_button("Открыть клуб")))
+                          {"inline_keyboard": tg.app_button("Заполнить анкету", "static/anketa.html")["inline_keyboard"]
+                           + tg.app_button("Открыть клуб")["inline_keyboard"]}))
             spawn(tg.notify_team(
                 f"💳 Новая оплата: {who} (id {tg_id})\n"
                 f"{level.capitalize()}-level, {months or '?'} мес., {amount or '?'} ₽\n\n"
@@ -499,6 +500,12 @@ async def bot_update(req: Request, con=Depends(get_con)):
     msg = upd.get("message") or {}
     u, text = msg.get("from"), (msg.get("text") or "")
     if not u or msg.get("chat", {}).get("type") != "private":
+        return {"ok": True}
+    if text.startswith("/anketa") or text.startswith("/monthly"):
+        monthly = text.startswith("/monthly")
+        await tg.send(u["id"], ("Ежемесячная анкета: пара минут, и мы увидим, что сдвинулось за месяц." if monthly else
+                                "Стартовая анкета: по ней мы подбираем знакомства и пару Random Coffee. Около 10 минут."),
+                      tg.app_button("Заполнить анкету", "static/monthly.html" if monthly else "static/anketa.html"))
         return {"ok": True}
     if text.startswith("/start"):
         arg = text.split(maxsplit=1)[1] if " " in text else ""
