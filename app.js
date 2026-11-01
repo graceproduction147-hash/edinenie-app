@@ -310,18 +310,13 @@ $("#saveProfile").onclick = async () => {
 $("#toInside").onclick = () => { if (S.me.manager_username) openTg(S.me.manager_username); else toast("Менеджер пришлет условия перехода в Telegram"); };
 
 /* ---------- первая анкета ---------- */
+// Одна анкета на все: ответы из нее сервер сам переносит в профиль (сфера, город, «ищу», «могу помочь», Random Coffee).
 function showOnboard() {
-  $("#onboard").hidden = false; const m = S.me;
-  $("#oName").value = m.first_name || ""; $("#oSphere").value = m.sphere || ""; $("#oProject").value = m.project || ""; $("#oCity").value = m.city || "";
-  $("#oSeek").value = m.seek || ""; $("#oGive").value = m.give || "";
-  $("#oSave").onclick = async () => {
-    const data = {first_name: $("#oName").value.trim(), sphere: $("#oSphere").value.trim(), project: $("#oProject").value.trim(), city: $("#oCity").value.trim(),
-      seek: $("#oSeek").value.trim(), give: $("#oGive").value.trim(), offline: $("#oOff").getAttribute("aria-pressed") === "true", consent: $("#oConsent").checked};
-    if (!data.consent) { toast("Отметьте согласие, чтобы войти"); return; }
-    if (!data.sphere || !data.city || !data.seek || !data.give) { toast("Заполните сферу, город, «ищу» и «могу помочь»"); return; }
-    try { await api("/api/me", {method: "PUT", json: data}); Object.assign(S.me, data, {consent_at: "1", profile_done: 1}); $("#onboard").hidden = true; start(); }
-    catch (e) { fail(e); }
-  };
+  const o = $("#onboard"); o.hidden = false;
+  o.innerHTML = `<span class="eyebrow">Добро пожаловать</span><h2>Расскажите о себе</h2>
+    <p>Одна анкета, около 10 минут. По ней мы подбираем знакомства и пару Random Coffee, а ваш профиль в клубе заполнится сам. Полностью анкету видит только команда клуба. Остальным участникам показываются имя, сфера, проект, город, «ищу» и «могу помочь».</p>
+    <div class="panel"><button class="btn" id="oGo">Заполнить анкету</button></div>`;
+  $("#oGo").onclick = () => { location.href = "/static/anketa.html" + location.hash; };
 }
 
 /* ---------- запуск ---------- */
