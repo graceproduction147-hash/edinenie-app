@@ -2,7 +2,9 @@
 import hashlib
 import hmac
 import json
+import asyncio
 import logging
+import os
 import time
 from urllib.parse import parse_qsl
 
@@ -36,18 +38,34 @@ def check_init_data(init_data: str, max_age=86400):
 
 
 async def _call(token, method, payload):
+    """Отправка в Telegram. С российского сервера api.telegram.org часто недоступен,
+    поэтому, если задан SHEET_WEBHOOK_URL, запрос идет через скрипт Google (он пересылает его в Telegram).
+    Если скрипт не ответил, пробуем напрямую."""
     if not token:
         log.info("нет токена, пропускаю %s: %s", method, payload.get("text", "")[:80])
         return None
+    relay = (os.environ.get("SHEET_WEBHOOK_URL") or "").strip()
+    if relay:
+        try:
+            async with httpx.AsyncClient(timeout=25, follow_redirects=True) as c:
+                r = await c.post(relay, json={"relay": "telegram", "token": token, "method": method, "payload": payload})
+                data = r.json()
+                if data.get("ok"):
+                    return data
+                log.warning("Telegram %s через скрипт: %s", method, str(data)[:300])
+                if data.get("error_code") or data.get("description"):
+                    return data  # Telegram ответил ошибкой (например, chat not found), повтор напрямую не поможет
+        except Exception as e:
+            log.warning("Telegram %s через скрипт не удался: %s", method, repr(e)[:200])
     try:
-        async with httpx.AsyncClient(timeout=15) as c:
+        async with httpx.AsyncClient(timeout=8) as c:
             r = await c.post(f"https://api.telegram.org/bot{token}/{method}", json=payload)
             data = r.json()
             if not data.get("ok"):
                 log.warning("Telegram %s: %s", method, data)
             return data
     except Exception as e:  # сеть не должна ронять сервер
-        log.warning("Telegram %s: %s", method, e)
+        log.warning("Telegram %s напрямую: %s", method, repr(e)[:200])
         return None
 
 
@@ -70,8 +88,8 @@ async def notify_team(text):
         chats = set(MANAGER_CHAT_IDS) | set(db.team_ids(con))
     finally:
         con.close()
-    for chat in chats:
-        await send(chat, text, token=TEAM_BOT_TOKEN or BOT_TOKEN)
+    await asyncio.gather(*(send(chat, text, token=TEAM_BOT_TOKEN or BOT_TOKEN) for chat in chats),
+                         return_exceptions=True)
 
 
 async def set_webhook(url, secret):
