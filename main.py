@@ -435,7 +435,7 @@ async def tribute(req: Request, con=Depends(get_con)):
     con.commit()
     if not verified:
         log.warning("Tribute: подпись не подошла (или не задан TRIBUTE_API_KEY), оплата записана, но доступ не выдан")
-        await tg.notify_team("Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты».")
+        spawn(tg.notify_team("Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."))
         return JSONResponse({"ok": False}, status_code=401)
     if not tg_id:
         return {"ok": True, "note": "нет telegram_user_id"}
@@ -467,24 +467,24 @@ async def tribute(req: Request, con=Depends(get_con)):
                           "paid_at": created.astimezone(MSK).strftime("%d.%m.%Y %H:%M"), "status": "активен",
                           "bot_started": bool(m.get("bot_started"))}))
         if event in NEW_SUB:
-            await tg.send(tg_id, f"Добро пожаловать в Единение{', ' + name if name else ''}!\n\n"
+            spawn(tg.send(tg_id, f"Добро пожаловать в Единение{', ' + name if name else ''}!\n\n"
                                  "Откройте клуб и заполните анкету: по ней мы подбираем знакомства и пару Random Coffee.",
-                          tg.app_button("Открыть клуб"))
-            await tg.notify_team(
+                          tg.app_button("Открыть клуб")))
+            spawn(tg.notify_team(
                 f"💳 Новая оплата: {who} (id {tg_id})\n"
                 f"{level.capitalize()}-level, {months or '?'} мес., {amount or '?'} ₽\n\n"
                 f"Приветствие для отправки:\n«{name or 'Привет'}, добро пожаловать в Единение! Я ваш менеджер. "
-                f"Расскажите, с каким запросом пришли в клуб, и я помогу найти своих людей.»")
+                f"Расскажите, с каким запросом пришли в клуб, и я помогу найти своих людей.»"))
         else:
             # продление: участнику ничего не пишем, команде сообщаем коротко
-            await tg.notify_team(f"🔁 Продление: {who} (id {tg_id}), {months or '?'} мес., {amount or '?'} ₽. "
-                                 f"Доступ продлен до {str(until)[:10]}.")
+            spawn(tg.notify_team(f"🔁 Продление: {who} (id {tg_id}), {months or '?'} мес., {amount or '?'} ₽. "
+                                 f"Доступ продлен до {str(until)[:10]}."))
     elif event in DONATIONS:
         # донат доступ в клуб не открывает
-        await tg.notify_team(f"Донат через Tribute ({event}): id {tg_id}, {amount or '?'} ₽. Доступ в клуб не выдан.")
+        spawn(tg.notify_team(f"Донат через Tribute ({event}): id {tg_id}, {amount or '?'} ₽. Доступ в клуб не выдан."))
     elif event in ("cancelled_subscription", "subscription_cancelled"):
         spawn(push_sheet({"op": "cancel", "tg_id": tg_id, "status": "отмена"}))
-        await tg.notify_team(f"Отмена подписки: id {tg_id}. Доступ сохранится до конца оплаченного периода.")
+        spawn(tg.notify_team(f"Отмена подписки: id {tg_id}. Доступ сохранится до конца оплаченного периода."))
     return {"ok": True}
 
 
