@@ -3,6 +3,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -307,7 +308,7 @@ async def create_claim(rule_code: str = Form(...), text: str = Form(""), ref: st
         raise HTTPException(400, "Напишите пару слов")
     cid, rule = add_claim(con, m["tg_id"], rule_code, text.strip(), saved, ref or None)
     con.commit()
-    await tg.notify_team(f"Новая заявка на баллы: <b>{rule['title']}</b> +{rule['points']} от {m['first_name'] or ''} "
+    await tg.notify_team(f"Новая заявка на баллы: <b>{rule['title']}</b> +{rule['points']} от {html.escape(m['first_name'] or '')} "
                          f"{'@' + m['username'] if m['username'] else ''}\n\n{text[:500]}\n\nПодтвердить в кабинете: {PUBLIC_URL}/admin")
     return {"ok": True, "id": cid, "points": rule["points"]}
 
@@ -323,7 +324,7 @@ async def redeem(code: str, m=Depends(member), con=Depends(get_con)):
         raise HTTPException(400, "Пока не хватает баллов")
     con.execute("INSERT INTO redemptions(tg_id,code,cost,created_at) VALUES(?,?,?,?)", (m["tg_id"], code, item["cost"], db.now()))
     con.commit()
-    await tg.notify_team(f"Обмен баллов: <b>{item['title']}</b> ({item['cost']}) — {m['first_name'] or ''} "
+    await tg.notify_team(f"Обмен баллов: <b>{item['title']}</b> ({item['cost']}) — {html.escape(m['first_name'] or '')} "
                          f"{'@' + m['username'] if m['username'] else ''}. Свяжитесь с участником.")
     return {"ok": True}
 
@@ -456,8 +457,8 @@ async def tribute(req: Request, con=Depends(get_con)):
                 con.commit()
             except Exception:
                 log.exception("не удалось начислить приглашение")
-        name = m.get("first_name") or ""
-        who = f"{name} {'@' + m['username'] if m.get('username') else ''}".strip()
+        name = html.escape(m.get("first_name") or "")
+        who = f"{name} {'@' + html.escape(m['username']) if m.get('username') else ''}".strip()
         try:
             created = datetime.fromisoformat(str(data.get("created_at", "")).replace("Z", "+00:00"))
         except ValueError:
@@ -515,7 +516,7 @@ async def bot_update(req: Request, con=Depends(get_con)):
         if joined_team:
             await tg.send(u["id"], "Вы в команде клуба Единение. Приложение открыто полностью, уведомления об оплатах и заявках на баллы будут приходить от team-бота: нажмите /start в @edinenie_team1_bot.",
                           tg.app_button("Открыть клуб"))
-            await tg.notify_team(f"В команду клуба добавлен(а) {u.get('first_name') or ''} {'@' + u['username'] if u.get('username') else ''} (id {u['id']}).")
+            await tg.notify_team(f"В команду клуба добавлен(а) {html.escape(u.get('first_name') or '')} {'@' + html.escape(u['username']) if u.get('username') else ''} (id {u['id']}).")
             return {"ok": True}
         if status == "active":
             await tg.send(u["id"], f"{u.get('first_name') or 'Привет'}, вы в клубе Единение. Здесь знакомства, эфиры, библиотека и ваши баллы.",
@@ -679,6 +680,112 @@ async def admin_coffee(_=Depends(admin), con=Depends(get_con)):
 @app.get("/admin/api/payments")
 def admin_payments(_=Depends(admin), con=Depends(get_con)):
     return db.rows(con.execute("SELECT id,tg_id,event,amount,period_months,expires_at,verified,created_at FROM payments ORDER BY id DESC LIMIT 300"))
+
+
+# ---------------- анкеты ----------------
+
+FORMS_SQL = """CREATE TABLE IF NOT EXISTS forms(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, kind TEXT, data TEXT,
+  verified INTEGER DEFAULT 0, created_at TEXT)"""
+
+
+def ensure_forms(con):
+    con.execute(FORMS_SQL)
+    con.execute("CREATE INDEX IF NOT EXISTS forms_tg ON forms(tg_id)")
+
+
+def clean_form(data):
+    """Оставляем простые значения и режем длину: анкету может отправить кто угодно."""
+    out = {}
+    for k, v in list(data.items())[:150]:
+        if isinstance(v, bool):
+            out[str(k)[:60]] = v
+        elif isinstance(v, (int, float)):
+            out[str(k)[:60]] = v
+        elif v is not None:
+            out[str(k)[:60]] = str(v)[:4000]
+    return out
+
+
+def apply_start_form(con, u, d):
+    """Перенос ответов стартовой анкеты в профиль участника (знакомства и Random Coffee берут данные оттуда)."""
+    upsert_member(con, {"id": u["id"], "username": u.get("username"), "first_name": u.get("first_name"),
+                        "last_name": u.get("last_name")})
+    cur = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone())
+    upd = {}
+    for dst, src in (("sphere", "sphere_work"), ("project", "project"), ("city", "city"),
+                     ("seek", "looking_for"), ("give", "can_give")):
+        v = str(d.get(src) or "").strip()
+        if v:
+            upd[dst] = v
+    nm = str(d.get("name") or "").strip()
+    if nm and not (cur.get("first_name") or "").strip():
+        parts = nm.split(None, 1)
+        upd["first_name"] = parts[0]
+        if len(parts) > 1:
+            upd["last_name"] = parts[1]
+    rc = str(d.get("random_coffee") or "").strip()
+    if rc:
+        upd["coffee"] = 0 if rc.startswith("Пока без") else 1
+    mf = str(d.get("meet_format") or "").strip()
+    if mf:
+        upd["offline"] = 0 if mf == "Онлайн" else 1
+    if d.get("consent_data") in (True, "да") and not cur.get("consent_at"):
+        upd["consent_at"] = db.now()
+    merged = {**cur, **upd}
+    upd["profile_done"] = 1 if all((str(merged.get(k) or "")).strip() for k in ("sphere", "city", "seek", "give")) else 0
+    sets = ", ".join(f"{k}=?" for k in upd)
+    con.execute(f"UPDATE members SET {sets}, updated_at=? WHERE tg_id=?", (*upd.values(), db.now(), int(u["id"])))
+    con.commit()
+
+
+@app.post("/api/form")
+async def submit_form(req: Request, x_init_data: str = Header(""), con=Depends(get_con)):
+    ensure_forms(con)
+    raw = await req.body()
+    if len(raw) > 200_000:
+        raise HTTPException(413, "Слишком длинный ответ")
+    try:
+        data = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(400, "Неверный формат запроса")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Неверный формат запроса")
+    u = tg.check_init_data(x_init_data, max_age=86400 * 3)
+    kind = "monthly" if data.get("form_type") == "monthly" else "start"
+    if u:
+        tg_id = int(u["id"])
+    else:
+        t = str(data.get("telegram_id") or "")
+        tg_id = int(t) if t.isdigit() else None
+    d = clean_form(data)
+    con.execute("INSERT INTO forms(tg_id,kind,data,verified,created_at) VALUES(?,?,?,?,?)",
+                (tg_id, kind, json.dumps(d, ensure_ascii=False), 1 if u else 0, db.now()))
+    con.commit()
+    if u and kind == "start":
+        try:
+            apply_start_form(con, u, d)
+        except Exception:
+            log.exception("не удалось перенести анкету в профиль")
+    who = html.escape(str(d.get("name") or (u or {}).get("first_name") or "без имени"))
+    tail = "" if u else " (без подтверждения Telegram, в профиль не перенесена)"
+    spawn(tg.notify_team(f"📝 {'Ежемесячная' if kind == 'monthly' else 'Стартовая'} анкета: {who}, id {tg_id or '?'}{tail}. Смотрите в кабинете, вкладка «Анкеты»."))
+    return {"ok": True}
+
+
+@app.get("/admin/api/forms")
+def admin_forms(_=Depends(admin), con=Depends(get_con)):
+    ensure_forms(con)
+    out = []
+    for r in con.execute("SELECT f.*, m.username, m.first_name, m.last_name, m.level, m.status FROM forms f LEFT JOIN members m ON m.tg_id=f.tg_id "
+                         "ORDER BY f.id DESC LIMIT 500").fetchall():
+        x = dict(r)
+        try:
+            x["data"] = json.loads(x["data"] or "{}")
+        except ValueError:
+            x["data"] = {}
+        out.append(x)
+    return out
 
 
 # ---------------- страницы ----------------
