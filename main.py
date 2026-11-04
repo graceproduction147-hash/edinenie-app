@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import coffee, db, tg
@@ -1050,7 +1050,10 @@ def add_claim(con, tg_id, code, text="", file=None, ref=None):
 def points(m=Depends(member), con=Depends(get_con)):
     rules = db.rows(con.execute("SELECT * FROM point_rules WHERE active=1 ORDER BY sort"))
     claims = db.rows(con.execute("SELECT id,rule_code,points,status,created_at FROM claims WHERE tg_id=? ORDER BY id DESC LIMIT 50", (m["tg_id"],)))
+    ensure_shop(con)
     shop = db.rows(con.execute("SELECT * FROM shop WHERE active=1 ORDER BY cost"))
+    for _it in shop:
+        _it["img_url"] = shop_img_url(_it)
     return {"rules": rules, "claims": claims, "shop": shop, **db.balance(con, m["tg_id"]),
             "invite_link": f"https://t.me/edinenie_club_bot?start=ref_{m['tg_id']}"}
 
@@ -1396,14 +1399,44 @@ def admin(authorization: str = Header("")):
     return TOKENS[tok]
 
 
+def _pw_hash(pw: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 200000).hex()
+
+
+def _pw_ok(con, pw: str) -> bool:
+    """Пароль кабинета: если его меняли в кабинете, берем новый, иначе из файла настроек сервера."""
+    stored = db.get_setting(con, "admin_pw_hash", "")
+    if stored and "$" in stored:
+        salt, hh = stored.split("$", 1)
+        return hmac.compare_digest(_pw_hash(pw, salt), hh)
+    return bool(ADMIN_PASSWORD) and secrets.compare_digest(pw.encode(), ADMIN_PASSWORD.strip().encode())
+
+
 @app.post("/admin/api/login")
-async def admin_login(req: Request):
+async def admin_login(req: Request, con=Depends(get_con)):
     data = await req.json()
-    if not ADMIN_PASSWORD or not secrets.compare_digest(str(data.get("password", "")).strip().encode(), ADMIN_PASSWORD.strip().encode()):
+    if not _pw_ok(con, str(data.get("password", "")).strip()):
         raise HTTPException(401, "Неверный пароль")
     tok = secrets.token_urlsafe(32)
     TOKENS[tok] = data.get("name") or "команда"
     return {"token": tok}
+
+
+@app.post("/admin/api/password")
+async def admin_password(req: Request, authorization: str = Header(""), _=Depends(admin), con=Depends(get_con)):
+    d = await req.json()
+    if not _pw_ok(con, str(d.get("old", "")).strip()):
+        raise HTTPException(400, "Текущий пароль неверный")
+    new = str(d.get("new", "")).strip()
+    if len(new) < 8:
+        raise HTTPException(400, "Новый пароль: не короче 8 знаков")
+    salt = secrets.token_hex(8)
+    db.set_setting(con, "admin_pw_hash", salt + "$" + _pw_hash(new, salt))
+    con.commit()
+    keep = authorization.removeprefix("Bearer ").strip()
+    for t in [t for t in TOKENS if t != keep]:
+        TOKENS.pop(t, None)
+    return {"ok": True}
 
 
 @app.get("/admin/api/overview")
@@ -1454,9 +1487,76 @@ async def admin_crm_save(shard: str, req: Request, _=Depends(admin), con=Depends
 @app.get("/admin/api/members")
 def admin_members(_=Depends(admin), con=Depends(get_con)):
     out = db.rows(con.execute("SELECT * FROM members ORDER BY created_at DESC"))
+    last = _last_active(con)
     for m in out:
         m["points"] = db.balance(con, m["tg_id"])
+        m["last_active"] = last.get(m["tg_id"], "")
     return out
+
+
+def _last_active(con):
+    """Дата последнего действия участника: заявка на баллы, анкета, эфир, кофе, знакомство, обмен."""
+    best = {}
+    qs = ["SELECT tg_id, MAX(created_at) FROM claims GROUP BY tg_id",
+          "SELECT tg_id, MAX(created_at) FROM forms GROUP BY tg_id",
+          "SELECT tg_id, MAX(created_at) FROM rsvp GROUP BY tg_id",
+          "SELECT tg_id, MAX(created_at) FROM event_watch GROUP BY tg_id",
+          "SELECT tg_id, MAX(created_at) FROM redemptions GROUP BY tg_id",
+          "SELECT a, MAX(created_at) FROM coffee_pairs GROUP BY a",
+          "SELECT b, MAX(created_at) FROM coffee_pairs GROUP BY b",
+          "SELECT a, MAX(created_at) FROM matches GROUP BY a",
+          "SELECT b, MAX(created_at) FROM matches GROUP BY b"]
+    for q in qs:
+        try:
+            for tg, d in con.execute(q).fetchall():
+                if tg and d and d > best.get(tg, ""):
+                    best[tg] = d
+        except Exception:
+            pass
+    return best
+
+
+@app.get("/admin/api/timeline/{tg_id}")
+def admin_timeline(tg_id: int, _=Depends(admin), con=Depends(get_con)):
+    """Автоматический журнал участника: все, что система знает о нем."""
+    ev = []
+
+    def add(d, kind, text):
+        if d:
+            ev.append({"d": str(d), "kind": kind, "text": text})
+
+    def q(sql, args=()):
+        try:
+            return con.execute(sql, args).fetchall()
+        except Exception:
+            return []
+
+    m = con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if m:
+        add(m["created_at"], "вход", "Вошел в Клуб")
+    for r in q("SELECT event, amount, currency, period_months, created_at FROM payments WHERE tg_id=? ORDER BY id", (tg_id,)):
+        per = f", {r['period_months']} мес." if r["period_months"] else ""
+        amt = f" {int(r['amount'])} {r['currency'] or ''}".rstrip() if r["amount"] else ""
+        add(r["created_at"], "оплата", f"Оплата{amt}{per}" if "cancel" not in str(r["event"]) else "Отмена подписки")
+    for r in q("SELECT kind, created_at FROM forms WHERE tg_id=?", (tg_id,)):
+        add(r["created_at"], "анкета", "Заполнил(а) " + ("ежемесячную анкету" if r["kind"] == "monthly" else "анкету участника"))
+    for r in q("SELECT c.points, c.status, c.created_at, c.text, p.title FROM claims c LEFT JOIN point_rules p ON p.code=c.rule_code WHERE c.tg_id=?", (tg_id,)):
+        st = {"approved": "подтверждено", "rejected": "отклонено"}.get(r["status"], "ждет подтверждения")
+        add(r["created_at"], "баллы", f"Баллы: {r['title'] or 'действие'}, +{r['points']} ({st})")
+    for r in q("SELECT r.status, r.created_at, r.cost, s.title FROM redemptions r LEFT JOIN shop s ON s.code=r.code WHERE r.tg_id=?", (tg_id,)):
+        add(r["created_at"], "подарок", f"Обмен баллов на подарок «{r['title'] or ''}», {r['cost']}")
+    for r in q("SELECT created_at FROM rsvp WHERE tg_id=?", (tg_id,)):
+        add(r["created_at"], "эфир", "Записался(ась) на эфир")
+    for r in q("SELECT w.created_at, e.title FROM event_watch w LEFT JOIN events e ON e.id=w.event_id WHERE w.tg_id=?", (tg_id,)):
+        add(r["created_at"], "эфир", f"Посмотрел(а) запись эфира «{r['title'] or ''}»")
+    for r in q("SELECT created_at, week FROM coffee_pairs WHERE a=? OR b=?", (tg_id, tg_id)):
+        add(r["created_at"], "кофе", f"Random Coffee: пара на неделю {r['week']}")
+    for r in q("SELECT created_at FROM matches WHERE a=? OR b=?", (tg_id, tg_id)):
+        add(r["created_at"], "знакомство", "Взаимная симпатия в Знакомствах")
+    for r in q("SELECT title, status, created_at FROM offers WHERE tg_id=?", (tg_id,)):
+        add(r["created_at"], "витрина", f"Предложение «{r['title']}»")
+    ev.sort(key=lambda x: x["d"], reverse=True)
+    return ev[:120]
 
 
 @app.patch("/admin/api/members/{tg_id}")
@@ -2091,6 +2191,135 @@ async def offer_request(oid: int, req: Request, m=Depends(member), con=Depends(g
     return {"ok": True}
 
 
+def ensure_shop(con):
+    try:
+        con.execute("ALTER TABLE shop ADD COLUMN img TEXT DEFAULT ''")
+        con.commit()
+    except Exception:
+        pass
+
+
+def shop_img_url(it):
+    n = it.get("img") or ""
+    return f"/botpic/{n}" if n and (BOTPICS / n).exists() else ""
+
+
+SHOP_ICONS = ["gift", "house", "talk", "rec", "note", "pod", "guide", "case", "clip"]
+
+
+@app.get("/admin/api/shop")
+def admin_shop(_=Depends(admin), con=Depends(get_con)):
+    ensure_shop(con)
+    items = db.rows(con.execute("SELECT * FROM shop ORDER BY active DESC, cost, title"))
+    cnt = {r["code"]: r["n"] for r in con.execute("SELECT code, COUNT(*) AS n FROM redemptions GROUP BY code")}
+    for it in items:
+        it["requests"] = cnt.get(it["code"], 0)
+        it["img_url"] = shop_img_url(it)
+    return items
+
+
+@app.post("/admin/api/shop")
+async def admin_shop_save(req: Request, _=Depends(admin), con=Depends(get_con)):
+    ensure_shop(con)
+    d = await req.json()
+    title = (d.get("title") or "").strip()
+    if not title:
+        raise HTTPException(400, "Напишите название подарка")
+    try:
+        cost = int(d.get("cost") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Стоимость должна быть числом")
+    if cost < 0:
+        raise HTTPException(400, "Стоимость не может быть отрицательной")
+    icon = d.get("icon") if d.get("icon") in SHOP_ICONS else "gift"
+    code = (d.get("code") or "").strip() or "g" + uuid.uuid4().hex[:8]
+    vals = (title, (d.get("hint") or "").strip(), cost, 1 if d.get("inside_only") else 0, icon, 0 if d.get("active") is False or d.get("active") == 0 else 1)
+    if con.execute("SELECT 1 FROM shop WHERE code=?", (code,)).fetchone():
+        con.execute("UPDATE shop SET title=?, hint=?, cost=?, inside_only=?, icon=?, active=? WHERE code=?", vals + (code,))
+    else:
+        con.execute("INSERT INTO shop(title,hint,cost,inside_only,icon,active,code) VALUES(?,?,?,?,?,?,?)", vals + (code,))
+    con.commit()
+    return {"ok": True, "code": code}
+
+
+@app.put("/admin/api/shop/{code}/img")
+async def admin_shop_img(code: str, req: Request, _=Depends(admin), con=Depends(get_con)):
+    ensure_shop(con)
+    row = con.execute("SELECT img FROM shop WHERE code=?", (code,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Нет такого подарка")
+    raw = str((await req.json()).get("image", ""))
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    try:
+        body = base64.b64decode(raw, validate=False)
+    except Exception:
+        raise HTTPException(400, "Не получилось прочитать картинку")
+    if len(body) < 200 or len(body) > 8_000_000:
+        raise HTTPException(400, "Картинка пустая или слишком большая (до 8 МБ)")
+    BOTPICS.mkdir(parents=True, exist_ok=True)
+    name = f"shop-{secrets.token_hex(6)}.jpg"
+    (BOTPICS / name).write_bytes(body)
+    old = row["img"] or ""
+    con.execute("UPDATE shop SET img=? WHERE code=?", (name, code))
+    con.commit()
+    if old and old != name:
+        try:
+            (BOTPICS / old).unlink()
+        except OSError:
+            pass
+    return {"ok": True, "img_url": f"/botpic/{name}"}
+
+
+@app.delete("/admin/api/shop/{code}/img")
+def admin_shop_img_del(code: str, _=Depends(admin), con=Depends(get_con)):
+    ensure_shop(con)
+    row = con.execute("SELECT img FROM shop WHERE code=?", (code,)).fetchone()
+    if row and row["img"]:
+        try:
+            (BOTPICS / row["img"]).unlink()
+        except OSError:
+            pass
+    con.execute("UPDATE shop SET img='' WHERE code=?", (code,))
+    con.commit()
+    return {"ok": True}
+
+
+@app.delete("/admin/api/shop/{code}")
+def admin_shop_delete(code: str, _=Depends(admin), con=Depends(get_con)):
+    if con.execute("SELECT 1 FROM redemptions WHERE code=?", (code,)).fetchone():
+        con.execute("UPDATE shop SET active=0 WHERE code=?", (code,))
+        hidden = True
+    else:
+        con.execute("DELETE FROM shop WHERE code=?", (code,))
+        hidden = False
+    con.commit()
+    return {"ok": True, "hidden": hidden}
+
+
+@app.get("/admin/api/redemptions")
+def admin_redemptions(status: str = "pending", _=Depends(admin), con=Depends(get_con)):
+    rows = db.rows(con.execute(
+        "SELECT r.*, s.title, m.first_name, m.last_name, m.username FROM redemptions r "
+        "LEFT JOIN shop s ON s.code=r.code LEFT JOIN members m ON m.tg_id=r.tg_id "
+        "WHERE r.status=? ORDER BY r.id DESC LIMIT 200", (status,)))
+    for r in rows:
+        r["who"] = person_name(r)
+    return rows
+
+
+@app.post("/admin/api/redemptions/{rid}")
+async def admin_redemption_decide(rid: int, req: Request, _=Depends(admin), con=Depends(get_con)):
+    st = (await req.json()).get("status")
+    if st not in ("done", "rejected"):
+        raise HTTPException(400, "Неверный статус")
+    if not con.execute("SELECT 1 FROM redemptions WHERE id=?", (rid,)).fetchone():
+        raise HTTPException(404, "Нет такой заявки")
+    con.execute("UPDATE redemptions SET status=? WHERE id=?", (st, rid))
+    con.commit()
+    return {"ok": True}
+
+
 @app.get("/admin/api/offers")
 def admin_offers(_=Depends(admin), con=Depends(get_con)):
     ensure_offers(con)
@@ -2137,14 +2366,24 @@ def health():
 STATIC = BASE / "static"
 
 
+def _page(name: str):
+    """Отдаем страницу без кеша, а к скриптам и стилям добавляем версию: после обновления Telegram сразу берет новые файлы."""
+    txt = (STATIC / name).read_text(encoding="utf-8")
+    for f in ("app.js", "app.css"):
+        fp = STATIC / f
+        if fp.exists():
+            txt = txt.replace('/static/%s"' % f, '/static/%s?v=%d"' % (f, int(fp.stat().st_mtime)))
+    return HTMLResponse(txt, headers={"Cache-Control": "no-store, max-age=0"})
+
+
 @app.get("/admin")
 def admin_page():
-    return FileResponse(STATIC / "admin.html")
+    return _page("admin.html")
 
 
 @app.get("/")
 def app_page():
-    return FileResponse(STATIC / "index.html")
+    return _page("index.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
