@@ -1876,6 +1876,31 @@ async def admin_library(req: Request, _=Depends(admin), con=Depends(get_con)):
     return {"id": lid}
 
 
+@app.get("/admin/api/library")
+def admin_library_list(_=Depends(admin), con=Depends(get_con)):
+    rows = con.execute("SELECT * FROM library ORDER BY id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/admin/api/library/{lid}")
+async def admin_library_edit(lid: int, req: Request, _=Depends(admin), con=Depends(get_con)):
+    d = await req.json()
+    cols = ["type", "title", "author", "meta", "url", "body", "inside_only"]
+    sets = [c for c in cols if c in d]
+    if sets:
+        vals = [int(d[c] or 0) if c == "inside_only" else (d[c] or "") for c in sets]
+        con.execute(f"UPDATE library SET {', '.join(c + '=?' for c in sets)} WHERE id=?", (*vals, lid))
+        con.commit()
+    return {"id": lid}
+
+
+@app.delete("/admin/api/library/{lid}")
+def admin_library_del(lid: int, _=Depends(admin), con=Depends(get_con)):
+    con.execute("DELETE FROM library WHERE id=?", (lid,))
+    con.commit()
+    return {"ok": True}
+
+
 @app.get("/admin/api/auto")
 def admin_auto_get(_=Depends(admin), con=Depends(get_con)):
     return {"on": auto_on(con)}
