@@ -18,7 +18,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import coffee, db, tg
+from . import card, coffee, db, tg
 from .config import (ADMIN_IDS, ADMIN_PASSWORD, BASE, DEV_MODE, INSIDE_MONTHS, JOIN_URL, PERIOD_MAP,
                      PUBLIC_URL, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
 
@@ -46,6 +46,12 @@ TEXTS = {
                   "default": "Единение — Клуб, где окружение работает на ваш рост 🚀\n\nЗдесь можно найти своих людей, знакомиться по запросу, а не наугад, и каждый месяц видеть, что сдвинулось: в деньгах, смыслах, знакомствах, возможностях, практиках и впечатлениях 🫂\n\nНажмите «Старт». Если вы уже в Клубе, он откроется сразу 🌀"},
     "bot_short": {"title": "Подпись под именем бота", "max": 120, "plain": True, "hint": "Короткая строка, до 120 знаков. Обновляется в Telegram после сохранения.",
                   "default": "Окружение, которое двигает вперед: свои люди, живые встречи и результаты 🚀"},
+    "card_ask_name": {"title": "Вопрос: как подписать карточку месяца", "group": "members", "max": 700, "vars": "", "hint": "Приходит один раз, когда у человека еще нет имени для карточки. Ответ человека сохраняется как подпись на картинке.",
+                      "default": "**Ваша карточка месяца почти готова** ✨\n\nКак ее подписать? Напишите имя и фамилию так, как хотите видеть на картинке."},
+    "card_ready": {"title": "Подпись к карточке месяца", "group": "members", "max": 700, "vars": "", "hint": "Приходит вместе с картинкой.",
+                   "default": "**Ваша карточка месяца** ✨\n\nМожно выкладывать в Stories и отмечать клуб. Изменить подпись: команда /cardname."},
+    "card_wait": {"title": "Карточка пока недоступна", "group": "members", "max": 700, "vars": "", "hint": "Если человек просит карточку, а итоги месяца еще не заполнены.",
+                  "default": "Карточка появится сразу после итогов месяца 🚀 Заполнить их можно командой /monthly."},
     # ---- участникам ----
     "inside_on": {"title": "Inside получен", "group": "members", "max": 1000, "vars": "{days} (сколько дней действует)", "hint": "Когда участник закрыл норму месяца.",
                   "default": "**{name}, поздравляем, вы в Inside!** 🔥\n\nБлагодарим вас за вклад в Клуб. Вы закрыли норму месяца, и теперь вам открыты закрытые эфиры, записи и материалы. Статус действует еще {days} дн.\n\nРады за ваше проявление ❤️"},
@@ -272,6 +278,7 @@ BOT_COMMANDS = [
     {"command": "start", "description": "Войти в клуб"},
     {"command": "anketa", "description": "Анкета участника"},
     {"command": "monthly", "description": "Итоги месяца"},
+    {"command": "card", "description": "Карточка месяца"},
 ]
 
 
@@ -403,6 +410,10 @@ def ensure_norm():
                     con.execute("UPDATE members SET birthday=? WHERE tg_id=?", (bd, r["tg_id"]))
         except Exception:
             log.exception("перенос дат рождения")
+    if "card_name" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN card_name TEXT")
+    if "card_ask" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN card_ask INTEGER DEFAULT 0")
     if "last_seen" not in cols:
         con.execute("ALTER TABLE members ADD COLUMN last_seen TEXT")
         con.execute("UPDATE members SET last_seen=?", (db.now(),))  # точка отсчета: «давно не заходили» считается с момента обновления
@@ -1457,6 +1468,29 @@ async def bot_update(req: Request, con=Depends(get_con)):
             con.commit()
             await tg.send(u["id"], render(con, "photo_saved"))
         return {"ok": True}
+    if text.startswith("/cardname"):
+        con.execute("UPDATE members SET card_ask=1 WHERE tg_id=?", (int(u["id"]),))
+        con.commit()
+        await send_text(u["id"], render(con, "card_ask_name"), key="card_ask_name", con=con)
+        return {"ok": True}
+    if text.startswith("/card"):
+        try:
+            await send_card(con, int(u["id"]))
+        except Exception:
+            log.exception("карточка месяца")
+        return {"ok": True}
+    if text and not text.startswith("/"):
+        ask = con.execute("SELECT card_ask FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
+        if ask and ask["card_ask"]:
+            nm = re.sub(r"\s+", " ", text).strip()[:60]
+            if len(nm) >= 2:
+                con.execute("UPDATE members SET card_name=?, card_ask=0 WHERE tg_id=?", (nm, int(u["id"])))
+                con.commit()
+                try:
+                    await send_card(con, int(u["id"]))
+                except Exception:
+                    log.exception("карточка месяца")
+                return {"ok": True}
     if text.startswith("/anketa") or text.startswith("/monthly"):
         monthly = text.startswith("/monthly")
         await send_text(u["id"], get_text(con, "monthly" if monthly else "anketa"),
@@ -1928,6 +1962,8 @@ async def submit_form(req: Request, x_init_data: str = Header(""), con=Depends(g
     who = str(d.get("name") or (u or {}).get("first_name") or "без имени")
     tail = "" if u else " (без подтверждения Telegram, в профиль не перенесена)"
     spawn(team_notify(render(con, "t_form", kind=("Ежемесячная" if kind == "monthly" else "Стартовая"), who=who, id=tg_id or "?", tail=tail), "t_form"))
+    if u and kind == "monthly":
+        spawn(send_card_bg(tg_id))
     return {"ok": True}
 
 
@@ -2023,6 +2059,83 @@ async def admin_stats_send(_=Depends(admin), con=Depends(get_con)):
 async def admin_digest_send(_=Depends(admin), con=Depends(get_con)):
     n = await send_digest(con)
     return {"sent": n}
+
+
+# ---------------- карточка месяца ----------------
+CARDS = UPLOADS.parent / "cards"
+
+
+def _monthly_scores(con, tg_id):
+    """Две последние ежемесячные анкеты с полными оценками (новая, предыдущая) и оценки стартовой анкеты."""
+    ensure_forms(con)
+    mon = []
+    for r in con.execute("SELECT data FROM forms WHERE tg_id=? AND kind='monthly' ORDER BY id DESC LIMIT 8", (tg_id,)).fetchall():
+        sc = card.scores_from_form(json.loads(r["data"] or "{}"))
+        if sc:
+            mon.append(sc)
+    base = None
+    for r in con.execute("SELECT data FROM forms WHERE tg_id=? AND kind='start' ORDER BY id DESC LIMIT 3", (tg_id,)).fetchall():
+        base = card.scores_from_form(json.loads(r["data"] or "{}"))
+        if base:
+            break
+    return (mon[0] if mon else None), (mon[1] if len(mon) > 1 else None), base
+
+
+def _month_no(m):
+    try:
+        c = datetime.fromisoformat(str(m.get("created_at") or "")[:19])
+        n = datetime.now()
+        return max(1, (n.year - c.year) * 12 + n.month - c.month + 1)
+    except ValueError:
+        return 1
+
+
+async def send_card(con, tg_id):
+    """Собирает карточку месяца участника и отправляет ее в бот. Если имя для подписи еще не задано, сначала спрашивает его."""
+    row = con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if not row:
+        return False
+    m = db.row(row)
+    cur, prev, base = _monthly_scores(con, tg_id)
+    if not cur:
+        await send_text(tg_id, render(con, "card_wait"), key="card_wait", con=con)
+        return False
+    if not (m.get("card_name") or "").strip():
+        con.execute("UPDATE members SET card_ask=1 WHERE tg_id=?", (tg_id,))
+        con.commit()
+        await send_text(tg_id, render(con, "card_ask_name"), key="card_ask_name", con=con)
+        return True
+    data = card.build_card_data(cur, prev, m.get("level") or "club", _month_no(m), m["card_name"], base=base)
+    png = await asyncio.to_thread(card.render_card, data)
+    CARDS.mkdir(parents=True, exist_ok=True)
+    fn = f"{tg_id}-{secrets.token_urlsafe(12)}.png"
+    (CARDS / fn).write_bytes(png)
+    for old in sorted(CARDS.glob(f"{tg_id}-*.png"), key=lambda p: p.stat().st_mtime)[:-5]:
+        old.unlink(missing_ok=True)
+    caption = render(con, "card_ready")
+    r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "photo": f"{PUBLIC_URL}/cardpic/{fn}",
+                                                    "caption": caption, "parse_mode": "HTML"})
+    ok = bool(r and r.get("ok"))
+    _msg_log(tg_id, "[картинка] " + caption, "card_ready", ok, "main")
+    return ok
+
+
+async def send_card_bg(tg_id):
+    con = db.connect()
+    try:
+        await send_card(con, tg_id)
+    except Exception:
+        log.exception("карточка месяца")
+    finally:
+        con.close()
+
+
+@app.get("/cardpic/{name}")
+def cardpic(name: str):
+    p = (CARDS / name).resolve()
+    if p.parent != CARDS.resolve() or not p.exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/png")
 
 
 @app.get("/botpic/{name}")
