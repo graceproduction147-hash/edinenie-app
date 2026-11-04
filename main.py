@@ -2113,8 +2113,14 @@ async def send_card(con, tg_id):
     for old in sorted(CARDS.glob(f"{tg_id}-*.png"), key=lambda p: p.stat().st_mtime)[:-5]:
         old.unlink(missing_ok=True)
     caption = render(con, "card_ready")
-    r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "photo": f"{PUBLIC_URL}/cardpic/{fn}",
-                                                    "caption": caption, "parse_mode": "HTML"})
+    r = None
+    for attempt in range(4):  # Telegram иногда не успевает скачать картинку с первого раза
+        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "photo": f"{PUBLIC_URL}/cardpic/{fn}",
+                                                        "caption": caption, "parse_mode": "HTML"})
+        if r and r.get("ok"):
+            break
+        log.warning("карточка: отправка %s не удалась: %s", attempt + 1, str(r)[:200])
+        await asyncio.sleep(4)
     ok = bool(r and r.get("ok"))
     _msg_log(tg_id, "[картинка] " + caption, "card_ready", ok, "main")
     return ok
@@ -2130,7 +2136,7 @@ async def send_card_bg(tg_id):
         con.close()
 
 
-@app.get("/cardpic/{name}")
+@app.api_route("/cardpic/{name}", methods=["GET", "HEAD"])
 def cardpic(name: str):
     p = (CARDS / name).resolve()
     if p.parent != CARDS.resolve() or not p.exists():
