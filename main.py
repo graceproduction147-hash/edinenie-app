@@ -105,6 +105,12 @@ TEXTS = {
                  "default": "Отмена подписки: id {id}. Доступ сохранится до конца оплаченного периода."},
     "t_badsign": {"title": "Оплата с неверной подписью", "group": "team", "max": 1000, "vars": "", "hint": "Команде.",
                   "default": "Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."},
+    "t_birthday": {"title": "День рождения участника, сегодня", "group": "team", "max": 1000, "vars": "{who}, {age} (возраст или пусто), {wish} (готовое поздравление)", "hint": "Команде, утром в день рождения. Поздравить лично.",
+                   "default": "🎂 Сегодня день рождения: **{who}**{age}\n\nПоздравьте лично. Готовый текст:\n\n{wish}"},
+    "t_birthday_soon": {"title": "День рождения участника, через 3 дня", "group": "team", "max": 1000, "vars": "{who}, {date}", "hint": "Команде, за 3 дня: время выбрать и отправить подарок.",
+                        "default": "🎁 Через 3 дня ({date}) день рождения: **{who}**\n\nВремя придумать подарок и подготовить поздравление."},
+    "birthday_wish": {"title": "Поздравление с днем рождения (готовый текст)", "group": "team", "max": 700, "vars": "{name}", "hint": "Подставляется в уведомление команде, чтобы скопировать и отправить лично.",
+                      "default": "{name}, с днем рождения! ❤️\n\nРады, что вы с нами в Клубе. Пусть этот год будет ярким, смелым и очень вашим 🔥\n\nМы приготовили для вас небольшой подарок 🪬"},
     "t_digest": {"title": "Утренний дайджест", "group": "team", "max": 1500, "vars": "{date}, {items} (список дел, собирается сам)", "hint": "Каждое утро, только если есть что решить. Под ним отдельные заявки на баллы с кнопками.",
                  "default": "☀️ **Дайджест на {date}**\n\n{items}"},
     "t_digest_claim": {"title": "Дайджест: заявка на баллы", "group": "team", "max": 1000, "vars": "{rule}, {points}, {who}, {text}", "hint": "Под ним кнопки «Подтвердить» и «Отклонить».",
@@ -345,6 +351,16 @@ def ensure_norm():
     cols = {r[1] for r in con.execute("PRAGMA table_info(members)")}
     if "inside_auto" not in cols:
         con.execute("ALTER TABLE members ADD COLUMN inside_auto INTEGER DEFAULT 0")
+    if "birthday" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN birthday TEXT")
+        try:  # дату из уже заполненных анкет переносим один раз
+            ensure_forms(con)
+            for r in con.execute("SELECT tg_id, data FROM forms WHERE kind='start' AND tg_id IS NOT NULL ORDER BY id").fetchall():
+                bd = str((json.loads(r["data"] or "{}") or {}).get("birthday") or "").strip()
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bd):
+                    con.execute("UPDATE members SET birthday=? WHERE tg_id=?", (bd, r["tg_id"]))
+        except Exception:
+            log.exception("перенос дат рождения")
     if "last_seen" not in cols:
         con.execute("ALTER TABLE members ADD COLUMN last_seen TEXT")
         con.execute("UPDATE members SET last_seen=?", (db.now(),))  # точка отсчета: «давно не заходили» считается с момента обновления
@@ -667,6 +683,31 @@ async def send_digest(con):
     return len(items)
 
 
+async def birthday_run(con):
+    """Дни рождения: утром в день рождения и за 3 дня команде приходит уведомление. Анкета -> members.birthday."""
+    nowm = datetime.now(MSK)
+    if nowm.hour < int(db.get_setting(con, "digest_hour", "9") or 9):
+        return
+    for delta, key in ((0, "t_birthday"), (3, "t_birthday_soon")):
+        day = (nowm + timedelta(days=delta)).date()
+        mmdd = day.strftime("-%m-%d")
+        rows = con.execute("SELECT * FROM members WHERE status='active' AND birthday LIKE ?", ("%" + mmdd,)).fetchall()
+        for m in rows:
+            ref = day.isoformat()
+            if con.execute("SELECT 1 FROM reminder_log WHERE tg_id=? AND kind=? AND ref=?", (m["tg_id"], key, ref)).fetchone():
+                continue
+            con.execute("INSERT OR IGNORE INTO reminder_log VALUES(?,?,?,?)", (m["tg_id"], key, ref, db.now()))
+            con.commit()
+            who = ((m["first_name"] or "") + (" @" + m["username"] if m["username"] else "")).strip() or f"id {m['tg_id']}"
+            try:
+                born = int(str(m["birthday"])[:4])
+                age = f", исполняется {day.year - born}" if 1900 < born < day.year else ""
+            except ValueError:
+                age = ""
+            wish = render(con, "birthday_wish", name=_first_name(m))
+            await team_notify(render(con, key, who=who, age=age, wish=Raw(wish), date=day.strftime("%d.%m")), key)
+
+
 async def digest_loop():
     while True:
         try:
@@ -685,6 +726,7 @@ async def digest_loop():
                         con.commit()
                         await send_stats(con)
                 await reminders_run(con)
+                await birthday_run(con)
             finally:
                 con.close()
         except Exception:
@@ -1484,9 +1526,38 @@ async def admin_crm_save(shard: str, req: Request, _=Depends(admin), con=Depends
     return {"ok": True, "ts": ts}
 
 
+async def fill_names(limit=25):
+    """Подтягиваем имена из Telegram тем, у кого в базе только числовой ID (например, оплатили, но еще не запускали бота)."""
+    con = db.connect()
+    try:
+        rows = con.execute("SELECT tg_id FROM members WHERE COALESCE(first_name,'')='' AND COALESCE(username,'')='' AND COALESCE(role,'')!='team' LIMIT ?", (limit,)).fetchall()
+        for r in rows:
+            key = "nt:%s" % r["tg_id"]
+            last = db.get_setting(con, key, "")
+            try:
+                if last and datetime.fromisoformat(last) > datetime.now(timezone.utc) - timedelta(hours=12):
+                    continue
+            except ValueError:
+                pass
+            db.set_setting(con, key, datetime.now(timezone.utc).isoformat())
+            con.commit()
+            res = await tg._call(tg.BOT_TOKEN, "getChat", {"chat_id": r["tg_id"]})
+            c = (res or {}).get("result") if isinstance(res, dict) and res.get("ok") else None
+            if c and (c.get("first_name") or c.get("username")):
+                con.execute("UPDATE members SET first_name=?, last_name=?, username=?, updated_at=? WHERE tg_id=?",
+                            (c.get("first_name") or "", c.get("last_name") or "", c.get("username") or "", db.now(), r["tg_id"]))
+                con.commit()
+    except Exception as e:
+        log.warning("fill_names: %s", repr(e)[:200])
+    finally:
+        con.close()
+
+
 @app.get("/admin/api/members")
-def admin_members(_=Depends(admin), con=Depends(get_con)):
+async def admin_members(_=Depends(admin), con=Depends(get_con)):
     out = db.rows(con.execute("SELECT * FROM members ORDER BY created_at DESC"))
+    if any(not (m.get("first_name") or m.get("username")) for m in out):
+        spawn(fill_names())
     last = _last_active(con)
     for m in out:
         m["points"] = db.balance(con, m["tg_id"])
@@ -1707,6 +1778,9 @@ def apply_start_form(con, u, d):
         upd["first_name"] = parts[0]
         if len(parts) > 1:
             upd["last_name"] = parts[1]
+    bd = str(d.get("birthday") or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bd):
+        upd["birthday"] = bd
     rc = str(d.get("random_coffee") or "").strip()
     if rc:
         upd["coffee"] = 0 if rc.startswith("Пока без") else 1
