@@ -2122,6 +2122,11 @@ async def send_card(con, tg_id):
         log.warning("карточка: отправка %s не удалась: %s", attempt + 1, str(r)[:200])
         await asyncio.sleep(4)
     ok = bool(r and r.get("ok"))
+    if not ok:
+        # Telegram не смог сам скачать картинку: даем кнопку, по ней карточка открывается в приложении и сохраняется
+        kb = {"inline_keyboard": [[{"text": "Открыть карточку", "web_app": {"url": f"{PUBLIC_URL}/cardview/{fn}"}}]]}
+        r2 = await tg.send(tg_id, caption, button=kb)
+        ok = bool(r2 and r2.get("ok"))
     _msg_log(tg_id, "[картинка] " + caption, "card_ready", ok, "main")
     return ok
 
@@ -2142,6 +2147,24 @@ def cardpic(name: str):
     if p.parent != CARDS.resolve() or not p.exists():
         raise HTTPException(404)
     return FileResponse(p, media_type="image/png")
+
+
+@app.get("/cardview/{name}")
+def cardview(name: str):
+    """Страница с карточкой: открывается из бота, картинку можно сохранить (нажать и удерживать)."""
+    p = (CARDS / name).resolve()
+    if p.parent != CARDS.resolve() or not p.exists():
+        raise HTTPException(404)
+    html = ("<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'><title>Карточка месяца</title>"
+            "<style>body{margin:0;background:#fff;font-family:system-ui,sans-serif;text-align:center;color:#222}"
+            "img{display:block;width:100%;max-width:460px;margin:0 auto}"
+            "p{margin:14px 20px;font-size:15px;line-height:1.4}"
+            "a{display:inline-block;margin:6px 0 24px;padding:12px 22px;border-radius:12px;background:#222;color:#fff;text-decoration:none}</style></head><body>"
+            f"<img src='/cardpic/{name}' alt='Карточка месяца'>"
+            "<p>Чтобы сохранить: нажмите на картинку и удерживайте, затем выберите «Сохранить».</p>"
+            f"<a href='/cardpic/{name}' target='_blank'>Открыть картинку отдельно</a></body></html>")
+    return HTMLResponse(html)
 
 
 @app.get("/botpic/{name}")
