@@ -2193,8 +2193,10 @@ async def offer_request(oid: int, req: Request, m=Depends(member), con=Depends(g
 
 def ensure_shop(con):
     try:
-        con.execute("ALTER TABLE shop ADD COLUMN img TEXT DEFAULT ''")
-        con.commit()
+        cols = [r[1] for r in con.execute("PRAGMA table_info(shop)").fetchall()]
+        if "img" not in cols:
+            con.execute("ALTER TABLE shop ADD COLUMN img TEXT DEFAULT ''")
+            con.commit()
     except Exception:
         pass
 
