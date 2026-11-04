@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import secrets
+import time
 import urllib.request
 import uuid
 from contextlib import asynccontextmanager
@@ -299,6 +300,36 @@ async def setup_bot(delay=3):
             log.exception("не удалось настроить бота: %s", method)
 
 
+async def poll_loop():
+    """Режим TG_MODE=poll: сообщения боту забираем сами через скрипт Google (getUpdates), входящие подключения от Telegram не нужны.
+    Нужен, когда Telegram не может достучаться до сервера напрямую."""
+    await asyncio.sleep(2)
+    r = await tg._call(tg.BOT_TOKEN, "deleteWebhook", {"drop_pending_updates": False})
+    log.info("получение сообщений: опрос через скрипт, вебхук снят: %s", str(r)[:120])
+    offset = None
+    while True:
+        started = time.monotonic()
+        try:
+            payload = {"timeout": 20, "allowed_updates": ["message", "callback_query"]}
+            if offset:
+                payload["offset"] = offset
+            r = await tg._call(tg.BOT_TOKEN, "getUpdates", payload, timeout=50)
+            if r and r.get("ok"):
+                for u in r.get("result") or []:
+                    offset = u["update_id"] + 1
+                    spawn(_run_update(u))
+            else:
+                log.warning("getUpdates: %s", str(r)[:200])
+                await asyncio.sleep(3)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("опрос Telegram")
+            await asyncio.sleep(3)
+        if time.monotonic() - started < 1:
+            await asyncio.sleep(1)
+
+
 @asynccontextmanager
 async def lifespan(app):
     db.init()
@@ -309,7 +340,10 @@ async def lifespan(app):
     norm = asyncio.create_task(norm_loop())
     recap = asyncio.create_task(recap_loop())
     digest = asyncio.create_task(digest_loop())
+    poll = asyncio.create_task(poll_loop()) if os.environ.get("TG_MODE", "webhook").strip().lower() == "poll" else None
     yield
+    if poll:
+        poll.cancel()
     digest.cancel()
     task.cancel()
     setup.cancel()
