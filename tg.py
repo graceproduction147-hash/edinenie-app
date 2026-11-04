@@ -37,7 +37,7 @@ def check_init_data(init_data: str, max_age=86400):
         return None
 
 
-async def _call(token, method, payload):
+async def _call(token, method, payload, file=None):
     """Отправка в Telegram. С российского сервера api.telegram.org часто недоступен,
     поэтому, если задан SHEET_WEBHOOK_URL, запрос идет через скрипт Google (он пересылает его в Telegram).
     Если скрипт не ответил, пробуем напрямую."""
@@ -47,8 +47,13 @@ async def _call(token, method, payload):
     relay = (os.environ.get("SHEET_WEBHOOK_URL") or "").strip()
     if relay:
         try:
-            async with httpx.AsyncClient(timeout=25, follow_redirects=True) as c:
-                r = await c.post(relay, json={"relay": "telegram", "token": token, "method": method, "payload": payload})
+            async with httpx.AsyncClient(timeout=60 if file else 25, follow_redirects=True) as c:
+                body = {"relay": "telegram", "token": token, "method": method, "payload": payload}
+                if file:  # (поле, байты): файл уходит через скрипт Google прямо в Telegram
+                    import base64
+                    body["file_field"] = file[0]
+                    body["file_b64"] = base64.b64encode(file[1]).decode("ascii")
+                r = await c.post(relay, json=body)
                 data = r.json()
                 if data.get("ok"):
                     return data
@@ -57,6 +62,8 @@ async def _call(token, method, payload):
                     return data  # Telegram ответил ошибкой (например, chat not found), повтор напрямую не поможет
         except Exception as e:
             log.warning("Telegram %s через скрипт не удался: %s", method, repr(e)[:200])
+    if file:
+        return None
     try:
         async with httpx.AsyncClient(timeout=8) as c:
             r = await c.post(f"https://api.telegram.org/bot{token}/{method}", json=payload)
