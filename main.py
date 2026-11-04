@@ -43,6 +43,7 @@ TEXTS = {
     "btn_form": {"title": "Кнопка анкеты", "max": 60, "plain": True, "hint": "", "default": "Заполнить анкету"},
     "btn_club": {"title": "Кнопка клуба", "max": 60, "plain": True, "hint": "", "default": "Открыть Клуб"},
     "btn_monthly": {"title": "Кнопка итогов месяца", "max": 60, "plain": True, "hint": "", "default": "Заполнить итоги"},
+    "btn_support": {"title": "Кнопка поддержки", "max": 60, "plain": True, "hint": "Ведет в чат службы поддержки.", "default": "Служба поддержки"},
     "bot_about": {"title": "Описание бота (в пустом чате до Start)", "max": 512, "plain": True, "hint": "Только текст, без жирного. Обновляется в Telegram после сохранения.",
                   "default": "Единение — Клуб, где окружение работает на ваш рост.\n\nЗдесь можно найти своих людей, знакомиться по запросу, а не наугад, и каждый месяц видеть, что сдвинулось: в деньгах, смыслах, знакомствах, возможностях, практиках и впечатлениях.\n\nНажмите «Старт». Если вы уже в Клубе, он откроется сразу."},
     "bot_short": {"title": "Подпись под именем бота", "max": 120, "plain": True, "hint": "Короткая строка, до 120 знаков. Обновляется в Telegram после сохранения.",
@@ -328,6 +329,14 @@ async def poll_loop():
             await asyncio.sleep(3)
         if time.monotonic() - started < 1:
             await asyncio.sleep(1)
+
+
+SUPPORT_URL = os.environ.get("SUPPORT_URL", "https://t.me/edinenie_support").strip()
+
+
+def support_button(con):
+    """Строка с кнопкой службы поддержки: обычная ссылка на чат в Telegram."""
+    return [[{"text": get_plain(con, "btn_support"), "url": SUPPORT_URL}]]
 
 
 @asynccontextmanager
@@ -1455,7 +1464,8 @@ async def tribute(req: Request, con=Depends(get_con)):
         if event in NEW_SUB:
             spawn(send_welcome(tg_id, get_text(con, "welcome", m.get("first_name") or ""),
                           {"inline_keyboard": tg.app_button(get_plain(con, "btn_form"), "static/anketa.html")["inline_keyboard"]
-                           + tg.app_button(get_plain(con, "btn_club"))["inline_keyboard"]},
+                           + tg.app_button(get_plain(con, "btn_club"))["inline_keyboard"]
+                           + support_button(con)},
                           pic_url(con, "welcome") or db.get_setting(con, "welcome_photo", "")))
             spawn(team_notify(render(con, "t_pay_new", who=Raw(who), id=tg_id, level=level.capitalize(), months=months or "?",
                                      amount=amount or "?", name=(m.get("first_name") or "Привет")), "t_pay_new"))
