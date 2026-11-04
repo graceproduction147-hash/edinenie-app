@@ -1441,10 +1441,26 @@ async def tribute(req: Request, con=Depends(get_con)):
 # ---------------- бот ----------------
 
 @app.post("/tg/webhook")
-async def bot_update(req: Request, con=Depends(get_con)):
+async def bot_update(req: Request):
+    """Telegram ждет ответ недолго, поэтому сразу отвечаем «принято», а сообщение разбираем в фоне."""
     if req.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET:
         raise HTTPException(403)
     upd = await req.json()
+    spawn(_run_update(upd))
+    return {"ok": True}
+
+
+async def _run_update(upd):
+    con = db.connect()
+    try:
+        await _handle_update(con, upd)
+    except Exception:
+        log.exception("сообщение боту")
+    finally:
+        con.close()
+
+
+async def _handle_update(con, upd):
     if upd.get("callback_query"):
         try:
             await handle_callback(con, upd["callback_query"])
