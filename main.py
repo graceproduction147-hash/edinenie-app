@@ -2113,14 +2113,16 @@ async def send_card(con, tg_id):
     for old in sorted(CARDS.glob(f"{tg_id}-*.png"), key=lambda p: p.stat().st_mtime)[:-5]:
         old.unlink(missing_ok=True)
     caption = render(con, "card_ready")
-    r = None
-    for attempt in range(4):  # Telegram иногда не успевает скачать картинку с первого раза
-        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "photo": f"{PUBLIC_URL}/cardpic/{fn}",
-                                                        "caption": caption, "parse_mode": "HTML"})
-        if r and r.get("ok"):
-            break
-        log.warning("карточка: отправка %s не удалась: %s", attempt + 1, str(r)[:200])
-        await asyncio.sleep(4)
+    # 1) картинка уходит через скрипт Google файлом (если скрипт обновлен), 2) иначе Telegram скачивает ее по ссылке
+    r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "caption": caption, "parse_mode": "HTML"}, file=("photo", png))
+    if not (r and r.get("ok")):
+        for attempt in range(2):
+            r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "photo": f"{PUBLIC_URL}/cardpic/{fn}",
+                                                            "caption": caption, "parse_mode": "HTML"})
+            if r and r.get("ok"):
+                break
+            log.warning("карточка: отправка по ссылке %s не удалась: %s", attempt + 1, str(r)[:200])
+            await asyncio.sleep(3)
     ok = bool(r and r.get("ok"))
     if not ok:
         # Telegram не смог сам скачать картинку: даем кнопку, по ней карточка открывается в приложении и сохраняется
