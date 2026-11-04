@@ -72,7 +72,7 @@ TEXTS = {
     "coffee_pair": {"title": "Random Coffee: пара на неделю", "group": "members", "max": 1000, "vars": "{pair} (имя и ник), {reason} (почему вы подходите)", "hint": "Каждому из пары, по понедельникам.",
                     "default": "☕ **Random Coffee на эту неделю** 🌀\n\nВаша пара: **{pair}**\n\n{reason}\n\nДоговоритесь о созвоне на 30 минут. В пятницу мы спросим, как прошло. Хорошей встречи 🫂"},
     "coffee_none": {"title": "Random Coffee: не хватило пары", "group": "members", "max": 1000, "vars": "", "hint": "Тому, кто остался без пары.",
-                    "default": "На этой неделе пары не нашлось 🌀\n\nНо вы первая в очереди на следующую. Благодарим вас за терпение ❤️"},
+                    "default": "На этой неделе пары не нашлось 🌀\n\nВы остаетесь в очереди на следующую неделю. Благодарим вас за терпение ❤️"},
     "coffee_ask": {"title": "Random Coffee: как прошла встреча", "group": "members", "max": 1000, "vars": "", "hint": "По пятницам, тем, кто еще не ответил.",
                    "default": "Добрый день! Как прошла встреча Random Coffee? 🫂\n\nРасскажите в двух словах, что получилось. Нам очень важно знать, а за отзыв начисляются баллы 🔥"},
     "event_day": {"title": "Напоминание об эфире за сутки", "group": "members", "max": 1000, "vars": "{title}, {link} (строка с ссылкой или пусто)", "hint": "Записавшимся на эфир.",
@@ -188,8 +188,49 @@ def pic_url(con, key):
     return f"{PUBLIC_URL}/botpic/{n}" if n and (BOTPICS / n).exists() else ""
 
 
+def auto_on(con):
+    """Общий выключатель автоматических рассылок участникам (по умолчанию выключен, включается в кабинете)."""
+    return db.get_setting(con, "auto_on", "0") == "1"
+
+
+# ---------------- журнал всех сообщений бота ----------------
+import contextvars
+_CUR_KEY = contextvars.ContextVar("cur_key", default="")
+_orig_send = tg.send
+
+
+def _msg_log(chat_id, text, key, ok, bot):
+    try:
+        c = db.connect()
+        try:
+            c.execute("CREATE TABLE IF NOT EXISTS msg_log(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, bot TEXT, key TEXT, text TEXT, ok INTEGER, created_at TEXT)")
+            c.execute("INSERT INTO msg_log(tg_id,bot,key,text,ok,created_at) VALUES(?,?,?,?,?,?)",
+                      (chat_id, bot, key or "", (text or "")[:4000], 1 if ok else 0, db.now()))
+            c.execute("DELETE FROM msg_log WHERE id < (SELECT MAX(id) FROM msg_log) - 20000")
+            c.commit()
+        finally:
+            c.close()
+    except Exception:
+        log.exception("журнал сообщений")
+
+
+async def _logged_send(chat_id, text, button=None, token=None):
+    ok = False
+    try:
+        r = await _orig_send(chat_id, text, button, token=token)
+        ok = bool(r) and (not isinstance(r, dict) or r.get("ok", True))
+        return r
+    finally:
+        _msg_log(chat_id, text, _CUR_KEY.get(), ok, "team" if (token and token == tg.TEAM_BOT_TOKEN) else "main")
+        _CUR_KEY.set("")
+
+
+tg.send = _logged_send
+
+
 async def send_text(chat_id, text, kb=None, key=None, con=None, token=None):
     """Сообщение бота. Если для него в кабинете задана картинка, она идет сверху (подпись до 1024 знаков, длиннее: картинка и текст отдельно)."""
+    _CUR_KEY.set(key or "")
     url = ""
     if key:
         c = con or db.connect()
@@ -207,6 +248,7 @@ async def send_text(chat_id, text, kb=None, key=None, con=None, token=None):
                     payload["reply_markup"] = kb
                 r = await tg._call(tok, "sendPhoto", payload)
                 if r and r.get("ok"):
+                    _msg_log(chat_id, "[картинка] " + text, key, True, "team" if (token and token == tg.TEAM_BOT_TOKEN) else "main")
                     return r
             else:
                 log.warning("текст «%s» длиннее 1024 знаков, отправлен без картинки", key)
@@ -401,11 +443,13 @@ async def recalc_inside(con, tg_id):
     if st["done"] and m["level"] != "inside":
         con.execute("UPDATE members SET level='inside', inside_auto=1 WHERE tg_id=?", (tg_id,))
         con.commit()
-        await send_text(tg_id, render(con, "inside_on", days=st["days_left"]), tg.app_button("Открыть клуб", "#profile"), key="inside_on", con=con)
+        if auto_on(con):
+            await send_text(tg_id, render(con, "inside_on", days=st["days_left"]), tg.app_button("Открыть клуб", "#profile"), key="inside_on", con=con)
     elif not st["done"] and m["level"] == "inside" and m["inside_auto"]:
         con.execute("UPDATE members SET level='club', inside_auto=0 WHERE tg_id=?", (tg_id,))
         con.commit()
-        await send_text(tg_id, render(con, "inside_off"), tg.app_button("Что осталось", "#profile"), key="inside_off", con=con)
+        if auto_on(con):
+            await send_text(tg_id, render(con, "inside_off"), tg.app_button("Что осталось", "#profile"), key="inside_off", con=con)
 
 
 # ---------------- после эфира: запись, «смотрел», инсайты по хештегу ----------------
@@ -497,7 +541,7 @@ async def recap_loop():
             con = db.connect()
             try:
                 since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-                for e in con.execute("SELECT * FROM events WHERE recording_url!='' AND starts_at>=?", (since,)).fetchall():
+                for e in ([] if not auto_on(con) else con.execute("SELECT * FROM events WHERE recording_url!='' AND starts_at>=?", (since,)).fetchall()):
                     done = {r[0] for r in con.execute("SELECT kind FROM event_notice WHERE event_id=?", (e["id"],))}
                     if "record" not in done:
                         con.execute("INSERT OR IGNORE INTO event_notice(event_id,kind,sent_at) VALUES(?,?,?)", (e["id"], "record", db.now()))
@@ -532,7 +576,7 @@ def _first_name(m):
 async def reminders_run(con):
     """Напоминания участникам: анкета (1, 3, 7 день), продление (за 7 и 1 день), «давно не заходили». Каждое уходит один раз."""
     nowm = datetime.now(MSK)
-    if not (10 <= nowm.hour < 20):
+    if not auto_on(con) or not (10 <= nowm.hour < 20):
         return 0
     now = datetime.now(timezone.utc)
     sent = 0
@@ -1144,21 +1188,25 @@ async def redeem(code: str, m=Depends(member), con=Depends(get_con)):
 
 async def _coffee_announce(pairs, left):
     con = db.connect()
+    if not auto_on(con):
+        con.close()
+        return
     try:
         for a, b, ra, rb in pairs:
             for me, other, why in ((a, b, ra), (b, a, rb)):
                 pair = f"{other['first_name'] or ''} {other['last_name'] or ''}".strip() + (f" (@{other['username']})" if other["username"] else "")
                 await send_text(me["tg_id"], render(con, "coffee_pair", pair=pair, reason=why), tg.app_button("Открыть пару", "#coffee"),
                                 key="coffee_pair", con=con)
-        for p in left:
-            await send_text(p["tg_id"], render(con, "coffee_none"), key="coffee_none", con=con)
-        if pairs or left:
+        # тем, кому пары не хватило, ничего не отправляем: они остаются в очереди на следующую неделю
+        if pairs:
             await team_notify(render(con, "t_coffee", pairs=len(pairs), left=len(left)), "t_coffee")
     finally:
         con.close()
 
 
 async def _coffee_remind_feedback(con):
+    if not auto_on(con):
+        return
     week = coffee.week_key()
     for r in con.execute("SELECT * FROM coffee_pairs WHERE week=?", (week,)).fetchall():
         for who, met in ((r["a"], r["met_a"]), (r["b"], r["met_b"])):
@@ -1168,6 +1216,8 @@ async def _coffee_remind_feedback(con):
 
 async def _event_reminders(con):
     """Напоминания записавшимся: за сутки и за час до эфира."""
+    if not auto_on(con):
+        return
     now = datetime.now(timezone.utc)
     for kind, delta, key in (("day", timedelta(hours=24), "event_day"), ("hour", timedelta(hours=1), "event_hour")):
         lo, hi = (now + delta - timedelta(minutes=5)).isoformat(), (now + delta + timedelta(minutes=5)).isoformat()
@@ -1183,6 +1233,16 @@ async def _event_reminders(con):
                 await send_text(tg_id, text, key=key, con=con)
 
 
+_orig_make_pairs = coffee.make_pairs
+
+
+def _make_pairs(con, week=None):
+    if not auto_on(con):
+        return []  # пока рассылки выключены, пары не составляем и ничего не отправляем
+    return _orig_make_pairs(con, week)
+
+
+coffee.make_pairs = _make_pairs
 coffee.announce = _coffee_announce
 coffee.remind_feedback = _coffee_remind_feedback
 coffee.event_reminders = _event_reminders
@@ -1722,11 +1782,52 @@ async def admin_library(req: Request, _=Depends(admin), con=Depends(get_con)):
     return {"id": lid}
 
 
+@app.get("/admin/api/auto")
+def admin_auto_get(_=Depends(admin), con=Depends(get_con)):
+    return {"on": auto_on(con)}
+
+
+@app.post("/admin/api/auto")
+async def admin_auto_set(req: Request, _=Depends(admin), con=Depends(get_con)):
+    d = await req.json()
+    db.set_setting(con, "auto_on", "1" if d.get("on") else "0")
+    con.commit()
+    return {"on": auto_on(con)}
+
+
+@app.get("/admin/api/messages")
+def admin_messages(who: str = "all", q: str = "", limit: int = 300, _=Depends(admin), con=Depends(get_con)):
+    con.execute("CREATE TABLE IF NOT EXISTS msg_log(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, bot TEXT, key TEXT, text TEXT, ok INTEGER, created_at TEXT)")
+    sql = ("SELECT l.*, m.first_name, m.last_name, m.username, m.role FROM msg_log l LEFT JOIN members m ON m.tg_id=l.tg_id WHERE 1=1")
+    args = []
+    if who == "members":
+        sql += " AND (m.role IS NULL OR m.role!='team')"
+    elif who == "team":
+        sql += " AND m.role='team'"
+    if q.strip():
+        sql += " AND (lower(l.text) LIKE ? OR lower(COALESCE(m.first_name,'')||' '||COALESCE(m.last_name,'')||' '||COALESCE(m.username,'')) LIKE ?)"
+        like = "%" + q.strip().lower() + "%"
+        args += [like, like]
+    sql += " ORDER BY l.id DESC LIMIT ?"
+    args.append(max(1, min(int(limit), 1000)))
+    out = []
+    for r in con.execute(sql, args).fetchall():
+        d = dict(r)
+        d["name"] = (((d.get("first_name") or "") + " " + (d.get("last_name") or "")).strip()) or (("@" + d["username"]) if d.get("username") else f"id {d['tg_id']}")
+        d["title"] = (TEXTS.get(d["key"]) or {}).get("title") or (d["key"] or "")
+        out.append(d)
+    return out
+
+
 @app.post("/admin/api/coffee/run")
 async def admin_coffee(_=Depends(admin), con=Depends(get_con)):
+    if not auto_on(con):
+        return {"ok": False, "note": "Автоматические рассылки выключены"}
     res = coffee.make_pairs(con)
     if not res:
         return {"ok": False, "note": "Пары на эту неделю уже составлены"}
+    if not res[0]:
+        return {"ok": False, "note": f"Пар не получилось: подходящих участников с анкетой пока мало ({len(res[1])}). Никому ничего не отправлено."}
     await coffee.announce(*res)
     return {"ok": True, "pairs": len(res[0]), "left": len(res[1])}
 
