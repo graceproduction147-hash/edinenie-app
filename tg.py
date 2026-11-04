@@ -37,7 +37,7 @@ def check_init_data(init_data: str, max_age=86400):
         return None
 
 
-async def _call(token, method, payload, file=None):
+async def _call(token, method, payload, file=None, timeout=None):
     """Отправка в Telegram. С российского сервера api.telegram.org часто недоступен,
     поэтому, если задан SHEET_WEBHOOK_URL, запрос идет через скрипт Google (он пересылает его в Telegram).
     Если скрипт не ответил, пробуем напрямую."""
@@ -47,7 +47,7 @@ async def _call(token, method, payload, file=None):
     relay = (os.environ.get("SHEET_WEBHOOK_URL") or "").strip()
     if relay:
         try:
-            async with httpx.AsyncClient(timeout=60 if file else 25, follow_redirects=True) as c:
+            async with httpx.AsyncClient(timeout=timeout or (60 if file else 25), follow_redirects=True) as c:
                 body = {"relay": "telegram", "token": token, "method": method, "payload": payload}
                 if file:  # (поле, байты): файл уходит через скрипт Google прямо в Telegram
                     import base64
