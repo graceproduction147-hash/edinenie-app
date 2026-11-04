@@ -7,6 +7,7 @@ import html
 import json
 import logging
 import os
+import re
 import secrets
 import urllib.request
 import uuid
@@ -25,12 +26,240 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("club")
 
 
+# Тексты бота. Их можно менять в кабинете (вкладка «Тексты бота»), в коде править не нужно.
+# **жирный**, {name} вставит имя, {link} вставит ссылку на вступление. Эмодзи вставляйте прямо в текст.
+TEXTS = {
+    "welcome": {"title": "Приветствие после оплаты", "max": 1000, "hint": "Приходит сразу после оплаты. Если задана картинка, этот текст идет под ней.",
+                "default": "**{name}, добрый день! Добро пожаловать в «Единение»!** ❤️\n\nБлагодарим вас, что вы с нами. Мы очень рады, что вы теперь часть Клуба — сообщества людей, которых объединяют развитие, сильное окружение и желание создавать большее вместе 🫂\n\nВсего два шага, чтобы начать:\n\n📝 **Шаг 1. Заполните анкету.** Расскажите немного о себе, своих интересах и намерениях. Так нам будет проще познакомить вас с нужными людьми 🪬\n\n🌀 **Шаг 2. Откройте Клуб.** Заходите в наше пространство, знакомьтесь с участниками и присоединяйтесь к событиям 🚀\n\nМы рядом, если появятся вопросы ❤️"},
+    "member_start": {"title": "Участнику, когда он нажимает Start", "max": 3000, "hint": "",
+                     "default": "**{name}, добрый день!** ❤️\n\nРады видеть вас в Клубе. Свои люди и ваши результаты ждут внутри 🚀"},
+    "guest_start": {"title": "Тому, кто еще не оплатил", "max": 3000, "hint": "{link} вставит ссылку на вступление.",
+                    "default": "**Единение** 🌀\n\nОкружение, которое двигает вперед.\n\nПриложение откроется, как только пройдет оплата участия. Будем рады видеть вас в Клубе 🫂\n\nВступить: {link}"},
+    "anketa": {"title": "Команда /anketa", "max": 3000, "hint": "",
+               "default": "**Анкета участника** 🪬\n\nДесять минут о себе — и Клуб сможет знакомить вас с теми людьми, с которыми действительно интересно. Профиль в Клубе заполнится из анкеты сам.\n\nБлагодарим вас за время ❤️"},
+    "monthly": {"title": "Команда /monthly", "max": 3000, "hint": "",
+                "default": "**Итоги месяца** 🚀\n\nПара минут, чтобы увидеть, что сдвинулось, и выбрать, куда идти дальше. Нам очень важно знать, как у вас дела ❤️"},
+    "btn_form": {"title": "Кнопка анкеты", "max": 60, "plain": True, "hint": "", "default": "🪬 Заполнить анкету"},
+    "btn_club": {"title": "Кнопка клуба", "max": 60, "plain": True, "hint": "", "default": "🌀 Открыть Клуб"},
+    "btn_monthly": {"title": "Кнопка итогов месяца", "max": 60, "plain": True, "hint": "", "default": "🚀 Заполнить итоги"},
+    "bot_about": {"title": "Описание бота (в пустом чате до Start)", "max": 512, "plain": True, "hint": "Только текст, без жирного. Обновляется в Telegram после сохранения.",
+                  "default": "Единение — Клуб, где окружение работает на ваш рост 🚀\n\nЗдесь можно найти своих людей, знакомиться по запросу, а не наугад, и каждый месяц видеть, что сдвинулось: в деньгах, смыслах, знакомствах, возможностях, практиках и впечатлениях 🫂\n\nНажмите «Старт». Если вы уже в Клубе, он откроется сразу 🌀"},
+    "bot_short": {"title": "Подпись под именем бота", "max": 120, "plain": True, "hint": "Короткая строка, до 120 знаков. Обновляется в Telegram после сохранения.",
+                  "default": "Окружение, которое двигает вперед: свои люди, живые встречи и результаты 🚀"},
+    # ---- участникам ----
+    "inside_on": {"title": "Inside получен", "group": "members", "max": 1000, "vars": "{days} (сколько дней действует)", "hint": "Когда участник закрыл норму месяца.",
+                  "default": "**{name}, поздравляем, вы в Inside!** 🔥\n\nБлагодарим вас за вклад в Клуб. Вы закрыли норму месяца, и теперь вам открыты закрытые эфиры, записи и материалы. Статус действует еще {days} дн.\n\nРады за ваше проявление ❤️"},
+    "inside_off": {"title": "Inside на паузе", "group": "members", "max": 1000, "vars": "", "hint": "Когда норма месяца не закрыта.",
+                   "default": "Inside пока на паузе: норма месяца еще не закрыта.\n\nЧтобы вернуть его, можно пригласить друга, провести встречу Random Coffee или рассказать о Клубе и своих результатах. Мы будем рады вам 🔥"},
+    "points_ok": {"title": "Баллы подтверждены", "group": "members", "max": 1000, "vars": "{points}", "hint": "Когда команда подтвердила заявку на баллы.",
+                  "default": "Команда Клуба подтвердила +{points} баллов 🔥\n\nБлагодарим вас за вклад и рады за ваше проявление ❤️"},
+    "recap_record": {"title": "Запись эфира готова", "group": "members", "max": 1000, "vars": "{title} (название эфира), {points}", "hint": "Приходит, когда в кабинете появилась ссылка на запись.",
+                     "default": "Запись эфира «{title}» готова 🌀\n\nПосмотрите, когда будет время, и нажмите «Смотрел». А главную мысль напишите в чате Клуба с хештегом #инсайт: бот ее зафиксирует, команда подтвердит, и придет +{points} баллов.\n\nНам очень важно узнать, что откликнулось 🪬"},
+    "recap_nudge": {"title": "Напоминание про запись (через 48 часов)", "group": "members", "max": 1000, "vars": "{title}, {points}", "hint": "Только тем, кто не нажал «Смотрел».",
+                    "default": "Добрый день! Напоминаем про запись эфира «{title}» ❤️\n\nЕсли уже смотрели, нажмите «Смотрел» и напишите свой инсайт в чат с хештегом #инсайт: придет +{points} баллов.\n\nБудем рады услышать, что вам откликнулось 🪬"},
+    "recap_closed": {"title": "Запись закрытого эфира, не Inside", "group": "members", "max": 1000, "vars": "{title}", "hint": "Тем, у кого нет Inside. Приходит один раз.",
+                     "default": "Вышла запись закрытого эфира «{title}» 🌀\n\nОна доступна на уровне Inside. Inside открывается за вклад в Клуб: за месяц привести друга, провести встречу Random Coffee и рассказать о Клубе или о своих результатах. Как это сделать, смотрите в профиле приложения.\n\nБудем рады видеть вас внутри 🔥"},
+    "insight_ok": {"title": "Инсайт записан", "group": "members", "max": 1000, "vars": "{points}", "hint": "Участник написал #инсайт в чате клуба.",
+                   "default": "**Записали ваш инсайт** 🪬\n\nЗа него назначено **{points} баллов**. Инсайт передан менеджеру Клуба: если все в порядке, мы начислим вам {points} баллов.\n\nБлагодарим вас за включенность и рады за ваше проявление ❤️"},
+    "insight_dup": {"title": "Инсайт по эфиру уже был", "group": "members", "max": 1000, "vars": "", "hint": "Второй инсайт по тому же эфиру.",
+                    "default": "Инсайт по этому эфиру уже записан 🪬\n\nОдного на эфир достаточно: баллы начисляются за него один раз. Благодарим вас ❤️"},
+    "match": {"title": "Взаимный интерес в Знакомствах", "group": "members", "max": 1000, "vars": "{peer} (имя), {nick} (например @ivan или пусто)", "hint": "Обоим, когда они отметили друг друга.",
+              "default": "✨ **Это взаимно!** 🫂\n\nВы и **{peer}** отметили друг друга в Знакомствах. Мы рады за вас! {nick}\n\nНапишите друг другу — пусть это будет началом хорошей истории 🚀"},
+    "offer_live": {"title": "Предложение опубликовано", "group": "members", "max": 1000, "vars": "{title}", "hint": "Автору, когда команда одобрила предложение.",
+                   "default": "Ваше предложение «{title}» опубликовано в разделе «События», вкладка «Предложения», на 30 дней 🚀\n\nКогда придет заявка, мы сразу напишем вам здесь. Благодарим вас, что делитесь своим ❤️"},
+    "offer_request": {"title": "Заявка на ваше предложение", "group": "members", "max": 1000, "vars": "{title}, {who} (имя и ссылка), {what} (хочет купить или предлагает бартер), {message} (текст человека)", "hint": "Автору предложения.",
+                      "default": "🛍 Добрый день! По вашему предложению «{title}» есть отклик: {who} {what}.\n\n{message}\n\nНапишите человеку в Telegram и договоритесь напрямую. Рады, что в Клубе происходит такое 🔥"},
+    "coffee_pair": {"title": "Random Coffee: пара на неделю", "group": "members", "max": 1000, "vars": "{pair} (имя и ник), {reason} (почему вы подходите)", "hint": "Каждому из пары, по понедельникам.",
+                    "default": "☕ **Random Coffee на эту неделю** 🌀\n\nВаша пара: **{pair}**\n\n{reason}\n\nДоговоритесь о созвоне на 30 минут. В пятницу мы спросим, как прошло. Хорошей встречи 🫂"},
+    "coffee_none": {"title": "Random Coffee: не хватило пары", "group": "members", "max": 1000, "vars": "", "hint": "Тому, кто остался без пары.",
+                    "default": "На этой неделе пары не нашлось 🌀\n\nНо вы первая в очереди на следующую. Благодарим вас за терпение ❤️"},
+    "coffee_ask": {"title": "Random Coffee: как прошла встреча", "group": "members", "max": 1000, "vars": "", "hint": "По пятницам, тем, кто еще не ответил.",
+                   "default": "Добрый день! Как прошла встреча Random Coffee? 🫂\n\nРасскажите в двух словах, что получилось. Нам очень важно знать, а за отзыв начисляются баллы 🔥"},
+    "event_day": {"title": "Напоминание об эфире за сутки", "group": "members", "max": 1000, "vars": "{title}, {link} (строка с ссылкой или пусто)", "hint": "Записавшимся на эфир.",
+                  "default": "Добрый день! Завтра эфир Клуба: **{title}**{link}\n\nБудем рады вас видеть 🌀"},
+    "event_hour": {"title": "Напоминание об эфире за час", "group": "members", "max": 1000, "vars": "{title}, {link}", "hint": "Записавшимся на эфир.",
+                   "default": "Через час эфир Клуба: **{title}**{link}\n\nЖдем вас, будет живо 🔥"},
+    "r_anketa_1": {"title": "Напоминание про анкету: 1-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Через сутки после оплаты, если анкета не заполнена.",
+                   "default": "{name}, добрый день! ❤️\n\nРады, что вы в Клубе. Заполните, пожалуйста, анкету: десять минут — и мы сможем знакомить вас с нужными людьми 🪬"},
+    "r_anketa_3": {"title": "Напоминание про анкету: 3-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На третий день, если анкета все еще не заполнена.",
+                   "default": "{name}, добрый день! ❤️\n\nБез анкеты нам сложно понять, с кем вас познакомить. Это займет десять минут, а профиль заполнится сам. Будем благодарны 🪬"},
+    "r_anketa_7": {"title": "Напоминание про анкету: 7-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На седьмой день, последнее напоминание.",
+                   "default": "{name}, добрый день! ❤️\n\nУже неделя в Клубе, а анкеты пока нет. Если что-то мешает, просто напишите нам, мы поможем 🫂"},
+    "r_renew_7": {"title": "Продление: за 7 дней", "group": "reminders", "max": 1000, "vars": "{name}, {date} (до какого числа оплачено), {link}", "hint": "За неделю до конца оплаты.",
+                  "default": "{name}, добрый день! ❤️\n\nВаше участие в Клубе оплачено до {date}. Если подписка продлевается автоматически, ничего делать не нужно. Если нет, продлить можно по ссылке: {link}\n\nБлагодарим вас, что вы с нами 🫂"},
+    "r_renew_1": {"title": "Продление: за 1 день", "group": "reminders", "max": 1000, "vars": "{name}, {date}, {link}", "hint": "За сутки до конца оплаты.",
+                  "default": "{name}, добрый день! ❤️\n\nЗавтра ({date}) заканчивается оплата участия в Клубе. Чтобы остаться с нами, продлите, пожалуйста, по ссылке: {link}\n\nБудем очень рады, если вы продолжите путь вместе с нами 🚀"},
+    "r_quiet": {"title": "Давно не заходили", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Если участник не открывал приложение 21 день. Не чаще раза в 30 дней.",
+                "default": "{name}, добрый день! ❤️\n\nДавно не слышали вас, и нам вас не хватает. Загляните в Клуб: на неделе есть эфир, а в Random Coffee вас ждет новая пара. Как вы? 🌀"},
+    # ---- команде ----
+    "t_stats": {"title": "Недельная сводка для собственника", "group": "team", "max": 1500, "vars": "{period}, {items} (цифры собираются сами)", "route0": "none",
+                "hint": "По понедельникам. По умолчанию не приходит никому: выберите получателя ниже.",
+                "default": "📊 **Сводка клуба за неделю ({period})**\n\n{items}"},
+    "t_pay_new": {"title": "Новая оплата", "group": "team", "max": 2000, "vars": "{who}, {id}, {level}, {months}, {amount}, {name}", "hint": "Команде, сразу после первой оплаты.",
+                  "default": "💳 Новая оплата: {who} (id {id})\n{level}-level, {months} мес., {amount} ₽\n\nПриветствие для отправки:\n«{name}, добро пожаловать в Единение! Я ваш менеджер. Расскажите, с каким запросом пришли в клуб, и я помогу найти своих людей.»"},
+    "t_pay_renew": {"title": "Продление", "group": "team", "max": 1000, "vars": "{who}, {id}, {months}, {amount}, {until}", "hint": "Команде.",
+                    "default": "🔁 Продление: {who} (id {id}), {months} мес., {amount} ₽. Доступ продлен до {until}."},
+    "t_donation": {"title": "Донат", "group": "team", "max": 1000, "vars": "{event}, {id}, {amount}", "hint": "Команде.",
+                   "default": "Донат через Tribute ({event}): id {id}, {amount} ₽. Доступ в клуб не выдан."},
+    "t_cancel": {"title": "Отмена подписки", "group": "team", "max": 1000, "vars": "{id}", "hint": "Команде.",
+                 "default": "Отмена подписки: id {id}. Доступ сохранится до конца оплаченного периода."},
+    "t_badsign": {"title": "Оплата с неверной подписью", "group": "team", "max": 1000, "vars": "", "hint": "Команде.",
+                  "default": "Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."},
+    "t_digest": {"title": "Утренний дайджест", "group": "team", "max": 1500, "vars": "{date}, {items} (список дел, собирается сам)", "hint": "Каждое утро, только если есть что решить. Под ним отдельные заявки на баллы с кнопками.",
+                 "default": "☀️ **Дайджест на {date}**\n\n{items}"},
+    "t_digest_claim": {"title": "Дайджест: заявка на баллы", "group": "team", "max": 1000, "vars": "{rule}, {points}, {who}, {text}", "hint": "Под ним кнопки «Подтвердить» и «Отклонить».",
+                       "default": "Заявка: **{rule}** +{points} от {who}\n\n{text}"},
+    "t_notsaved": {"title": "Оплата не записана в таблицу", "group": "team", "max": 1000, "vars": "{id}", "hint": "Команде, если таблица не ответила.",
+                   "default": "Оплата принята сервером, но не записана в таблицу (id {id}). Строку можно добавить вручную."},
+    "t_form": {"title": "Новая анкета", "group": "team", "max": 1000, "vars": "{kind} (Стартовая или Ежемесячная), {who}, {id}, {tail}", "hint": "Команде.",
+               "default": "📝 {kind} анкета: {who}, id {id}{tail}. Смотрите в кабинете, вкладка «Анкеты»."},
+    "t_claim": {"title": "Заявка на баллы", "group": "team", "max": 1500, "vars": "{rule}, {points}, {who}, {text}, {link}", "hint": "Команде, когда участник отправил задание из приложения.",
+                "default": "Новая заявка на баллы: **{rule}** +{points} от {who}\n\n{text}\n\nПодтвердить в кабинете: {link}"},
+    "t_insight": {"title": "Инсайт из чата", "group": "team", "max": 1500, "vars": "{who}, {event} (по эфиру «...» или пусто), {text}", "hint": "Команде, под сообщением кнопки «Подтвердить» и «Отклонить».",
+                  "default": "Инсайт от {who}{event}:\n\n{text}"},
+    "t_redeem": {"title": "Обмен баллов", "group": "team", "max": 1000, "vars": "{item}, {cost}, {who}", "hint": "Команде.",
+                 "default": "Обмен баллов: **{item}** ({cost}) — {who}. Свяжитесь с участником."},
+    "t_offer_new": {"title": "Новое предложение на проверку", "group": "team", "max": 1000, "vars": "{title}, {who}", "hint": "Команде.",
+                    "default": "🛍 Новое предложение на проверку: «{title}» от {who}. Откройте кабинет, вкладка «Предложения»."},
+    "t_offer_req": {"title": "Заявка на предложение", "group": "team", "max": 1000, "vars": "{title}, {who}, {kind} (покупка или бартер)", "hint": "Команде.",
+                    "default": "🛍 Заявка на предложение «{title}»: {who}, {kind}."},
+    "t_guest": {"title": "Гость на эфир", "group": "team", "max": 1000, "vars": "{who}, {guest}, {event}", "hint": "Команде.",
+                "default": "🎟 {who} (годовой тариф) зовет гостя «{guest}» на эфир «{event}»."},
+    "t_coffee": {"title": "Random Coffee: итоги", "group": "team", "max": 1000, "vars": "{pairs}, {left}", "hint": "Команде, в понедельник.",
+                 "default": "Random Coffee: составлено пар {pairs}, без пары {left}."},
+    "t_team_added": {"title": "Новый человек в команде", "group": "team", "max": 1000, "vars": "{who}, {id}", "hint": "Команде.",
+                     "default": "В команду клуба добавлен(а) {who} (id {id})."},
+    "team_welcome": {"title": "Новому члену команды", "group": "team", "max": 1500, "vars": "", "hint": "Тому, кого только что добавили в команду.",
+                     "default": "Вы в команде клуба Единение. Приложение открыто полностью, уведомления об оплатах и заявках на баллы будут приходить от team-бота: нажмите /start в @edinenie_team1_bot."},
+    "photo_saved": {"title": "Картинка приветствия сохранена", "group": "team", "max": 1000, "vars": "", "hint": "Менеджеру, который прислал фото боту.",
+                    "default": "Картинка сохранена: теперь ее увидит каждый новый участник в приветствии после оплаты. Чтобы заменить, пришлите другое фото."},
+}
+
+
+def text_raw(con, key):
+    v = db.get_setting(con, "text:" + key, None)
+    return v if v and v.strip() else TEXTS[key]["default"]
+
+
+def md_html(t):
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(t, quote=False), flags=re.S)
+
+
+def get_text(con, key, name="", link=""):
+    """Текст сообщения из настроек (или стандартный): имя и ссылка подставлены, **жирный** превращен в HTML."""
+    raw = text_raw(con, key)
+    if name:
+        raw = raw.replace("{name}", name)
+    else:
+        raw = re.sub(r"\{name\}[,\s]*(\S)", lambda m: m.group(1).upper(), raw).replace("{name}", "")
+    return md_html(raw.replace("{link}", link))
+
+
+def get_plain(con, key):
+    return text_raw(con, key)
+
+
+class Raw(str):
+    """Кусок, который уже безопасен для HTML (ссылка, например): его не экранируем."""
+
+
+def render(con, key, **v):
+    """Текст из «Тексты бота» с подставленными значениями: {title}, {points} и так далее. **жирный** становится HTML."""
+    out = md_html(text_raw(con, key))
+    for k, val in v.items():
+        sv = str(val) if isinstance(val, Raw) else html.escape("" if val is None else str(val), quote=False)
+        out = out.replace("{" + k + "}", sv)
+    out = re.sub(r"[ \t]+\n", "\n", out)
+    return re.sub(r"\n{3,}", "\n\n", out).strip()
+
+
+BOTPICS = UPLOADS.parent / "botpics"
+PIC_LIMIT = 1024  # длиннее подпись под картинкой Telegram не принимает
+
+
+def pic_url(con, key):
+    n = db.get_setting(con, "pic:" + key, "")
+    return f"{PUBLIC_URL}/botpic/{n}" if n and (BOTPICS / n).exists() else ""
+
+
+async def send_text(chat_id, text, kb=None, key=None, con=None, token=None):
+    """Сообщение бота. Если для него в кабинете задана картинка, она идет сверху (подпись до 1024 знаков, длиннее: картинка и текст отдельно)."""
+    url = ""
+    if key:
+        c = con or db.connect()
+        try:
+            url = pic_url(c, key)
+        finally:
+            if not con:
+                c.close()
+    if url:
+        tok = token or tg.BOT_TOKEN
+        try:
+            if len(text) <= 1024:
+                payload = {"chat_id": chat_id, "photo": url, "caption": text, "parse_mode": "HTML"}
+                if kb:
+                    payload["reply_markup"] = kb
+                r = await tg._call(tok, "sendPhoto", payload)
+                if r and r.get("ok"):
+                    return r
+            else:
+                log.warning("текст «%s» длиннее 1024 знаков, отправлен без картинки", key)
+        except Exception:
+            log.exception("не удалось отправить картинку")
+    return await tg.send(chat_id, text, kb, token=token)
+
+
+async def team_notify(text, key=None):
+    """Сообщение менеджерам от team-бота (с картинкой, если она задана)."""
+    con = db.connect()
+    try:
+        chats = team_targets(con, key) if key else team_chat_ids(con)
+    finally:
+        con.close()
+    await asyncio.gather(*(send_text(c, text, key=key, token=tg.TEAM_BOT_TOKEN or tg.BOT_TOKEN) for c in chats),
+                         return_exceptions=True)
+
+
+BOT_COMMANDS = [
+    {"command": "start", "description": "Войти в клуб"},
+    {"command": "anketa", "description": "Анкета участника"},
+    {"command": "monthly", "description": "Итоги месяца"},
+]
+
+
+async def setup_bot(delay=3):
+    """Описание, короткая подпись и меню команд бота ставятся при запуске и после правки в кабинете."""
+    await asyncio.sleep(delay)
+    con = db.connect()
+    try:
+        about, short = get_plain(con, "bot_about"), get_plain(con, "bot_short")
+    finally:
+        con.close()
+    for method, payload in (("setMyDescription", {"description": about}),
+                            ("setMyShortDescription", {"short_description": short}),
+                            ("setMyCommands", {"commands": BOT_COMMANDS})):
+        try:
+            await tg._call(tg.BOT_TOKEN, method, payload)
+        except Exception:
+            log.exception("не удалось настроить бота: %s", method)
+
+
 @asynccontextmanager
 async def lifespan(app):
     db.init()
+    ensure_norm()
+    ensure_recap()
     task = asyncio.create_task(coffee.scheduler())
+    setup = asyncio.create_task(setup_bot())
+    norm = asyncio.create_task(norm_loop())
+    recap = asyncio.create_task(recap_loop())
+    digest = asyncio.create_task(digest_loop())
     yield
+    digest.cancel()
     task.cancel()
+    setup.cancel()
+    norm.cancel()
+    recap.cancel()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -106,19 +335,517 @@ def is_inside(m):
     return m["level"] == "inside" or is_team(m)
 
 
+# ---------------- норма месяца: Inside за вклад, а не за баллы ----------------
+NORM_DAYS = 30
+NORM_PARTS = (("invite", ("invite",)), ("coffee", ("coffee",)), ("story", ("story", "result")))
+
+
+def ensure_norm():
+    con = db.connect()
+    cols = {r[1] for r in con.execute("PRAGMA table_info(members)")}
+    if "inside_auto" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN inside_auto INTEGER DEFAULT 0")
+    if "last_seen" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN last_seen TEXT")
+        con.execute("UPDATE members SET last_seen=?", (db.now(),))  # точка отсчета: «давно не заходили» считается с момента обновления
+    con.execute("CREATE TABLE IF NOT EXISTS crm_kv(k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS reminder_log(tg_id INTEGER, kind TEXT, ref TEXT, sent_at TEXT, PRIMARY KEY(tg_id, kind, ref))")
+    con.commit()
+    con.close()
+
+
+def norm_state(con, tg_id):
+    """За последние 30 дней подтверждены: приглашенный и оплативший участник, встреча Random Coffee,
+    рассказ о клубе или о своих результатах. Все три пункта = Inside до тех пор, пока самый старый из них не выйдет из окна."""
+    since = (datetime.now(timezone.utc) - timedelta(days=NORM_DAYS)).isoformat()
+    last = {}
+    for key, codes in NORM_PARTS:
+        q = ("SELECT MAX(decided_at) FROM claims WHERE tg_id=? AND status='approved' AND rule_code IN (%s) AND decided_at>=?"
+             % ",".join("?" * len(codes)))
+        last[key] = con.execute(q, (tg_id, *codes, since)).fetchone()[0]
+    done = all(last.values())
+    until, days_left = None, 0
+    if done:
+        try:
+            until_dt = min(datetime.fromisoformat(v) for v in last.values()) + timedelta(days=NORM_DAYS)
+            until = until_dt.isoformat()
+            days_left = max(0, (until_dt - datetime.now(timezone.utc)).days + 1)
+        except ValueError:
+            done = False
+    return {"invite": bool(last["invite"]), "coffee": bool(last["coffee"]), "story": bool(last["story"]),
+            "done": done, "until": until, "days_left": days_left, "days": NORM_DAYS}
+
+
+async def recalc_inside(con, tg_id):
+    """Выдает или снимает Inside по норме месяца. Inside, выданный командой вручную, не трогает."""
+    m = con.execute("SELECT level, inside_auto, status FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if not m or m["status"] != "active":
+        return
+    st = norm_state(con, tg_id)
+    if st["done"] and m["level"] != "inside":
+        con.execute("UPDATE members SET level='inside', inside_auto=1 WHERE tg_id=?", (tg_id,))
+        con.commit()
+        await send_text(tg_id, render(con, "inside_on", days=st["days_left"]), tg.app_button("Открыть клуб", "#profile"), key="inside_on", con=con)
+    elif not st["done"] and m["level"] == "inside" and m["inside_auto"]:
+        con.execute("UPDATE members SET level='club', inside_auto=0 WHERE tg_id=?", (tg_id,))
+        con.commit()
+        await send_text(tg_id, render(con, "inside_off"), tg.app_button("Что осталось", "#profile"), key="inside_off", con=con)
+
+
+# ---------------- после эфира: запись, «смотрел», инсайты по хештегу ----------------
+INSIGHT_TAG = re.compile(r"#инсайт\w*", re.I)
+
+
+def ensure_recap():
+    con = db.connect()
+    first = not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='event_notice'").fetchone()
+    con.execute("CREATE TABLE IF NOT EXISTS event_watch(tg_id INTEGER, event_id INTEGER, created_at TEXT, PRIMARY KEY(tg_id, event_id))")
+    con.execute("CREATE TABLE IF NOT EXISTS event_notice(event_id INTEGER, kind TEXT, sent_at TEXT, PRIMARY KEY(event_id, kind))")
+    if first:  # при первом запуске старые записи не рассылаем: напоминания только для новых
+        for r in con.execute("SELECT id FROM events WHERE recording_url!=''").fetchall():
+            for kind in ("record", "nudge"):
+                con.execute("INSERT OR IGNORE INTO event_notice(event_id,kind,sent_at) VALUES(?,?,?)", (r[0], kind, db.now()))
+    con.commit()
+    con.close()
+
+
+def team_chat_ids(con):
+    return set(tg.MANAGER_CHAT_IDS) | set(db.team_ids(con))
+
+
+def team_targets(con, key):
+    """Кому из команды уходит это сообщение. Ничего не выбрано: всем, как раньше."""
+    v = db.get_setting(con, "route:" + key, None)
+    if v is None or v == "":
+        return set() if (TEXTS.get(key, {}).get("route0") == "none") else team_chat_ids(con)
+    try:
+        ids = json.loads(v)
+    except ValueError:
+        return team_chat_ids(con)
+    if ids is None:
+        return team_chat_ids(con)
+    return {int(i) for i in ids} & team_chat_ids(con)
+
+
+async def decide_claim(con, cid, approve, points=None):
+    """Единое решение по заявке на баллы: из кабинета и из кнопок в боте."""
+    c = con.execute("SELECT * FROM claims WHERE id=?", (cid,)).fetchone()
+    if not c or c["status"] != "pending":
+        return None
+    status = "approved" if approve else "rejected"
+    pts = int(points) if points is not None else c["points"]
+    con.execute("UPDATE claims SET status=?, points=?, decided_at=? WHERE id=?", (status, pts, db.now(), cid))
+    con.commit()
+    if approve:
+        await send_text(c["tg_id"], render(con, "points_ok", points=pts), tg.app_button("Мои баллы", "#profile"), key="points_ok", con=con)
+        await recalc_inside(con, c["tg_id"])
+    return status, pts, c
+
+
+def _recap_audience(con, e):
+    rows = con.execute("SELECT * FROM members WHERE status='active' AND bot_started=1").fetchall()
+    return [db.row(r) for r in rows]
+
+
+async def _send_recap(con, e, kind):
+    pts = con.execute("SELECT points FROM point_rules WHERE code='insight'").fetchone()
+    pts = pts["points"] if pts else 10
+    watched = {r[0] for r in con.execute("SELECT tg_id FROM event_watch WHERE event_id=?", (e["id"],))}
+    for m in _recap_audience(con, e):
+        if kind == "nudge" and m["tg_id"] in watched:
+            continue
+        if e["inside_only"] and not is_inside(m):
+            if kind == "nudge":
+                continue  # повторно закрытый эфир тем, у кого нет Inside, не напоминаем
+            text = render(con, "recap_closed", title=e["title"])
+            try:
+                await send_text(m["tg_id"], text, tg.app_button("Как перейти на Inside", "#profile"), key="recap_closed", con=con)
+            except Exception:
+                log.exception("напоминание о закрытом эфире")
+            await asyncio.sleep(0.15)
+            continue
+        rk = "recap_record" if kind == "record" else "recap_nudge"
+        text = render(con, rk, title=e["title"], points=pts)
+        kb = {"inline_keyboard": [[{"text": "Смотреть запись", "url": e["recording_url"]}],
+                                  [{"text": "Смотрел", "callback_data": f"w:{e['id']}"}]]}
+        try:
+            await send_text(m["tg_id"], text, kb, key=rk, con=con)
+        except Exception:
+            log.exception("напоминание о записи")
+        await asyncio.sleep(0.15)
+
+
+async def recap_loop():
+    while True:
+        try:
+            con = db.connect()
+            try:
+                since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+                for e in con.execute("SELECT * FROM events WHERE recording_url!='' AND starts_at>=?", (since,)).fetchall():
+                    done = {r[0] for r in con.execute("SELECT kind FROM event_notice WHERE event_id=?", (e["id"],))}
+                    if "record" not in done:
+                        con.execute("INSERT OR IGNORE INTO event_notice(event_id,kind,sent_at) VALUES(?,?,?)", (e["id"], "record", db.now()))
+                        con.commit()
+                        await _send_recap(con, e, "record")
+                    elif "nudge" not in done:
+                        sent = con.execute("SELECT sent_at FROM event_notice WHERE event_id=? AND kind='record'", (e["id"],)).fetchone()[0]
+                        if datetime.fromisoformat(sent) < datetime.now(timezone.utc) - timedelta(hours=48):
+                            con.execute("INSERT OR IGNORE INTO event_notice(event_id,kind,sent_at) VALUES(?,?,?)", (e["id"], "nudge", db.now()))
+                            con.commit()
+                            await _send_recap(con, e, "nudge")
+            finally:
+                con.close()
+        except Exception:
+            log.exception("напоминания о записи")
+        await asyncio.sleep(1800)
+
+
+QUIET_DAYS = 21
+
+
+def quiet_members(con):
+    """Активные участники, которые не открывали приложение 21 день (и давно в клубе)."""
+    lim = (datetime.now(timezone.utc) - timedelta(days=QUIET_DAYS)).isoformat()
+    return con.execute("SELECT * FROM members WHERE status='active' AND role IS NOT 'team' AND created_at<? AND COALESCE(last_seen,'')<?", (lim, lim)).fetchall()
+
+
+def _first_name(m):
+    return (m["first_name"] or "").strip() or "Здравствуйте"
+
+
+async def reminders_run(con):
+    """Напоминания участникам: анкета (1, 3, 7 день), продление (за 7 и 1 день), «давно не заходили». Каждое уходит один раз."""
+    nowm = datetime.now(MSK)
+    if not (10 <= nowm.hour < 20):
+        return 0
+    now = datetime.now(timezone.utc)
+    sent = 0
+
+    async def once(m, kind, ref, key, kb, **v):
+        nonlocal sent
+        if con.execute("SELECT 1 FROM reminder_log WHERE tg_id=? AND kind=? AND ref=?", (m["tg_id"], kind, ref)).fetchone():
+            return
+        con.execute("INSERT OR IGNORE INTO reminder_log VALUES(?,?,?,?)", (m["tg_id"], kind, ref, db.now()))
+        con.commit()
+        try:
+            await send_text(m["tg_id"], render(con, key, name=_first_name(m), **v), kb, key=key, con=con)
+            sent += 1
+        except Exception:
+            log.exception("напоминание %s", kind)
+        await asyncio.sleep(0.15)
+
+    members = [db.row(r) for r in con.execute("SELECT * FROM members WHERE status='active' AND bot_started=1 AND role IS NOT 'team'")]
+    # анкета: только новым (до 10 дней в клубе), у кого ее нет
+    for m in members:
+        try:
+            created = datetime.fromisoformat(str(m["created_at"]).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        age = (now - created).days
+        if age > 9 or m.get("profile_done"):
+            continue
+        try:
+            has_form = con.execute("SELECT 1 FROM forms WHERE tg_id=? AND kind='start'", (m["tg_id"],)).fetchone()
+        except Exception:
+            has_form = None
+        if has_form:
+            continue
+        for day in (7, 3, 1):
+            if age >= day:
+                await once(m, f"anketa{day}", "", f"r_anketa_{day}", tg.app_button(get_plain(con, "btn_form"), "static/anketa.html"))
+                break
+    # продление
+    for m in members:
+        pu = str(m.get("paid_until") or "")
+        if not pu:
+            continue
+        try:
+            left = datetime.fromisoformat(pu.replace("Z", "+00:00")) - now
+        except ValueError:
+            continue
+        if timedelta(0) < left <= timedelta(days=7):
+            day = 1 if left <= timedelta(days=1) else 7
+            date = pu[8:10] + "." + pu[5:7]
+            kb = {"inline_keyboard": [[{"text": "Продлить участие", "url": JOIN_URL}]]} if JOIN_URL else None
+            await once(m, f"renew{day}", pu[:10], f"r_renew_{day}", kb, date=date, link=JOIN_URL or "")
+    # давно не заходили: не чаще раза в 30 дней
+    for r in quiet_members(con):
+        m = db.row(r)
+        if not m.get("bot_started"):
+            continue
+        last = con.execute("SELECT MAX(sent_at) FROM reminder_log WHERE tg_id=? AND kind='quiet'", (m["tg_id"],)).fetchone()[0]
+        if last and last > (now - timedelta(days=30)).isoformat():
+            continue
+        ref = now.strftime("%Y-%m-%d")
+        await once(m, "quiet", ref, "r_quiet", tg.app_button("Открыть клуб"))
+    return sent
+
+
+def stats_items(con, days=7):
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(days=days)).isoformat()
+    q = lambda sql, *a: con.execute(sql, a).fetchone()[0] or 0
+    pays = con.execute("SELECT event,amount FROM payments WHERE verified=1 AND created_at>=? AND event NOT IN ('new_donation','recurrent_donation','cancelled_donation','cancelled_subscription','subscription_cancelled')", (since,)).fetchall()
+    new_n = sum(1 for p in pays if p["event"] in NEW_SUB)
+    sum_all = int(sum((p["amount"] or 0) for p in pays))
+    items = [f"Оплат: {len(pays)} на {sum_all} ₽ (новых участников {new_n}, продлений {len(pays) - new_n})"]
+    items.append(f"Участников сейчас: {q('SELECT COUNT(*) FROM members WHERE status=?', 'active')}, из них в Inside {q('SELECT COUNT(*) FROM members WHERE status=? AND level=?', 'active', 'inside')}")
+    soon = q("SELECT COUNT(*) FROM members WHERE status='active' AND paid_until BETWEEN ? AND ?", now.isoformat(), (now + timedelta(days=14)).isoformat())
+    items.append(f"Оплата заканчивается в ближайшие 14 дней: {soon}")
+    items.append(f"Подтверждено заявок на баллы: {q('SELECT COUNT(*) FROM claims WHERE status=? AND decided_at>=?', 'approved', since)}, баллов начислено {q('SELECT SUM(points) FROM claims WHERE status=? AND decided_at>=?', 'approved', since)}")
+    items.append(f"Эфиров прошло: {q('SELECT COUNT(*) FROM events WHERE starts_at BETWEEN ? AND ?', since, now.isoformat())}, записей на эфиры {q('SELECT COUNT(*) FROM rsvp WHERE created_at>=?', since)}")
+    items.append(f"Встреч Random Coffee состоялось: {q('SELECT COUNT(*) FROM coffee_pairs WHERE created_at>=? AND (met_a=1 OR met_b=1)', since)}, новых взаимных симпатий {q('SELECT COUNT(*) FROM matches WHERE created_at>=?', since)}")
+    items.append(f"Открывали приложение за неделю: {q('SELECT COUNT(*) FROM members WHERE status=? AND last_seen>=?', 'active', since)}; давно не заходили: {len(quiet_members(con))}")
+    return items
+
+
+async def send_stats(con):
+    chats = team_targets(con, "t_stats")
+    if not chats:
+        return 0
+    now = datetime.now(MSK)
+    period = f"{(now - timedelta(days=7)).strftime('%d.%m')} - {now.strftime('%d.%m')}"
+    text = md_html(text_raw(con, "t_stats")).replace("{period}", period).replace("{items}", "\n".join("• " + html.escape(i) for i in stats_items(con)))
+    for chat in chats:
+        await send_text(chat, text, key="t_stats", con=con)
+    return len(chats)
+
+
+def digest_items(con):
+    """Что сегодня требует решения менеджера. Пустой список: сообщение не отправляем."""
+    now = datetime.now(timezone.utc)
+    day_ago = (now - timedelta(hours=24)).isoformat()
+    items, claims = [], con.execute("SELECT * FROM claims WHERE status='pending' ORDER BY id").fetchall()
+    if claims:
+        items.append(f"Заявок на баллы ждет решения: {len(claims)} (ниже, с кнопками)")
+    try:
+        n = con.execute("SELECT COUNT(*) FROM offers WHERE status='pending'").fetchone()[0]
+    except Exception:
+        n = 0
+    if n:
+        items.append(f"Предложений на проверку: {n} (кабинет, вкладка «Предложения»)")
+    try:
+        n = con.execute("SELECT COUNT(*) FROM forms WHERE created_at>=?", (day_ago,)).fetchone()[0]
+    except Exception:
+        n = 0
+    if n:
+        items.append(f"Новых анкет за сутки: {n} (кабинет, вкладка «Анкеты»)")
+    n = con.execute("SELECT COUNT(*) FROM members WHERE status='active' AND created_at>=?", (day_ago,)).fetchone()[0]
+    if n:
+        items.append(f"Новых участников за сутки: {n}")
+    soon = con.execute("SELECT first_name,last_name,username,paid_until FROM members WHERE status='active' AND paid_until!='' AND paid_until BETWEEN ? AND ? ORDER BY paid_until LIMIT 15",
+                       (now.isoformat(), (now + timedelta(days=7)).isoformat())).fetchall()
+    if soon:
+        names = ", ".join(((r["first_name"] or "") + " " + (r["last_name"] or "")).strip() + (f" @{r['username']}" if r["username"] else "") + f" (до {str(r['paid_until'])[8:10]}.{str(r['paid_until'])[5:7]})" for r in soon)
+        items.append(f"Оплата заканчивается в ближайшие 7 дней: {names}. Напишите им лично")
+    n = len(quiet_members(con))
+    if n:
+        items.append(f"Давно не заходили (21 день и больше): {n}. Участникам уже ушло напоминание, посмотрите список в кабинете")
+    ev = con.execute("SELECT title,starts_at FROM events WHERE starts_at BETWEEN ? AND ? ORDER BY starts_at", (now.isoformat(), (now + timedelta(hours=36)).isoformat())).fetchall()
+    for e in ev:
+        items.append(f"Скоро эфир: {e['title']} ({e['starts_at'][:16].replace('T', ' ')} UTC)")
+    return items, claims
+
+
+async def send_digest(con):
+    items, claims = digest_items(con)
+    if not items:
+        return 0
+    chats = team_targets(con, "t_digest")
+    # список уже экранирован построчно, поэтому подставляем как готовый HTML
+    head = md_html(text_raw(con, "t_digest")).replace("{date}", datetime.now(MSK).strftime("%d.%m")).replace("{items}", "\n".join("• " + html.escape(i) for i in items))
+    for chat in chats:
+        await send_text(chat, head, key="t_digest", con=con)
+        for c in claims[:8]:
+            mem = con.execute("SELECT first_name,username FROM members WHERE tg_id=?", (c["tg_id"],)).fetchone()
+            who = ((mem["first_name"] or "") + (" @" + mem["username"] if mem and mem["username"] else "")).strip() if mem else str(c["tg_id"])
+            rule = con.execute("SELECT title FROM point_rules WHERE code=?", (c["rule_code"],)).fetchone()
+            kb = {"inline_keyboard": [[{"text": f"Подтвердить +{c['points']}", "callback_data": f"c:{c['id']}:1"},
+                                       {"text": "Отклонить", "callback_data": f"c:{c['id']}:0"}]]}
+            await send_text(chat, render(con, "t_digest_claim", rule=(rule["title"] if rule else c["rule_code"]), points=c["points"], who=who,
+                                         text=(c["text"] or "")[:500]), kb, key="t_digest_claim", con=con)
+    return len(items)
+
+
+async def digest_loop():
+    while True:
+        try:
+            con = db.connect()
+            try:
+                if db.get_setting(con, "digest_on", "1") == "1":
+                    nowm = datetime.now(MSK)
+                    hour = int(db.get_setting(con, "digest_hour", "9") or 9)
+                    today = nowm.strftime("%Y-%m-%d")
+                    if nowm.hour >= hour and db.get_setting(con, "digest_last", "") != today:
+                        db.set_setting(con, "digest_last", today)
+                        con.commit()
+                        await send_digest(con)
+                    if nowm.weekday() == 0 and nowm.hour >= hour and db.get_setting(con, "stats_last", "") != today:
+                        db.set_setting(con, "stats_last", today)
+                        con.commit()
+                        await send_stats(con)
+                await reminders_run(con)
+            finally:
+                con.close()
+        except Exception:
+            log.exception("дайджест")
+        await asyncio.sleep(600)
+
+
+async def handle_callback(con, cq):
+    u, data = cq.get("from") or {}, cq.get("data") or ""
+    cid_q = cq.get("id")
+    async def answer(text=""):
+        await tg._call(tg.BOT_TOKEN, "answerCallbackQuery", {"callback_query_id": cid_q, "text": text})
+    if data.startswith("w:") and data[2:].isdigit():
+        con.execute("INSERT OR IGNORE INTO event_watch(tg_id,event_id,created_at) VALUES(?,?,?)", (u.get("id"), int(data[2:]), db.now()))
+        con.commit()
+        await answer("Отметила. Теперь напишите инсайт в чат с хештегом #инсайт")
+        msg = cq.get("message") or {}
+        kb = (msg.get("reply_markup") or {}).get("inline_keyboard") or []
+        if msg.get("chat") and kb:
+            await tg._call(tg.BOT_TOKEN, "editMessageReplyMarkup", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
+                                                                     "reply_markup": {"inline_keyboard": kb[:1]}})
+        return
+    if data.startswith("c:"):
+        parts = data.split(":")
+        if len(parts) == 3 and parts[1].isdigit() and u.get("id") in team_chat_ids(con):
+            res = await decide_claim(con, int(parts[1]), parts[2] == "1")
+            await answer("Готово" if res else "Заявка уже обработана")
+            msg = cq.get("message") or {}
+            if msg.get("chat"):
+                label = "Подтверждено" if res and res[0] == "approved" else ("Отклонено" if res else "Уже обработана")
+                await tg._call(tg.BOT_TOKEN, "editMessageReplyMarkup", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
+                                                                         "reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": "x"}]]}})
+            return
+    await answer()
+
+
+async def handle_chat_insight(con, msg):
+    """Сообщение в чате клуба с хештегом #инсайт: бот фиксирует его как заявку на баллы и отправляет команде."""
+    u, text = msg.get("from") or {}, (msg.get("text") or msg.get("caption") or "")
+    if not u or u.get("is_bot") or not INSIGHT_TAG.search(text):
+        return
+    row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
+    if not row:
+        return
+    m = db.row(row)
+    if refresh_status(con, m) != "active":
+        return
+    ev = con.execute("SELECT id,title FROM events WHERE recording_url!='' AND starts_at<=? AND starts_at>=? ORDER BY starts_at DESC LIMIT 1",
+                     (datetime.now(timezone.utc).isoformat(), (datetime.now(timezone.utc) - timedelta(days=21)).isoformat())).fetchone()
+    ref = f"event:{ev['id']}" if ev else f"tg:{msg['chat']['id']}:{msg['message_id']}"
+    if con.execute("SELECT 1 FROM claims WHERE tg_id=? AND ref=? AND status!='rejected'", (m["tg_id"], ref)).fetchone():
+        await send_text(m["tg_id"], render(con, "insight_dup"), key="insight_dup", con=con)
+        return
+    clean = INSIGHT_TAG.sub("", text).strip()[:1000]
+    cid, rule = add_claim(con, m["tg_id"], "insight", clean, ref=ref)
+    con.commit()
+    await send_text(m["tg_id"], render(con, "insight_ok", points=rule["points"]), tg.app_button("Мои баллы", "#profile"), key="insight_ok", con=con)
+    who = (m.get("first_name") or "") + (f" @{m['username']}" if m.get("username") else "")
+    kb = {"inline_keyboard": [[{"text": f"Подтвердить +{rule['points']}", "callback_data": f"c:{cid}:1"},
+                               {"text": "Отклонить", "callback_data": f"c:{cid}:0"}]]}
+    head = render(con, "t_insight", who=who.strip(), event=(f" по эфиру «{ev['title']}»" if ev else ""), text=clean)
+    for chat in team_targets(con, "t_insight"):
+        try:
+            await send_text(chat, head, kb, key="t_insight", con=con)
+        except Exception:
+            log.exception("инсайт команде")
+
+
+async def norm_loop():
+    while True:
+        try:
+            con = db.connect()
+            try:
+                for r in con.execute("SELECT tg_id FROM members WHERE inside_auto=1").fetchall():
+                    await recalc_inside(con, r[0])
+            finally:
+                con.close()
+        except Exception:
+            log.exception("пересчет Inside")
+        await asyncio.sleep(6 * 3600)
+
+
+YEAR_MONTHS = 12   # годовой тариф
+GUEST_PASSES = 2   # гостевых пропусков на эфиры в год у участника годового тарифа
+
+
+def is_year(m):
+    """Годовой тариф: активная подписка на 12 месяцев. Уровень Inside он не дает, только особые бонусы."""
+    try:
+        return m.get("status") == "active" and int(m.get("period_months") or 0) >= YEAR_MONTHS
+    except (TypeError, ValueError):
+        return False
+
+
 def public_card(m):
-    return {k: m.get(k) for k in ("tg_id", "first_name", "last_name", "sphere", "project", "city", "seek", "give", "tags", "offline", "level")}
+    d = {k: m.get(k) for k in ("tg_id", "first_name", "last_name", "sphere", "project", "city", "seek", "give", "tags", "offline", "level")}
+    d["year"] = is_year(m)
+    return d
 
 
 @app.get("/api/me")
 def me(m=Depends(current_user), con=Depends(get_con)):
+    try:  # когда человек последний раз открывал приложение (не чаще раза в час)
+        ls = m.get("last_seen") or ""
+        if not ls or ls < (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat():
+            con.execute("UPDATE members SET last_seen=? WHERE tg_id=?", (db.now(), m["tg_id"]))
+            con.commit()
+    except Exception:
+        log.exception("last_seen")
     stats = {
         "matches": con.execute("SELECT COUNT(*) FROM matches WHERE a=? OR b=?", (m["tg_id"], m["tg_id"])).fetchone()[0],
         "insights": con.execute("SELECT COUNT(*) FROM claims WHERE tg_id=? AND rule_code='insight'", (m["tg_id"],)).fetchone()[0],
         "coffee": con.execute("SELECT COUNT(*) FROM coffee_pairs WHERE (a=? AND met_a=1) OR (b=? AND met_b=1)", (m["tg_id"], m["tg_id"])).fetchone()[0],
     }
     return {"me": m, "points": db.balance(con, m["tg_id"]), "stats": stats, "join": JOIN_URL,
-            "is_admin": is_team(m)}
+            "is_admin": is_team(m), "year": is_year(m), "norm": norm_state(con, m["tg_id"])}
+
+
+# ---------------- мои запросы: что человек хочет сейчас ----------------
+SPHERES = ("Деньги", "Смыслы", "Знакомства", "Возможности", "Практики", "Впечатления")
+
+
+def ensure_wants(con):
+    con.execute("CREATE TABLE IF NOT EXISTS wants(tg_id INTEGER PRIMARY KEY, focus TEXT DEFAULT '', goal TEXT DEFAULT '', updated_at TEXT)")
+
+
+@app.get("/api/wants")
+def wants_get(m=Depends(member), con=Depends(get_con)):
+    """Кого ищу и чем могу помочь живут в профиле (по ним строятся знакомства), сфера и цель месяца здесь.
+    Пока человек ничего не менял, подставляем ответы из последней ежемесячной анкеты."""
+    ensure_wants(con); ensure_forms(con)
+    r = con.execute("SELECT focus, goal, updated_at FROM wants WHERE tg_id=?", (m["tg_id"],)).fetchone()
+    focus, goal, upd = (r["focus"], r["goal"], r["updated_at"]) if r else ("", "", None)
+    if not r:
+        f = con.execute("SELECT data FROM forms WHERE tg_id=? AND kind='monthly' ORDER BY id DESC LIMIT 1", (m["tg_id"],)).fetchone()
+        if f:
+            try:
+                d = json.loads(f["data"] or "{}")
+                focus = d.get("focus") if isinstance(d.get("focus"), str) else ""
+                goal = d.get("next_goal") if isinstance(d.get("next_goal"), str) else ""
+            except ValueError:
+                pass
+    return {"focus": focus if focus in SPHERES else "", "goal": goal or "", "seek": m.get("seek") or "",
+            "give": m.get("give") or "", "updated_at": upd}
+
+
+@app.put("/api/wants")
+async def wants_put(req: Request, m=Depends(member), con=Depends(get_con)):
+    ensure_wants(con)
+    d = await req.json()
+    focus = str(d.get("focus") or "")
+    if focus and focus not in SPHERES:
+        raise HTTPException(400, "Выберите сферу из списка")
+    goal, seek, give = (str(d.get(k) or "").strip()[:1000] for k in ("goal", "seek", "give"))
+    now = db.now()
+    con.execute("INSERT INTO wants(tg_id,focus,goal,updated_at) VALUES(?,?,?,?) "
+                "ON CONFLICT(tg_id) DO UPDATE SET focus=excluded.focus, goal=excluded.goal, updated_at=excluded.updated_at",
+                (m["tg_id"], focus, goal, now))
+    con.execute("UPDATE members SET seek=?, give=?, updated_at=? WHERE tg_id=?", (seek, give, now, m["tg_id"]))
+    con.commit()
+    return {"ok": True, "updated_at": now}
 
 
 @app.put("/api/me")
@@ -172,10 +899,9 @@ async def like(req: Request, m=Depends(member), con=Depends(get_con)):
             other = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (to_id,)).fetchone())
             matched = {**public_card(other), "username": other["username"]}
             for who, peer in ((m, other), (other, m)):
-                await tg.send(who["tg_id"],
-                              f"✨ <b>Это взаимно!</b>\n\nВы и <b>{peer['first_name'] or ''}</b> отметили друг друга в Знакомствах."
-                              f"{' Напишите: @' + peer['username'] if peer['username'] else ''}",
-                              tg.app_button("Открыть знакомства", "#matches"))
+                await send_text(who["tg_id"],
+                                render(con, "match", peer=peer["first_name"] or "", nick=("Напишите: @" + peer["username"] if peer["username"] else "")),
+                                tg.app_button("Открыть знакомства", "#matches"), key="match", con=con)
     con.commit()
     return {"match": matched}
 
@@ -222,6 +948,44 @@ async def coffee_feedback(pair_id: int, req: Request, m=Depends(member), con=Dep
 
 # ---------------- эфиры и библиотека ----------------
 
+def ensure_guests(con):
+    con.execute("""CREATE TABLE IF NOT EXISTS guest_passes(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, event_id INTEGER, guest_name TEXT, created_at TEXT)""")
+
+
+def guest_left(con, m):
+    if not is_year(m):
+        return 0
+    ensure_guests(con)
+    cut = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
+    used = con.execute("SELECT COUNT(*) FROM guest_passes WHERE tg_id=? AND created_at>=?", (m["tg_id"], cut)).fetchone()[0]
+    return max(0, GUEST_PASSES - used)
+
+
+@app.post("/api/events/{eid}/guest")
+async def event_guest(eid: int, req: Request, m=Depends(member), con=Depends(get_con)):
+    if not is_year(m):
+        raise HTTPException(403, "Гостевые пропуска есть на годовом тарифе")
+    ensure_guests(con)
+    d = await req.json()
+    name = str(d.get("name", "")).strip()[:80]
+    if not name:
+        raise HTTPException(400, "Напишите имя друга")
+    e = con.execute("SELECT * FROM events WHERE id=?", (eid,)).fetchone()
+    if not e or e["starts_at"] < (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat():
+        raise HTTPException(404, "Эфир уже прошел")
+    if e["inside_only"] and not is_inside(m):
+        raise HTTPException(403, "Это закрытый эфир для Inside")
+    if not con.execute("SELECT 1 FROM rsvp WHERE event_id=? AND tg_id=?", (eid, m["tg_id"])).fetchone():
+        raise HTTPException(400, "Сначала отметьте, что придете сами: нажмите «Буду»")
+    if guest_left(con, m) < 1:
+        raise HTTPException(400, "Гостевые пропуска на этот год закончились")
+    con.execute("INSERT INTO guest_passes(tg_id,event_id,guest_name,created_at) VALUES(?,?,?,?)", (m["tg_id"], eid, name, db.now()))
+    con.commit()
+    spawn(team_notify(render(con, "t_guest", who=person_name(m), guest=name, event=e["title"]), "t_guest"))
+    return {"left": guest_left(con, m), "join_url": e["join_url"]}
+
+
 @app.get("/api/events")
 def events(m=Depends(member), con=Depends(get_con)):
     now_iso = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
@@ -236,7 +1000,7 @@ def events(m=Depends(member), con=Depends(get_con)):
             e["join_url"] = ""  # ссылку на Zoom видят только записавшиеся
         if e["locked"]:
             e["recording_url"] = e["podcast_url"] = ""
-    return {"soon": soon, "records": recs}
+    return {"soon": soon, "records": recs, "guest": {"year": is_year(m), "left": guest_left(con, m), "total": GUEST_PASSES}}
 
 
 @app.post("/api/events/{eid}/rsvp")
@@ -308,8 +1072,9 @@ async def create_claim(rule_code: str = Form(...), text: str = Form(""), ref: st
         raise HTTPException(400, "Напишите пару слов")
     cid, rule = add_claim(con, m["tg_id"], rule_code, text.strip(), saved, ref or None)
     con.commit()
-    await tg.notify_team(f"Новая заявка на баллы: <b>{rule['title']}</b> +{rule['points']} от {html.escape(m['first_name'] or '')} "
-                         f"{'@' + m['username'] if m['username'] else ''}\n\n{text[:500]}\n\nПодтвердить в кабинете: {PUBLIC_URL}/admin")
+    await team_notify(render(con, "t_claim", rule=rule["title"], points=rule["points"],
+                             who=((m["first_name"] or "") + (" @" + m["username"] if m["username"] else "")).strip(), text=text[:500],
+                             link=f"{PUBLIC_URL}/admin"), "t_claim")
     return {"ok": True, "id": cid, "points": rule["points"]}
 
 
@@ -324,9 +1089,58 @@ async def redeem(code: str, m=Depends(member), con=Depends(get_con)):
         raise HTTPException(400, "Пока не хватает баллов")
     con.execute("INSERT INTO redemptions(tg_id,code,cost,created_at) VALUES(?,?,?,?)", (m["tg_id"], code, item["cost"], db.now()))
     con.commit()
-    await tg.notify_team(f"Обмен баллов: <b>{item['title']}</b> ({item['cost']}) — {html.escape(m['first_name'] or '')} "
-                         f"{'@' + m['username'] if m['username'] else ''}. Свяжитесь с участником.")
+    await team_notify(render(con, "t_redeem", item=item["title"], cost=item["cost"],
+                             who=((m["first_name"] or "") + (" @" + m["username"] if m["username"] else "")).strip()), "t_redeem")
     return {"ok": True}
+
+
+# ---------------- Random Coffee и напоминания: тексты из кабинета ----------------
+# Эти функции подменяют одноименные из coffee.py, чтобы тексты брались из «Тексты бота» (файл coffee.py трогать не нужно).
+
+async def _coffee_announce(pairs, left):
+    con = db.connect()
+    try:
+        for a, b, ra, rb in pairs:
+            for me, other, why in ((a, b, ra), (b, a, rb)):
+                pair = f"{other['first_name'] or ''} {other['last_name'] or ''}".strip() + (f" (@{other['username']})" if other["username"] else "")
+                await send_text(me["tg_id"], render(con, "coffee_pair", pair=pair, reason=why), tg.app_button("Открыть пару", "#coffee"),
+                                key="coffee_pair", con=con)
+        for p in left:
+            await send_text(p["tg_id"], render(con, "coffee_none"), key="coffee_none", con=con)
+        if pairs or left:
+            await team_notify(render(con, "t_coffee", pairs=len(pairs), left=len(left)), "t_coffee")
+    finally:
+        con.close()
+
+
+async def _coffee_remind_feedback(con):
+    week = coffee.week_key()
+    for r in con.execute("SELECT * FROM coffee_pairs WHERE week=?", (week,)).fetchall():
+        for who, met in ((r["a"], r["met_a"]), (r["b"], r["met_b"])):
+            if met is None:
+                await send_text(who, render(con, "coffee_ask"), tg.app_button("Оставить отзыв", "#coffee"), key="coffee_ask", con=con)
+
+
+async def _event_reminders(con):
+    """Напоминания записавшимся: за сутки и за час до эфира."""
+    now = datetime.now(timezone.utc)
+    for kind, delta, key in (("day", timedelta(hours=24), "event_day"), ("hour", timedelta(hours=1), "event_hour")):
+        lo, hi = (now + delta - timedelta(minutes=5)).isoformat(), (now + delta + timedelta(minutes=5)).isoformat()
+        for e in con.execute("SELECT * FROM events WHERE starts_at BETWEEN ? AND ?", (lo, hi)).fetchall():
+            mark = f"rem:{e['id']}:{kind}"
+            if db.get_setting(con, mark):
+                continue
+            db.set_setting(con, mark, "1")
+            con.commit()
+            link = Raw(f"\n\nПодключиться: {html.escape(e['join_url'])}") if e["join_url"] else ""
+            text = render(con, key, title=e["title"], link=link)
+            for (tg_id,) in con.execute("SELECT tg_id FROM rsvp WHERE event_id=?", (e["id"],)).fetchall():
+                await send_text(tg_id, text, key=key, con=con)
+
+
+coffee.announce = _coffee_announce
+coffee.remind_feedback = _coffee_remind_feedback
+coffee.event_reminders = _event_reminders
 
 
 # ---------------- запись оплат в таблицу (Google Apps Script) ----------------
@@ -369,9 +1183,24 @@ async def push_sheet(payload):
     except Exception:
         log.exception("не удалось записать оплату в таблицу")
         try:
-            await tg.notify_team(f"Оплата принята сервером, но не записана в таблицу (id {payload.get('tg_id')}). Строку можно добавить вручную.")
+            _c = db.connect()
+            try:
+                _t = render(_c, "t_notsaved", id=payload.get("tg_id"))
+            finally:
+                _c.close()
+            await team_notify(_t, "t_notsaved")
         except Exception:
             pass
+
+
+async def send_welcome(chat_id, text, kb, photo=""):
+    """Приветствие с картинкой, если команда ее задала (прислать фото боту), иначе обычным сообщением."""
+    if photo:
+        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": chat_id, "photo": photo, "caption": text,
+                                                       "parse_mode": "HTML", "reply_markup": kb})
+        if r and r.get("ok"):
+            return
+    await tg.send(chat_id, text, kb)
 
 
 # ---------------- оплаты Tribute ----------------
@@ -426,6 +1255,12 @@ async def tribute(req: Request, con=Depends(get_con)):
     price = p.get("price", p.get("amount"))  # price: сколько заплатил участник; amount: после комиссии Tribute
     amount = (price / 100) if isinstance(price, (int, float)) else None  # Tribute присылает копейки
     expires = p.get("expires_at")
+    if months is None and expires:  # тариф не опознан по названию: считаем срок по дате окончания
+        try:
+            days = (datetime.fromisoformat(str(expires).replace("Z", "+00:00")) - datetime.now(timezone.utc)).days
+            months = max(1, round(days / 30)) if days > 0 else None
+        except ValueError:
+            pass
     # Tribute повторяет доставку, если не получил ответ: то же событие второй раз не обрабатываем
     if verified and tg_id and expires and con.execute(
             "SELECT 1 FROM payments WHERE tg_id=? AND event=? AND expires_at=? AND verified=1",
@@ -436,7 +1271,7 @@ async def tribute(req: Request, con=Depends(get_con)):
     con.commit()
     if not verified:
         log.warning("Tribute: подпись не подошла (или не задан TRIBUTE_API_KEY), оплата записана, но доступ не выдан")
-        spawn(tg.notify_team("Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."))
+        spawn(team_notify(render(con, "t_badsign"), "t_badsign"))
         return JSONResponse({"ok": False}, status_code=401)
     if not tg_id:
         return {"ok": True, "note": "нет telegram_user_id"}
@@ -468,25 +1303,22 @@ async def tribute(req: Request, con=Depends(get_con)):
                           "paid_at": created.astimezone(MSK).strftime("%d.%m.%Y %H:%M"), "status": "активен",
                           "bot_started": bool(m.get("bot_started"))}))
         if event in NEW_SUB:
-            spawn(tg.send(tg_id, f"Добро пожаловать в Единение{', ' + name if name else ''}!\n\n"
-                                 "Откройте клуб и заполните анкету: по ней мы подбираем знакомства и пару Random Coffee.",
-                          {"inline_keyboard": tg.app_button("Заполнить анкету", "static/anketa.html")["inline_keyboard"]
-                           + tg.app_button("Открыть клуб")["inline_keyboard"]}))
-            spawn(tg.notify_team(
-                f"💳 Новая оплата: {who} (id {tg_id})\n"
-                f"{level.capitalize()}-level, {months or '?'} мес., {amount or '?'} ₽\n\n"
-                f"Приветствие для отправки:\n«{name or 'Привет'}, добро пожаловать в Единение! Я ваш менеджер. "
-                f"Расскажите, с каким запросом пришли в клуб, и я помогу найти своих людей.»"))
+            spawn(send_welcome(tg_id, get_text(con, "welcome", m.get("first_name") or ""),
+                          {"inline_keyboard": tg.app_button(get_plain(con, "btn_form"), "static/anketa.html")["inline_keyboard"]
+                           + tg.app_button(get_plain(con, "btn_club"))["inline_keyboard"]},
+                          pic_url(con, "welcome") or db.get_setting(con, "welcome_photo", "")))
+            spawn(team_notify(render(con, "t_pay_new", who=Raw(who), id=tg_id, level=level.capitalize(), months=months or "?",
+                                     amount=amount or "?", name=(m.get("first_name") or "Привет")), "t_pay_new"))
         else:
             # продление: участнику ничего не пишем, команде сообщаем коротко
-            spawn(tg.notify_team(f"🔁 Продление: {who} (id {tg_id}), {months or '?'} мес., {amount or '?'} ₽. "
-                                 f"Доступ продлен до {str(until)[:10]}."))
+            spawn(team_notify(render(con, "t_pay_renew", who=Raw(who), id=tg_id, months=months or "?", amount=amount or "?",
+                                     until=str(until)[:10]), "t_pay_renew"))
     elif event in DONATIONS:
         # донат доступ в клуб не открывает
-        spawn(tg.notify_team(f"Донат через Tribute ({event}): id {tg_id}, {amount or '?'} ₽. Доступ в клуб не выдан."))
+        spawn(team_notify(render(con, "t_donation", event=event, id=tg_id, amount=amount or "?"), "t_donation"))
     elif event in ("cancelled_subscription", "subscription_cancelled"):
         spawn(push_sheet({"op": "cancel", "tg_id": tg_id, "status": "отмена"}))
-        spawn(tg.notify_team(f"Отмена подписки: id {tg_id}. Доступ сохранится до конца оплаченного периода."))
+        spawn(team_notify(render(con, "t_cancel", id=tg_id), "t_cancel"))
     return {"ok": True}
 
 
@@ -497,15 +1329,35 @@ async def bot_update(req: Request, con=Depends(get_con)):
     if req.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET:
         raise HTTPException(403)
     upd = await req.json()
+    if upd.get("callback_query"):
+        try:
+            await handle_callback(con, upd["callback_query"])
+        except Exception:
+            log.exception("кнопка в боте")
+        return {"ok": True}
     msg = upd.get("message") or {}
     u, text = msg.get("from"), (msg.get("text") or "")
+    if msg.get("chat", {}).get("type") in ("group", "supergroup"):
+        try:
+            await handle_chat_insight(con, msg)
+        except Exception:
+            log.exception("инсайт из чата")
+        return {"ok": True}
     if not u or msg.get("chat", {}).get("type") != "private":
+        return {"ok": True}
+    if msg.get("photo"):
+        me_row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
+        if me_row and is_team(db.row(me_row)):
+            db.set_setting(con, "welcome_photo", msg["photo"][-1]["file_id"])
+            con.commit()
+            await tg.send(u["id"], render(con, "photo_saved"))
         return {"ok": True}
     if text.startswith("/anketa") or text.startswith("/monthly"):
         monthly = text.startswith("/monthly")
-        await tg.send(u["id"], ("Ежемесячная анкета: пара минут, и мы увидим, что сдвинулось за месяц." if monthly else
-                                "Стартовая анкета: по ней мы подбираем знакомства и пару Random Coffee. Около 10 минут."),
-                      tg.app_button("Заполнить анкету", "static/monthly.html" if monthly else "static/anketa.html"))
+        await send_text(u["id"], get_text(con, "monthly" if monthly else "anketa"),
+                        tg.app_button(get_plain(con, "btn_monthly" if monthly else "btn_form"),
+                                      "static/monthly.html" if monthly else "static/anketa.html"),
+                        key=("monthly" if monthly else "anketa"), con=con)
         return {"ok": True}
     if text.startswith("/start"):
         arg = text.split(maxsplit=1)[1] if " " in text else ""
@@ -521,16 +1373,14 @@ async def bot_update(req: Request, con=Depends(get_con)):
         m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (u["id"],)).fetchone())
         status = refresh_status(con, m)
         if joined_team:
-            await tg.send(u["id"], "Вы в команде клуба Единение. Приложение открыто полностью, уведомления об оплатах и заявках на баллы будут приходить от team-бота: нажмите /start в @edinenie_team1_bot.",
-                          tg.app_button("Открыть клуб"))
-            await tg.notify_team(f"В команду клуба добавлен(а) {html.escape(u.get('first_name') or '')} {'@' + html.escape(u['username']) if u.get('username') else ''} (id {u['id']}).")
+            await send_text(u["id"], render(con, "team_welcome"), tg.app_button("Открыть клуб"), key="team_welcome", con=con)
+            await team_notify(render(con, "t_team_added", who=((u.get("first_name") or "") + (" @" + u["username"] if u.get("username") else "")).strip(), id=u["id"]), "t_team_added")
             return {"ok": True}
         if status == "active":
-            await tg.send(u["id"], f"{u.get('first_name') or 'Привет'}, вы в клубе Единение. Здесь знакомства, эфиры, библиотека и ваши баллы.",
-                          tg.app_button("Открыть клуб"))
+            await send_text(u["id"], get_text(con, "member_start", u.get("first_name") or ""),
+                            tg.app_button(get_plain(con, "btn_club")), key="member_start", con=con)
         else:
-            await tg.send(u["id"], "Это бот клуба Единение. Приложение откроется, как только оплата участия пройдет.\n\n"
-                                   f"Вступить в клуб: {JOIN_URL}")
+            await send_text(u["id"], get_text(con, "guest_start", link=JOIN_URL), key="guest_start", con=con)
     return {"ok": True}
 
 
@@ -570,6 +1420,37 @@ def admin_overview(_=Depends(admin), con=Depends(get_con)):
     }
 
 
+CRM_SHARDS = ("people", "hist", "work", "cfg")
+
+
+@app.get("/admin/api/crm")
+def admin_crm(since: str = "", _=Depends(admin), con=Depends(get_con)):
+    """Рабочие данные менеджера (люди, история, задачи, контент-план): общие для всей команды."""
+    out = {}
+    for r in con.execute("SELECT k,v,updated_at FROM crm_kv").fetchall():
+        if r["k"] in CRM_SHARDS and (not since or r["updated_at"] > since):
+            try:
+                out[r["k"]] = {"data": json.loads(r["v"]), "ts": r["updated_at"]}
+            except ValueError:
+                pass
+    return {"shards": out, "now": db.now()}
+
+
+@app.put("/admin/api/crm/{shard}")
+async def admin_crm_save(shard: str, req: Request, _=Depends(admin), con=Depends(get_con)):
+    if shard not in CRM_SHARDS:
+        raise HTTPException(404, "Нет такого раздела")
+    body = await req.body()
+    if len(body) > 6_000_000:
+        raise HTTPException(400, "Слишком много данных")
+    json.loads(body)  # убеждаемся, что это JSON
+    ts = db.now()
+    con.execute("INSERT INTO crm_kv(k,v,updated_at) VALUES(?,?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at",
+                (shard, body.decode("utf-8"), ts))
+    con.commit()
+    return {"ok": True, "ts": ts}
+
+
 @app.get("/admin/api/members")
 def admin_members(_=Depends(admin), con=Depends(get_con)):
     out = db.rows(con.execute("SELECT * FROM members ORDER BY created_at DESC"))
@@ -599,15 +1480,10 @@ def admin_claims(status: str = "pending", _=Depends(admin), con=Depends(get_con)
 @app.post("/admin/api/claims/{cid}")
 async def admin_decide(cid: int, req: Request, _=Depends(admin), con=Depends(get_con)):
     data = await req.json()
-    c = con.execute("SELECT * FROM claims WHERE id=?", (cid,)).fetchone()
-    if not c or c["status"] != "pending":
+    c = con.execute("SELECT points FROM claims WHERE id=?", (cid,)).fetchone()
+    res = await decide_claim(con, cid, bool(data.get("approve")), int(data.get("points", c["points"])) if c else None)
+    if not res:
         raise HTTPException(400, "Заявка уже обработана")
-    status = "approved" if data.get("approve") else "rejected"
-    pts = int(data.get("points", c["points"]))
-    con.execute("UPDATE claims SET status=?, points=?, decided_at=? WHERE id=?", (status, pts, db.now(), cid))
-    con.commit()
-    if status == "approved":
-        await tg.send(c["tg_id"], f"Команда клуба подтвердила +{pts} баллов. Спасибо за вклад!", tg.app_button("Мои баллы", "#profile"))
     return {"ok": True}
 
 
@@ -774,9 +1650,9 @@ async def submit_form(req: Request, x_init_data: str = Header(""), con=Depends(g
             apply_start_form(con, u, d)
         except Exception:
             log.exception("не удалось перенести анкету в профиль")
-    who = html.escape(str(d.get("name") or (u or {}).get("first_name") or "без имени"))
+    who = str(d.get("name") or (u or {}).get("first_name") or "без имени")
     tail = "" if u else " (без подтверждения Telegram, в профиль не перенесена)"
-    spawn(tg.notify_team(f"📝 {'Ежемесячная' if kind == 'monthly' else 'Стартовая'} анкета: {who}, id {tg_id or '?'}{tail}. Смотрите в кабинете, вкладка «Анкеты»."))
+    spawn(team_notify(render(con, "t_form", kind=("Ежемесячная" if kind == "monthly" else "Стартовая"), who=who, id=tg_id or "?", tail=tail), "t_form"))
     return {"ok": True}
 
 
@@ -793,6 +1669,462 @@ def admin_forms(_=Depends(admin), con=Depends(get_con)):
             x["data"] = {}
         out.append(x)
     return out
+
+
+def _route_value(con, key):
+    v = db.get_setting(con, "route:" + key, None)
+    if v is None or v == "":
+        return [] if TEXTS.get(key, {}).get("route0") == "none" else None
+    try:
+        return json.loads(v)
+    except ValueError:
+        return None
+
+
+@app.put("/admin/api/texts/{key}/route")
+async def admin_text_route(key: str, req: Request, _=Depends(admin), con=Depends(get_con)):
+    if key not in TEXTS or TEXTS[key].get("group") != "team":
+        raise HTTPException(404, "Для этого сообщения получателей выбрать нельзя")
+    d = await req.json()
+    to = d.get("to")
+    db.set_setting(con, "route:" + key, json.dumps(None if to is None else [int(i) for i in to]))
+    con.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/api/texts")
+def admin_texts(_=Depends(admin), con=Depends(get_con)):
+    out = []
+    for k, t in TEXTS.items():
+        cur = db.get_setting(con, "text:" + k, None)
+        pic = db.get_setting(con, "pic:" + k, "")
+        out.append({"key": k, "title": t["title"], "hint": t["hint"], "max": t["max"], "plain": bool(t.get("plain")),
+                    "group": t.get("group") or ("bot" if t.get("plain") or k in ("welcome", "member_start", "guest_start", "anketa", "monthly") else "members"),
+                    "vars": t.get("vars", ""), "can_pic": not t.get("plain"), "limit": (PIC_LIMIT if pic and (BOTPICS / pic).exists() else t["max"]),
+                    "route": (None if t.get("group") != "team" else _route_value(con, k)), "route_own": t.get("group") == "team" and k != "t_digest_claim",
+                    "pic": (f"/botpic/{pic}" if pic and (BOTPICS / pic).exists() else ""),
+                    "value": cur if cur and cur.strip() else t["default"], "default": t["default"], "custom": bool(cur and cur.strip())})
+    return out
+
+
+@app.put("/admin/api/texts/{key}")
+async def admin_text_save(key: str, req: Request, _=Depends(admin), con=Depends(get_con)):
+    if key not in TEXTS:
+        raise HTTPException(404, "Нет такого текста")
+    data = await req.json()
+    v = str(data.get("value", "")).replace("\r\n", "\n").strip()
+    if len(v) > TEXTS[key]["max"]:
+        raise HTTPException(400, f"Слишком длинно: {len(v)} знаков, можно до {TEXTS[key]['max']}")
+    if db.get_setting(con, "pic:" + key, "") and len(v.replace("**", "")) > PIC_LIMIT:
+        raise HTTPException(400, f"С картинкой текст должен быть не длиннее {PIC_LIMIT} знаков, сейчас {len(v.replace('**', ''))}. Сократите текст или уберите картинку.")
+    db.set_setting(con, "text:" + key, v)
+    con.commit()
+    if key in ("bot_about", "bot_short"):
+        spawn(setup_bot(0))
+    return {"ok": True}
+
+
+@app.get("/admin/api/digest")
+def admin_digest(_=Depends(admin), con=Depends(get_con)):
+    return {"on": db.get_setting(con, "digest_on", "1") == "1", "hour": int(db.get_setting(con, "digest_hour", "9") or 9)}
+
+
+@app.put("/admin/api/digest")
+async def admin_digest_save(req: Request, _=Depends(admin), con=Depends(get_con)):
+    d = await req.json()
+    hour = max(0, min(23, int(d.get("hour", 9))))
+    db.set_setting(con, "digest_on", "1" if d.get("on") else "0")
+    db.set_setting(con, "digest_hour", str(hour))
+    con.commit()
+    return {"ok": True}
+
+
+@app.post("/admin/api/stats/send")
+async def admin_stats_send(_=Depends(admin), con=Depends(get_con)):
+    return {"sent": await send_stats(con)}
+
+
+@app.post("/admin/api/digest/send")
+async def admin_digest_send(_=Depends(admin), con=Depends(get_con)):
+    n = await send_digest(con)
+    return {"sent": n}
+
+
+@app.get("/botpic/{name}")
+def botpic(name: str):
+    p = (BOTPICS / name).resolve()
+    if p.parent != BOTPICS.resolve() or not p.exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/jpeg")
+
+
+@app.put("/admin/api/texts/{key}/pic")
+async def admin_text_pic(key: str, req: Request, _=Depends(admin), con=Depends(get_con)):
+    if key not in TEXTS or TEXTS[key].get("plain"):
+        raise HTTPException(404, "К этому тексту картинку прикрепить нельзя")
+    cur = text_raw(con, key)
+    if len(cur.replace("**", "")) > PIC_LIMIT:
+        raise HTTPException(400, f"Сначала сократите текст до {PIC_LIMIT} знаков (сейчас {len(cur.replace('**', ''))}): с картинкой он должен уместиться в одно сообщение.")
+    data = await req.json()
+    raw = str(data.get("image", ""))
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    try:
+        body = base64.b64decode(raw, validate=False)
+    except Exception:
+        raise HTTPException(400, "Не получилось прочитать картинку")
+    if len(body) < 200 or len(body) > 8_000_000:
+        raise HTTPException(400, "Картинка пустая или слишком большая (до 8 МБ)")
+    BOTPICS.mkdir(parents=True, exist_ok=True)
+    name = f"{key}-{secrets.token_hex(4)}.jpg"
+    (BOTPICS / name).write_bytes(body)
+    old = db.get_setting(con, "pic:" + key, "")
+    db.set_setting(con, "pic:" + key, name)
+    con.commit()
+    if old and old != name:
+        try:
+            (BOTPICS / old).unlink()
+        except OSError:
+            pass
+    return {"ok": True, "pic": f"/botpic/{name}"}
+
+
+@app.delete("/admin/api/texts/{key}/pic")
+async def admin_text_pic_del(key: str, _=Depends(admin), con=Depends(get_con)):
+    old = db.get_setting(con, "pic:" + key, "")
+    db.set_setting(con, "pic:" + key, "")
+    con.commit()
+    if old:
+        try:
+            (BOTPICS / old).unlink()
+        except OSError:
+            pass
+    return {"ok": True}
+
+
+@app.delete("/admin/api/texts/{key}")
+async def admin_text_reset(key: str, _=Depends(admin), con=Depends(get_con)):
+    if key not in TEXTS:
+        raise HTTPException(404, "Нет такого текста")
+    db.set_setting(con, "text:" + key, "")
+    con.commit()
+    if key in ("bot_about", "bot_short"):
+        spawn(setup_bot(0))
+    return {"ok": True}
+
+
+# ---------------- календарь событий ----------------
+
+CAL_SQL = """CREATE TABLE IF NOT EXISTS cal_events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, icon TEXT DEFAULT '', title TEXT, date_from TEXT, date_to TEXT DEFAULT '',
+  when_text TEXT DEFAULT '', place TEXT DEFAULT '', body TEXT DEFAULT '', perk TEXT DEFAULT '', promo TEXT DEFAULT '',
+  link TEXT DEFAULT '', contact TEXT DEFAULT '', active INTEGER DEFAULT 1, own INTEGER DEFAULT 0, created_at TEXT)"""
+
+CAL_INTRO = ("Друзья, собрали ближайшие эфиры, встречи, вечеринки, ретриты и путешествия от наших друзей, "
+             "которые мы рекомендуем участникам клуба. Сохраняйте даты и выбирайте, где встречаемся!")
+CAL_OUTRO = ("EDINENIE становится больше, чем клубом и отдельными мероприятиями. Мы собираем среду, в которой можно "
+             "встречаться со своими, путешествовать вместе, развиваться, танцевать, создавать новые связи, проекты "
+             "и проживать сильные события рядом с людьми, с которыми хочется идти дальше. По каждому событию будем "
+             "отдельно публиковать подробности, программу и специальные условия для участников клуба.")
+
+# icon, title, date_from, date_to, when_text, place, body, perk, promo, link, contact
+CAL_SEED = [
+    ("🔥", "Эфир с Владом Митьковским", "2026-11-10", "", "10 ноября", "Онлайн | EDINENIE",
+     "Новая встреча с Владом Митьковским для участников клуба. Тему и подробности эфира расскажем совсем скоро.", "", "", "", ""),
+    ("🌿", "«ВЫДОХ» с Игорем Будниковым", "2026-11-19", "2026-11-23", "19–23 ноября", "Подмосковье",
+     "Несколько дней тишины, медитации и перезагрузки с Игорем Будниковым. Формат для тех, кому хочется остановиться, "
+     "выдохнуть, восстановиться и вернуться к себе.", "", "", "", "@darodionova"),
+    ("🔥", "Будниковы: DANA DANCE", "2026-11-24", "", "24 ноября", "Москва",
+     "Повторяем нашу большую совместную вечеринку, и в этот раз готовим формат еще мощнее и масштабнее! Новый музыкальный "
+     "сет, танец, много живого общения, знакомств и встреч двух сообществ.\n\nЕсли по вашей рекомендации придут +2 человека, "
+     "вы получите в подарок книгу Игоря Будникова «Возвращение Домой». Подарок вручат прямо на вечеринке.",
+     "Скидка 500 ₽ для участников клуба", "DANCE", "https://welcomebackhome.academy/dana-dance-november", ""),
+    ("🌎", "PERUKUA «Голос Матери Земли»", "2026-11-25", "", "25 ноября", "Москва | Центр исполнительских искусств",
+     "Уникальный живой интерактивный концерт-семинар PERUKUA. «Голос Матери Земли» это соединение музыки, песен, "
+     "целительных саундтреков и коротких практик, возвращающих в тело, спокойствие и контакт с собой.",
+     "Скидка 10% на билеты для участников клуба", "Edin10", "https://peruquois.ru/mother", ""),
+    ("✈️", "«Загадочная Бирма»", "2026-11-25", "2026-12-04", "25 ноября – 4 декабря", "Мьянма | экспедиция с Джеффри Оливером",
+     "Большое путешествие в Бирму с Джеффри Оливером. Новый для нас формат: не просто мероприятие, а настоящее совместное "
+     "исследование страны, культуры и себя. Добавляем его в направление путешествий EDINENIE.", "", "", "", "@darodionova"),
+    ("❤️", "«Лаборатория близости»", "2027-02-18", "2027-02-25", "18–25 февраля", "Панган | Игорь и Наташа Будниковы",
+     "Отдельная программа, посвященная близости, отношениям и более глубокому контакту с собой и другим человеком.", "", "", "", "@darodionova"),
+    ("🏔", "Шерегеш с Будниковыми", "2027-03-06", "2027-03-13", "6–13 марта", "Alpen Club, сектор А",
+     "Неделя вместе в горах. В программе: лыжи и сноуборд, практики с Игорем и Натальей, мастермайнды, знакомства и сильное "
+     "окружение, баня, après-ski, Dana Dance, совместный отдых и много живого общения.", "", "", "", "@darodionova"),
+]
+
+
+def ensure_cal(con):
+    con.execute(CAL_SQL)
+    if db.get_setting(con, "cal_seeded", "") != "1":
+        for it in CAL_SEED:
+            con.execute("INSERT INTO cal_events(icon,title,date_from,date_to,when_text,place,body,perk,promo,link,contact,created_at) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (*it, db.now()))
+        con.execute("UPDATE cal_events SET own=1 WHERE title LIKE 'Эфир с Владом%'")
+        db.set_setting(con, "cal_seeded", "1")
+        con.commit()
+
+
+def msk_today():
+    return datetime.now(timezone(timedelta(hours=3))).date().isoformat()
+
+
+@app.get("/api/calendar")
+def calendar_public(m=Depends(member), con=Depends(get_con)):
+    ensure_cal(con)
+    today = msk_today()
+    items = db.rows(con.execute(
+        "SELECT * FROM cal_events WHERE active=1 AND COALESCE(NULLIF(date_to,''),date_from)>=? ORDER BY date_from, id", (today,)))
+    marks = []
+    y0 = int(today[:4])
+    lo, hi = f"{y0}-01-01", f"{y0 + 1}-12-31"
+    for r in db.rows(con.execute("SELECT id,title,date_from,date_to,own FROM cal_events WHERE active=1 AND date_from<=? AND COALESCE(NULLIF(date_to,''),date_from)>=?", (hi, lo))):
+        try:
+            a = datetime.strptime(r["date_from"], "%Y-%m-%d").date()
+            b = datetime.strptime(r["date_to"] or r["date_from"], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        for i in range(min((b - a).days, 60) + 1):
+            marks.append({"d": (a + timedelta(days=i)).isoformat(), "k": "cal", "id": r["id"], "t": r["title"], "own": 1 if r.get("own") else 0})
+    for r in db.rows(con.execute("SELECT id,title,starts_at FROM events WHERE substr(starts_at,1,10)>=? AND substr(starts_at,1,10)<=?", (lo, hi))):
+        marks.append({"d": str(r["starts_at"])[:10], "k": "ev", "id": r["id"], "t": r["title"], "own": 1})
+    return {"intro": db.get_setting(con, "cal_intro", "") or CAL_INTRO,
+            "outro": db.get_setting(con, "cal_outro", "") or CAL_OUTRO, "items": items, "marks": marks}
+
+
+@app.get("/admin/api/calendar")
+def admin_calendar(_=Depends(admin), con=Depends(get_con)):
+    ensure_cal(con)
+    return {"intro": db.get_setting(con, "cal_intro", "") or CAL_INTRO,
+            "outro": db.get_setting(con, "cal_outro", "") or CAL_OUTRO,
+            "today": msk_today(),
+            "items": db.rows(con.execute("SELECT * FROM cal_events ORDER BY date_from DESC, id DESC LIMIT 300"))}
+
+
+def _day(v):
+    v = str(v or "").strip()
+    if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        raise HTTPException(400, "Дата должна быть в формате ГГГГ-ММ-ДД")
+    return v
+
+
+@app.post("/admin/api/calendar")
+async def admin_calendar_save(req: Request, _=Depends(admin), con=Depends(get_con)):
+    ensure_cal(con)
+    d = await req.json()
+    title = str(d.get("title", "")).strip()[:200]
+    date_from = _day(d.get("date_from"))
+    if not title or not date_from:
+        raise HTTPException(400, "Нужны название и дата начала")
+    link = str(d.get("link", "")).strip()[:500]
+    if link and not re.match(r"https?://", link):
+        raise HTTPException(400, "Ссылка должна начинаться с https://")
+    vals = (str(d.get("icon", "")).strip()[:8], title, date_from, _day(d.get("date_to")),
+            str(d.get("when_text", "")).strip()[:80], str(d.get("place", "")).strip()[:160],
+            str(d.get("body", "")).replace("\r\n", "\n").strip()[:3000], str(d.get("perk", "")).strip()[:200],
+            str(d.get("promo", "")).strip()[:60], link, str(d.get("contact", "")).strip()[:60],
+            0 if d.get("active") in (0, False, "0") else 1, 1 if str(d.get("own")) in ("1", "True", "true") else 0)
+    cols = "icon=?,title=?,date_from=?,date_to=?,when_text=?,place=?,body=?,perk=?,promo=?,link=?,contact=?,active=?,own=?"
+    if d.get("id"):
+        con.execute(f"UPDATE cal_events SET {cols} WHERE id=?", (*vals, int(d["id"])))
+        eid = int(d["id"])
+    else:
+        eid = con.execute("INSERT INTO cal_events(icon,title,date_from,date_to,when_text,place,body,perk,promo,link,contact,active,own,created_at) "
+                          "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (*vals, db.now())).lastrowid
+    con.commit()
+    return {"id": eid}
+
+
+@app.delete("/admin/api/calendar/{eid}")
+def admin_calendar_delete(eid: int, _=Depends(admin), con=Depends(get_con)):
+    ensure_cal(con)
+    con.execute("DELETE FROM cal_events WHERE id=?", (eid,))
+    con.commit()
+    return {"ok": True}
+
+
+@app.put("/admin/api/calendar-texts")
+async def admin_calendar_texts(req: Request, _=Depends(admin), con=Depends(get_con)):
+    d = await req.json()
+    for k in ("intro", "outro"):
+        v = str(d.get(k, "")).replace("\r\n", "\n").strip()
+        if len(v) > 1500:
+            raise HTTPException(400, "Слишком длинный текст")
+        db.set_setting(con, "cal_" + k, v)
+    con.commit()
+    return {"ok": True}
+
+
+# ---------------- предложения участников ----------------
+
+OFFERS_SQL = ["""CREATE TABLE IF NOT EXISTS offers(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, title TEXT, body TEXT DEFAULT '', price TEXT DEFAULT '',
+  barter INTEGER DEFAULT 0, barter_for TEXT DEFAULT '', status TEXT DEFAULT 'pending', approved_at TEXT, slot TEXT DEFAULT 'invite', created_at TEXT)""",
+              """CREATE TABLE IF NOT EXISTS offer_requests(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, offer_id INTEGER, from_tg INTEGER, kind TEXT, message TEXT DEFAULT '', created_at TEXT)"""]
+
+
+def ensure_offers(con):
+    for q in OFFERS_SQL:
+        con.execute(q)
+
+
+def person_name(m):
+    n = " ".join(x for x in (m.get("first_name"), m.get("last_name")) if x).strip()
+    return n or (("@" + m["username"]) if m.get("username") else str(m.get("tg_id") or ""))
+
+
+OFFER_DAYS = 30  # один приглашенный участник = 30 дней размещения одного предложения
+
+
+def offer_cutoff():
+    return (datetime.now(timezone.utc) - timedelta(days=OFFER_DAYS)).isoformat()
+
+
+def offer_slots(con, m):
+    """Места на витрине: 1 приглашенный и оплативший участник = 1 предложение на месяц.
+    Годовой тариф дает еще одно постоянное место без приглашений. Команда не ограничена."""
+    if is_team(m):
+        return {"invited": 0, "used": 0, "free": 99, "team": True, "year": False, "year_free": False}
+    invited = con.execute("SELECT COUNT(*) FROM claims WHERE tg_id=? AND rule_code='invite' AND status!='rejected'", (m["tg_id"],)).fetchone()[0]
+    used = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND COALESCE(slot,'invite')!='year' AND (status='pending' OR approved_at IS NOT NULL)", (m["tg_id"],)).fetchone()[0]
+    year = is_year(m)
+    busy = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND slot='year' AND status IN ('pending','active')", (m["tg_id"],)).fetchone()[0]
+    year_free = bool(year and not busy)
+    return {"invited": invited, "used": used, "free": max(0, invited - used) + (1 if year_free else 0), "team": False,
+            "year": year, "year_free": year_free}
+
+
+def offer_until(approved_at):
+    try:
+        return (datetime.fromisoformat(approved_at) + timedelta(days=OFFER_DAYS)).astimezone(timezone(timedelta(hours=3))).date().isoformat()
+    except Exception:
+        return ""
+
+
+@app.get("/api/offers")
+def offers_list(m=Depends(member), con=Depends(get_con)):
+    ensure_offers(con)
+    rows = db.rows(con.execute(
+        "SELECT o.*, m.first_name, m.last_name, m.sphere, m.city, m.status AS a_status, m.period_months AS a_pm FROM offers o LEFT JOIN members m ON m.tg_id=o.tg_id "
+        "WHERE o.status IN ('active','pending') OR o.tg_id=? ORDER BY o.id DESC LIMIT 300", (m["tg_id"],)))
+    asked = {(r[0], r[1]) for r in con.execute("SELECT offer_id, kind FROM offer_requests WHERE from_tg=?", (m["tg_id"],))}
+    cut = offer_cutoff()
+    out = []
+    for o in rows:
+        mine = o["tg_id"] == m["tg_id"]
+        if o["status"] == "hidden":
+            continue
+        st = o["status"]
+        yr = (o.get("slot") == "year")
+        if st == "active":
+            if yr:
+                if not is_year({"status": o["a_status"], "period_months": o["a_pm"]}):
+                    st = "expired"
+            elif not o["approved_at"] or o["approved_at"] < cut:
+                st = "expired"
+        if not mine and st != "active":
+            continue
+        out.append({"id": o["id"], "title": o["title"], "body": o["body"], "price": o["price"], "barter": bool(o["barter"]),
+                    "barter_for": o["barter_for"], "status": st, "mine": mine, "year": yr,
+                    "until": "" if yr else (offer_until(o["approved_at"]) if o["approved_at"] else ""),
+                    "author": person_name(o), "sphere": o["sphere"] or "", "city": o["city"] or "",
+                    "asked_buy": (o["id"], "buy") in asked, "asked_barter": (o["id"], "barter") in asked})
+    return {"items": out, "slots": offer_slots(con, m), "days": OFFER_DAYS}
+
+
+@app.post("/api/offers")
+async def offer_create(req: Request, m=Depends(member), con=Depends(get_con)):
+    ensure_offers(con)
+    d = await req.json()
+    title = str(d.get("title", "")).strip()[:100]
+    body = str(d.get("body", "")).replace("\r\n", "\n").strip()[:800]
+    price = str(d.get("price", "")).strip()[:120]
+    barter = 1 if d.get("barter") else 0
+    barter_for = str(d.get("barter_for", "")).strip()[:300] if barter else ""
+    if not title or not body:
+        raise HTTPException(400, "Напишите название и что именно вы предлагаете")
+    if not price and not barter:
+        raise HTTPException(400, "Укажите специальную цену для клуба или отметьте, что открыты к бартеру")
+    if offer_slots(con, m)["free"] < 1:
+        raise HTTPException(400, "Нет свободного места на витрине. Пригласите в клуб друга: один оплативший участник дает месяц размещения одного предложения.")
+    slot = "year" if offer_slots(con, m)["year_free"] else "invite"
+    oid = con.execute("INSERT INTO offers(tg_id,title,body,price,barter,barter_for,status,slot,created_at) VALUES(?,?,?,?,?,?,'pending',?,?)",
+                      (m["tg_id"], title, body, price, barter, barter_for, slot, db.now())).lastrowid
+    con.commit()
+    spawn(team_notify(render(con, "t_offer_new", title=title, who=person_name(m)), "t_offer_new"))
+    return {"id": oid}
+
+
+@app.delete("/api/offers/{oid}")
+def offer_hide(oid: int, m=Depends(member), con=Depends(get_con)):
+    ensure_offers(con)
+    con.execute("UPDATE offers SET status='hidden' WHERE id=? AND tg_id=?", (oid, m["tg_id"]))
+    con.commit()
+    return {"ok": True}
+
+
+@app.post("/api/offers/{oid}/request")
+async def offer_request(oid: int, req: Request, m=Depends(member), con=Depends(get_con)):
+    ensure_offers(con)
+    d = await req.json()
+    kind = "barter" if d.get("kind") == "barter" else "buy"
+    msg = str(d.get("message", "")).strip()[:500]
+    o = con.execute("SELECT * FROM offers WHERE id=? AND status='active' AND (slot='year' OR approved_at>=?)", (oid, offer_cutoff())).fetchone()
+    if not o:
+        raise HTTPException(404, "Предложение уже недоступно")
+    if o["tg_id"] == m["tg_id"]:
+        raise HTTPException(400, "Это ваше предложение")
+    if kind == "barter" and not o["barter"]:
+        raise HTTPException(400, "Автор не рассматривает бартер")
+    if kind == "barter" and not msg:
+        raise HTTPException(400, "Напишите, что можете предложить взамен")
+    if con.execute("SELECT 1 FROM offer_requests WHERE offer_id=? AND from_tg=? AND kind=?", (oid, m["tg_id"], kind)).fetchone():
+        raise HTTPException(400, "Вы уже отправили заявку")
+    con.execute("INSERT INTO offer_requests(offer_id,from_tg,kind,message,created_at) VALUES(?,?,?,?,?)", (oid, m["tg_id"], kind, msg, db.now()))
+    con.commit()
+    who = f'<a href="tg://user?id={m["tg_id"]}">{html.escape(person_name(m))}</a>' + (f' (@{html.escape(m["username"])})' if m.get("username") else "")
+    what = "хочет купить по специальной цене" if kind == "buy" else "предлагает бартер"
+    text = render(con, "offer_request", title=o["title"], who=Raw(who), what=what, message=msg or "")
+    spawn(send_text(o["tg_id"], text, key="offer_request"))
+    spawn(team_notify(render(con, "t_offer_req", title=o["title"], who=person_name(m), kind=("покупка" if kind == "buy" else "бартер")), "t_offer_req"))
+    return {"ok": True}
+
+
+@app.get("/admin/api/offers")
+def admin_offers(_=Depends(admin), con=Depends(get_con)):
+    ensure_offers(con)
+    rows = db.rows(con.execute(
+        "SELECT o.*, m.first_name, m.last_name, m.username, m.sphere FROM offers o LEFT JOIN members m ON m.tg_id=o.tg_id ORDER BY o.id DESC LIMIT 300"))
+    for o in rows:
+        o["author"] = person_name(o)
+        o["until"] = offer_until(o["approved_at"]) if o.get("approved_at") else ""
+        o["requests"] = con.execute("SELECT COUNT(*) FROM offer_requests WHERE offer_id=?", (o["id"],)).fetchone()[0]
+    return rows
+
+
+@app.post("/admin/api/offers/{oid}/status")
+async def admin_offer_status(oid: int, req: Request, _=Depends(admin), con=Depends(get_con)):
+    ensure_offers(con)
+    st = (await req.json()).get("status")
+    if st not in ("active", "hidden", "pending"):
+        raise HTTPException(400, "Неверный статус")
+    row = con.execute("SELECT * FROM offers WHERE id=?", (oid,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Нет такого предложения")
+    con.execute("UPDATE offers SET status=?, approved_at=CASE WHEN ?='active' AND approved_at IS NULL THEN ? ELSE approved_at END WHERE id=?", (st, st, db.now(), oid))
+    con.commit()
+    if st == "active" and row["status"] == "pending":
+        spawn(send_text(row["tg_id"], render(con, "offer_live", title=row["title"]), tg.app_button("Открыть клуб", "#events"), key="offer_live"))
+    return {"ok": True}
+
+
+@app.get("/admin/api/offer-requests")
+def admin_offer_requests(_=Depends(admin), con=Depends(get_con)):
+    ensure_offers(con)
+    return db.rows(con.execute(
+        "SELECT r.*, o.title, m.first_name, m.last_name, m.username FROM offer_requests r "
+        "LEFT JOIN offers o ON o.id=r.offer_id LEFT JOIN members m ON m.tg_id=r.from_tg ORDER BY r.id DESC LIMIT 300"))
 
 
 # ---------------- страницы ----------------
