@@ -849,6 +849,16 @@ async def handle_callback(con, cq):
             await tg._call(tg.BOT_TOKEN, "editMessageReplyMarkup", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
                                                                      "reply_markup": {"inline_keyboard": kb[:1]}})
         return
+    if data.startswith("fw:"):
+        parts = data.split(":")
+        if len(parts) == 3 and parts[1].isdigit():
+            await answer(await funnel_answer(con, cq, int(parts[1]), parts[2] == "y"))
+            msg = cq.get("message") or {}
+            if msg.get("chat"):
+                label = "Спасибо, отметили" if parts[2] == "y" else "Хорошо, напомним"
+                await tg._call(tg.BOT_TOKEN, "editMessageReplyMarkup", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
+                                                                         "reply_markup": {"inline_keyboard": [[{"text": label, "callback_data": "x"}]]}})
+            return
     if data.startswith("c:"):
         parts = data.split(":")
         if len(parts) == 3 and parts[1].isdigit() and u.get("id") in team_chat_ids(con):
@@ -1572,6 +1582,15 @@ async def _handle_update(con, upd):
             joined_team = True
         if arg.startswith("f_") and await funnel_start(con, u, arg[2:]):
             return {"ok": True}
+        if arg in ("anketa", "monthly"):
+            # ссылка только на анкету: человек получает кнопку анкеты, а не вход в приложение
+            upsert_member(con, u, **extra)
+            monthly = arg == "monthly"
+            await send_text(u["id"], get_text(con, "monthly" if monthly else "anketa"),
+                            tg.app_button(get_plain(con, "btn_monthly" if monthly else "btn_form"),
+                                          "static/monthly.html" if monthly else "static/anketa.html"),
+                            key=("monthly" if monthly else "anketa"), con=con)
+            return {"ok": True}
         upsert_member(con, u, **extra)
         m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (u["id"],)).fetchone())
         status = refresh_status(con, m)
@@ -1607,6 +1626,16 @@ def ensure_funnels(con):
     CREATE TABLE IF NOT EXISTS funnel_members(tg_id INTEGER, funnel_id INTEGER, joined_at TEXT, sent INTEGER DEFAULT 0,
       opened_at TEXT, watched_at TEXT, offer_sent INTEGER DEFAULT 0, answers TEXT DEFAULT '', PRIMARY KEY(tg_id, funnel_id));
     """)
+    for table, col, ddl in (("funnels", "access_hours", "INTEGER DEFAULT 24"), ("funnels", "ask_text", "TEXT DEFAULT ''"),
+                            ("funnels", "ask_delay_min", "INTEGER DEFAULT 180"), ("funnel_steps", "stage", "TEXT DEFAULT 'warm'"),
+                            ("funnel_members", "sent_access", "INTEGER DEFAULT 0"), ("funnel_members", "sent_sales", "INTEGER DEFAULT 0"),
+                            ("funnel_members", "confirmed_at", "TEXT"), ("funnel_members", "ask_sent", "INTEGER DEFAULT 0")):
+        if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+    con.commit()
+
+
+NEVER_OPENED_DAYS = 4  # если человек так и не нажал «Смотреть эфир», продающая цепочка начнется через столько дней после входа
 
 
 def _funnel_kb(code, btn, kind):
@@ -1619,36 +1648,91 @@ def _funnel_kb(code, btn, kind):
     return None
 
 
-async def funnel_send_due(con, fm, f):
-    """Отправляет человеку то, что по цепочке пора отправить: шаги прогрева, затем предложение после просмотра."""
-    now = datetime.now(timezone.utc)
-    steps = con.execute("SELECT * FROM funnel_steps WHERE funnel_id=? ORDER BY sort,id", (f["id"],)).fetchall()
+def _dt(x, default=None):
     try:
-        joined = datetime.fromisoformat(fm["joined_at"])
+        return datetime.fromisoformat(x)
     except Exception:
-        joined = now
-    sent = fm["sent"] or 0
-    for _ in range(6):
-        if sent >= len(steps):
-            break
-        st = steps[sent]
-        if joined + timedelta(minutes=int(st["delay_min"] or 0)) > now:
-            break
-        _CUR_KEY.set("funnel_" + f["code"])
-        r = await tg.send(fm["tg_id"], md_html(st["text"] or ""), button=_funnel_kb(f["code"], st["btn"], st["kind"]))
-        sent += 1
-        con.execute("UPDATE funnel_members SET sent=? WHERE tg_id=? AND funnel_id=?", (sent, fm["tg_id"], f["id"]))
-        con.commit()
-    if fm["watched_at"] and not fm["offer_sent"] and (f["offer_text"] or "").strip():
-        try:
-            due = datetime.fromisoformat(fm["watched_at"]) + timedelta(minutes=int(f["offer_delay_min"] or 0))
-        except Exception:
-            due = now
-        if due <= now:
-            _CUR_KEY.set("funnel_offer_" + f["code"])
-            r = await tg.send(fm["tg_id"], md_html(f["offer_text"]), button=_funnel_kb(f["code"], f["offer_btn"], "join"))
-            con.execute("UPDATE funnel_members SET offer_sent=1 WHERE tg_id=? AND funnel_id=?", (fm["tg_id"], f["id"]))
+        return default
+
+
+def funnel_window(f, fm):
+    """Когда у человека открыт доступ к эфиру: (начало или None, конец). Начало это его первое нажатие «Смотреть эфир»."""
+    now = datetime.now(timezone.utc)
+    start = _dt(fm["watched_at"])
+    if start:
+        return start, start + timedelta(hours=int(f["access_hours"] or 24))
+    return None, (_dt(fm["joined_at"], now) + timedelta(days=NEVER_OPENED_DAYS))
+
+
+def _is_paid_member(con, tg_id):
+    r = con.execute("SELECT status, role FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    return bool(r and r["status"] == "active" and (r["role"] or "") != "team")
+
+
+ASK_DEFAULT = "Удалось посмотреть эфир?"
+
+
+async def funnel_send_due(con, fm, f):
+    """Отправляет человеку то, что по цепочке пора отправить: прогрев до просмотра, напоминания пока открыт доступ,
+    вопрос «удалось посмотреть?», предложение после просмотра и продающие сообщения после закрытия доступа."""
+    if _is_paid_member(con, fm["tg_id"]):
+        return
+    now = datetime.now(timezone.utc)
+    start, end = funnel_window(f, fm)
+    steps = {}
+    for st in con.execute("SELECT * FROM funnel_steps WHERE funnel_id=? ORDER BY sort,id", (f["id"],)).fetchall():
+        steps.setdefault(st["stage"] or "warm", []).append(st)
+
+    async def run(stage, counter, anchor):
+        lst, sent = steps.get(stage, []), fm[counter] or 0
+        for _ in range(6):
+            if sent >= len(lst):
+                break
+            st = lst[sent]
+            if anchor + timedelta(minutes=int(st["delay_min"] or 0)) > now:
+                break
+            if stage == "access" and now >= end:
+                break
+            _CUR_KEY.set("funnel_" + f["code"])
+            await tg.send(fm["tg_id"], md_html(st["text"] or ""), button=_funnel_kb(f["code"], st["btn"], st["kind"]))
+            sent += 1
+            con.execute(f"UPDATE funnel_members SET {counter}=? WHERE tg_id=? AND funnel_id=?", (sent, fm["tg_id"], f["id"]))
             con.commit()
+
+    if not start:
+        await run("warm", "sent", _dt(fm["joined_at"], now))
+    else:
+        if now < end:
+            await run("access", "sent_access", start)
+        if not fm["ask_sent"] and not fm["confirmed_at"] and now < end and start + timedelta(minutes=int(f["ask_delay_min"] or 180)) <= now:
+            kb = {"inline_keyboard": [[{"text": "Да, посмотрел(а)", "callback_data": f"fw:{f['id']}:y"}],
+                                      [{"text": "Еще не успел(а)", "callback_data": f"fw:{f['id']}:n"}]]}
+            _CUR_KEY.set("funnel_ask_" + f["code"])
+            await tg.send(fm["tg_id"], md_html((f["ask_text"] or "").strip() or ASK_DEFAULT), button=kb)
+            con.execute("UPDATE funnel_members SET ask_sent=1 WHERE tg_id=? AND funnel_id=?", (fm["tg_id"], f["id"]))
+            con.commit()
+    conf = _dt(fm["confirmed_at"])
+    if conf and not fm["offer_sent"] and (f["offer_text"] or "").strip() and conf + timedelta(minutes=int(f["offer_delay_min"] or 0)) <= now:
+        _CUR_KEY.set("funnel_offer_" + f["code"])
+        await tg.send(fm["tg_id"], md_html(f["offer_text"]), button=_funnel_kb(f["code"], f["offer_btn"], "join"))
+        con.execute("UPDATE funnel_members SET offer_sent=1 WHERE tg_id=? AND funnel_id=?", (fm["tg_id"], f["id"]))
+        con.commit()
+    if now >= end:
+        await run("sales", "sent_sales", end)
+
+
+async def funnel_answer(con, cq, fid, yes):
+    """Нажатие на «Да, посмотрел(а)» или «Еще не успел(а)» под вопросом бота."""
+    u = cq.get("from") or {}
+    fm = con.execute("SELECT * FROM funnel_members WHERE tg_id=? AND funnel_id=?", (u.get("id"), fid)).fetchone()
+    if not fm:
+        return "Не нашли вашу ссылку"
+    if yes:
+        if not fm["confirmed_at"]:
+            con.execute("UPDATE funnel_members SET confirmed_at=? WHERE tg_id=? AND funnel_id=?", (db.now(), u["id"], fid))
+            con.commit()
+        return "Спасибо, что поделились"
+    return "Хорошо, доступ еще открыт"
 
 
 async def funnel_start(con, u, code):
@@ -1719,6 +1803,16 @@ def _funnel_route(con, f, focus, want):
     return out
 
 
+def _guest_state(con, m, fn, fm):
+    """Открыт ли еще доступ к эфиру. Оплатившие участники и команда видят эфир всегда."""
+    start, end = funnel_window(fn, fm)
+    now = datetime.now(timezone.utc)
+    always = m["status"] == "active"
+    expired = bool(start and now >= end and not always)
+    left = int((end - now).total_seconds() // 60) if start and not expired else None
+    return expired, left
+
+
 @app.get("/api/guest/funnel")
 def guest_funnel(f: str = "", m=Depends(current_user), con=Depends(get_con)):
     fn = _funnel_by_code(con, f)
@@ -1726,6 +1820,7 @@ def guest_funnel(f: str = "", m=Depends(current_user), con=Depends(get_con)):
     if not fm["opened_at"]:
         con.execute("UPDATE funnel_members SET opened_at=? WHERE tg_id=? AND funnel_id=?", (db.now(), m["tg_id"], fn["id"]))
         con.commit()
+    expired, left = _guest_state(con, m, fn, fm)
     e = db.row(con.execute("SELECT * FROM events WHERE id=?", (fn["event_id"],)).fetchone()) if fn["event_id"] else None
     ans = {}
     try:
@@ -1739,8 +1834,9 @@ def guest_funnel(f: str = "", m=Depends(current_user), con=Depends(get_con)):
         except Exception:
             summary = []
         ev = {"title": e["title"], "speaker": e.get("speaker") or "", "description": e.get("description") or "", "summary": summary,
-              "can_watch": bool(e.get("recording_url") or e.get("join_url"))}
-    return {"title": fn["title"], "event": ev, "watched": bool(fm["watched_at"]),
+              "can_watch": bool((e.get("recording_url") or e.get("join_url")) and not expired)}
+    return {"title": fn["title"], "event": ev, "watched": bool(fm["watched_at"]), "confirmed": bool(fm["confirmed_at"]),
+            "expired": expired, "left_min": left, "access_hours": int(fn["access_hours"] or 24),
             "offer": (fn["offer_text"] or "").strip(), "offer_btn": fn["offer_btn"] or "Вступить в клуб", "join": JOIN_URL,
             "member": m["status"] == "active",
             "focus": [[k, v[0]] for k, v in FUNNEL_FOCUS.items()], "want": [[k, v] for k, v in FUNNEL_WANT.items()],
@@ -1752,6 +1848,9 @@ async def guest_watch(req: Request, m=Depends(current_user), con=Depends(get_con
     d = await req.json()
     fn = _funnel_by_code(con, d.get("f"))
     fm = _funnel_member(con, m, fn)
+    expired, _ = _guest_state(con, m, fn, fm)
+    if expired:
+        raise HTTPException(403, "Доступ к эфиру закончился")
     e = con.execute("SELECT recording_url, join_url FROM events WHERE id=?", (fn["event_id"],)).fetchone() if fn["event_id"] else None
     url = (e["recording_url"] or e["join_url"]) if e else ""
     if not url:
@@ -1760,6 +1859,16 @@ async def guest_watch(req: Request, m=Depends(current_user), con=Depends(get_con
         con.execute("UPDATE funnel_members SET watched_at=? WHERE tg_id=? AND funnel_id=?", (db.now(), m["tg_id"], fn["id"]))
         con.commit()
     return {"url": url}
+
+
+@app.post("/api/guest/confirm")
+async def guest_confirm(req: Request, m=Depends(current_user), con=Depends(get_con)):
+    d = await req.json()
+    fn = _funnel_by_code(con, d.get("f"))
+    _funnel_member(con, m, fn)
+    con.execute("UPDATE funnel_members SET confirmed_at=COALESCE(confirmed_at, ?) WHERE tg_id=? AND funnel_id=?", (db.now(), m["tg_id"], fn["id"]))
+    con.commit()
+    return {"ok": True}
 
 
 @app.post("/api/guest/anketa")
@@ -2096,12 +2205,13 @@ def admin_library_del(lid: int, _=Depends(admin), con=Depends(get_con)):
 
 def _funnel_out(con, f):
     r = dict(f)
-    r["steps"] = [dict(x) for x in con.execute("SELECT delay_min,text,btn,kind FROM funnel_steps WHERE funnel_id=? ORDER BY sort,id", (f["id"],))]
+    r["steps"] = [dict(x) for x in con.execute("SELECT delay_min,text,btn,kind,stage FROM funnel_steps WHERE funnel_id=? ORDER BY sort,id", (f["id"],))]
     q = lambda sql: con.execute(sql, (f["id"],)).fetchone()[0]
     r["stats"] = {
         "joined": q("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=?"),
         "opened": q("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=? AND opened_at IS NOT NULL"),
         "watched": q("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=? AND watched_at IS NOT NULL"),
+        "confirmed": q("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=? AND confirmed_at IS NOT NULL"),
         "anketa": q("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=? AND answers!=''"),
         "paid": q("SELECT COUNT(*) FROM funnel_members fm JOIN members m ON m.tg_id=fm.tg_id WHERE fm.funnel_id=? AND m.status='active'"),
     }
@@ -2123,21 +2233,23 @@ async def admin_funnel_save(req: Request, _=Depends(admin), con=Depends(get_con)
     if not title:
         raise HTTPException(400, "Нужно название воронки")
     vals = (title, int(d["event_id"]) if d.get("event_id") else None, 1 if d.get("active", True) else 0,
-            str(d.get("offer_text") or ""), str(d.get("offer_btn") or ""), int(d.get("offer_delay_min") or 0))
+            str(d.get("offer_text") or ""), str(d.get("offer_btn") or ""), int(d.get("offer_delay_min") or 0),
+            max(1, int(d.get("access_hours") or 24)), str(d.get("ask_text") or ""), int(d.get("ask_delay_min") or 0))
     fid = d.get("id")
     if fid:
-        con.execute("UPDATE funnels SET title=?, event_id=?, active=?, offer_text=?, offer_btn=?, offer_delay_min=? WHERE id=?", (*vals, int(fid)))
+        con.execute("UPDATE funnels SET title=?, event_id=?, active=?, offer_text=?, offer_btn=?, offer_delay_min=?, access_hours=?, ask_text=?, ask_delay_min=? WHERE id=?", (*vals, int(fid)))
     else:
         code = "f" + secrets.token_hex(3)
-        fid = con.execute("INSERT INTO funnels(title,event_id,active,offer_text,offer_btn,offer_delay_min,code,created_at) VALUES(?,?,?,?,?,?,?,?)",
+        fid = con.execute("INSERT INTO funnels(title,event_id,active,offer_text,offer_btn,offer_delay_min,access_hours,ask_text,ask_delay_min,code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                           (*vals, code, db.now())).lastrowid
     con.execute("DELETE FROM funnel_steps WHERE funnel_id=?", (int(fid),))
-    for i, s in enumerate(d.get("steps") or []):
-        if not str(s.get("text") or "").strip():
+    for i, st in enumerate(d.get("steps") or []):
+        if not str(st.get("text") or "").strip():
             continue
-        kind = s.get("kind") if s.get("kind") in ("watch", "anketa", "join", "") else ""
-        con.execute("INSERT INTO funnel_steps(funnel_id,sort,delay_min,text,btn,kind) VALUES(?,?,?,?,?,?)",
-                    (int(fid), i, int(s.get("delay_min") or 0), str(s["text"]), str(s.get("btn") or ""), kind))
+        kind = st.get("kind") if st.get("kind") in ("watch", "anketa", "join", "") else ""
+        stage = st.get("stage") if st.get("stage") in ("warm", "access", "sales") else "warm"
+        con.execute("INSERT INTO funnel_steps(funnel_id,sort,delay_min,text,btn,kind,stage) VALUES(?,?,?,?,?,?,?)",
+                    (int(fid), i, int(st.get("delay_min") or 0), str(st["text"]), str(st.get("btn") or ""), kind, stage))
     con.commit()
     return {"id": int(fid)}
 
