@@ -1467,7 +1467,7 @@ async def tribute(req: Request, con=Depends(get_con)):
         # Inside не продается: уровень остается прежним, новый участник начинает с club
         exists = con.execute("SELECT level FROM members WHERE tg_id=?", (tg_id,)).fetchone()
         level = (exists["level"] if exists and exists["level"] else "club")
-        upsert_member(con, {"id": tg_id}, status="active", paid_until=until, period_months=months,
+        upsert_member(con, {"id": tg_id, "username": str(p.get("telegram_username") or "").lstrip("@") or None}, status="active", paid_until=until, period_months=months,
                       last_amount=amount, level=level)
         m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
         # пригласивший получает заявку на баллы (решение по ней принимаете вы в кабинете)
@@ -2000,10 +2000,27 @@ async def admin_crm_save(shard: str, req: Request, _=Depends(admin), con=Depends
     return {"ok": True, "ts": ts}
 
 
+def backfill_usernames(con):
+    """Тем, у кого в базе нет ника, берем его из оплаты Tribute: там приходит telegram_username."""
+    rows = con.execute("SELECT tg_id FROM members WHERE COALESCE(username,'')=''").fetchall()
+    for r in rows:
+        for pay in con.execute("SELECT raw FROM payments WHERE tg_id=? ORDER BY id DESC LIMIT 5", (r["tg_id"],)).fetchall():
+            try:
+                pl = (json.loads(pay["raw"] or "{}").get("payload") or {})
+            except ValueError:
+                continue
+            un = str(pl.get("telegram_username") or pl.get("username") or "").lstrip("@").strip()
+            if un:
+                con.execute("UPDATE members SET username=?, updated_at=? WHERE tg_id=? AND COALESCE(username,'')=''", (un, db.now(), r["tg_id"]))
+                break
+    con.commit()
+
+
 async def fill_names(limit=25):
     """Подтягиваем имена из Telegram тем, у кого в базе только числовой ID (например, оплатили, но еще не запускали бота)."""
     con = db.connect()
     try:
+        backfill_usernames(con)
         rows = con.execute("SELECT tg_id FROM members WHERE COALESCE(first_name,'')='' AND COALESCE(username,'')='' AND COALESCE(role,'')!='team' LIMIT ?", (limit,)).fetchall()
         for r in rows:
             key = "nt:%s" % r["tg_id"]
@@ -2029,6 +2046,10 @@ async def fill_names(limit=25):
 
 @app.get("/admin/api/members")
 async def admin_members(_=Depends(admin), con=Depends(get_con)):
+    try:
+        backfill_usernames(con)
+    except Exception:
+        log.exception("ники из оплат")
     out = db.rows(con.execute("SELECT * FROM members ORDER BY created_at DESC"))
     if any(not (m.get("first_name") or m.get("username")) for m in out):
         spawn(fill_names())
