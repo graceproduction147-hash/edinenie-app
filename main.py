@@ -2080,19 +2080,34 @@ async def fill_names(limit=25):
         con.close()
 
 
-def _public_name(username):
-    """Имя с публичной страницы t.me/<ник> (если человек не скрыл его). Пусто, если не нашли."""
-    try:
-        req = urllib.request.Request("https://t.me/" + username, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=6) as r:
-            page = r.read(200000).decode("utf-8", "ignore")
-    except Exception:
-        return ""
-    mm = re.search(r'property="og:title" content="([^"]*)"', page)
+def _og_name(page):
+    mm = re.search(r'property="og:title" content="([^"]*)"', page or "")
     t = html.unescape(mm.group(1)).strip() if mm else ""
     if not t or t.lower().startswith("telegram") or "@" in t:
         return ""
     return t
+
+
+def _public_name(username):
+    """Имя с публичной страницы t.me/<ник> (если человек не скрыл его). Сначала через скрипт Google
+    (с российского сервера t.me часто закрыт), потом напрямую. Пусто, если не нашли."""
+    relay = (os.environ.get("SHEET_WEBHOOK_URL") or "").strip()
+    if relay:
+        try:
+            req = urllib.request.Request(relay, data=json.dumps({"relay": "pubname", "username": username}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.loads(r.read(300000).decode("utf-8", "ignore"))
+            if isinstance(data, dict) and data.get("ok") and data.get("html"):
+                return _og_name(data["html"])
+        except Exception:
+            pass
+    try:
+        req = urllib.request.Request("https://t.me/" + username, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            return _og_name(r.read(200000).decode("utf-8", "ignore"))
+    except Exception:
+        return ""
 
 
 async def _names_from_public_page(con, limit=15):
