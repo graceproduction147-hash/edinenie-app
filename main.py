@@ -1051,6 +1051,23 @@ def feed(f: str = "all", m=Depends(member), con=Depends(get_con)):
     return [public_card(r) for r in db.rows(con.execute(q, args))]
 
 
+@app.post("/api/track")
+async def track_event(req: Request, m=Depends(current_user), con=Depends(get_con)):
+    """Что открывают в приложении: только название раздела, без содержимого."""
+    try:
+        data = await req.json()
+    except Exception:
+        return {"ok": False}
+    kind = str((data or {}).get("kind") or "")[:40]
+    if not re.fullmatch(r"[a-z0-9_:]{2,40}", kind):
+        return {"ok": False}
+    con.execute("CREATE TABLE IF NOT EXISTS app_events(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, kind TEXT, created_at TEXT)")
+    con.execute("CREATE INDEX IF NOT EXISTS ix_app_events ON app_events(created_at, kind)")
+    con.execute("INSERT INTO app_events(tg_id,kind,created_at) VALUES(?,?,?)", (m["tg_id"], kind, db.now()))
+    con.commit()
+    return {"ok": True}
+
+
 @app.post("/api/like")
 async def like(req: Request, m=Depends(member), con=Depends(get_con)):
     data = await req.json()
@@ -2442,6 +2459,26 @@ async def admin_coffee(_=Depends(admin), con=Depends(get_con)):
         return {"ok": False, "note": f"Пар не получилось: подходящих участников с анкетой пока мало ({len(res[1])}). Никому ничего не отправлено."}
     await coffee.announce(*res)
     return {"ok": True, "pairs": len(res[0]), "left": len(res[1])}
+
+
+@app.get("/admin/api/usage")
+def admin_usage(_=Depends(admin), con=Depends(get_con)):
+    """Что смотрят участники в приложении: открытия разделов за 7 и 30 дней."""
+    con.execute("CREATE TABLE IF NOT EXISTS app_events(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, kind TEXT, created_at TEXT)")
+    out = {"kinds": [], "days": []}
+    now = datetime.now(timezone.utc)
+    d7 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    d30 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    rows = con.execute("""SELECT kind,
+        SUM(created_at>=?) AS n7, COUNT(DISTINCT CASE WHEN created_at>=? THEN tg_id END) AS u7,
+        COUNT(*) AS n30, COUNT(DISTINCT tg_id) AS u30
+        FROM app_events WHERE created_at>=? GROUP BY kind ORDER BY n30 DESC""", (d7, d7, d30)).fetchall()
+    out["kinds"] = [{"kind": r[0], "n7": r[1] or 0, "u7": r[2] or 0, "n30": r[3], "u30": r[4]} for r in rows]
+    for i in range(13, -1, -1):
+        day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        r = con.execute("SELECT COUNT(*), COUNT(DISTINCT tg_id) FROM app_events WHERE substr(created_at,1,10)=?", (day,)).fetchone()
+        out["days"].append({"d": day, "n": r[0], "u": r[1]})
+    return out
 
 
 @app.get("/admin/api/payments")
