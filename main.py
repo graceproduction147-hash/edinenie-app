@@ -2073,10 +2073,46 @@ async def fill_names(limit=25):
                 con.execute("UPDATE members SET first_name=?, last_name=?, username=?, updated_at=? WHERE tg_id=?",
                             (c.get("first_name") or "", c.get("last_name") or "", c.get("username") or "", db.now(), r["tg_id"]))
                 con.commit()
+        await _names_from_public_page(con)
     except Exception as e:
         log.warning("fill_names: %s", repr(e)[:200])
     finally:
         con.close()
+
+
+def _public_name(username):
+    """Имя с публичной страницы t.me/<ник> (если человек не скрыл его). Пусто, если не нашли."""
+    try:
+        req = urllib.request.Request("https://t.me/" + username, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            page = r.read(200000).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    mm = re.search(r'property="og:title" content="([^"]*)"', page)
+    t = html.unescape(mm.group(1)).strip() if mm else ""
+    if not t or t.lower().startswith("telegram") or "@" in t:
+        return ""
+    return t
+
+
+async def _names_from_public_page(con, limit=15):
+    rows = con.execute("SELECT tg_id, username FROM members WHERE COALESCE(first_name,'')='' AND COALESCE(username,'')!='' AND COALESCE(role,'')!='team' LIMIT ?", (limit,)).fetchall()
+    for r in rows:
+        key = "pn:%s" % r["tg_id"]
+        last = db.get_setting(con, key, "")
+        try:
+            if last and datetime.fromisoformat(last) > datetime.now(timezone.utc) - timedelta(hours=24):
+                continue
+        except ValueError:
+            pass
+        db.set_setting(con, key, datetime.now(timezone.utc).isoformat())
+        con.commit()
+        name = await asyncio.to_thread(_public_name, r["username"])
+        if name:
+            parts = name.split(None, 1)
+            con.execute("UPDATE members SET first_name=?, last_name=?, updated_at=? WHERE tg_id=?",
+                        (parts[0], parts[1] if len(parts) > 1 else "", db.now(), r["tg_id"]))
+            con.commit()
 
 
 @app.get("/admin/api/members")
@@ -2086,7 +2122,7 @@ async def admin_members(_=Depends(admin), con=Depends(get_con)):
     except Exception:
         log.exception("ники из оплат")
     out = db.rows(con.execute("SELECT * FROM members ORDER BY created_at DESC"))
-    if any(not (m.get("first_name") or m.get("username")) for m in out):
+    if any(not m.get("first_name") for m in out):
         spawn(fill_names())
     last = _last_active(con)
     pays = {}
