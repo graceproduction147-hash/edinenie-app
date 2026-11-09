@@ -1908,11 +1908,42 @@ async def guest_anketa(req: Request, m=Depends(current_user), con=Depends(get_co
 TOKENS = {}
 
 
+TOKEN_DAYS = 60  # вход в кабинет помнится столько дней, в том числе после обновлений сервера
+
+
+def _tok_hash(tok: str) -> str:
+    return hashlib.sha256(tok.encode()).hexdigest()
+
+
+def _tok_save(con, tok: str, name: str):
+    con.execute("CREATE TABLE IF NOT EXISTS admin_tokens(h TEXT PRIMARY KEY, name TEXT, created_at TEXT)")
+    con.execute("DELETE FROM admin_tokens WHERE created_at < ?", ((datetime.now(timezone.utc) - timedelta(days=TOKEN_DAYS)).isoformat(),))
+    con.execute("INSERT OR REPLACE INTO admin_tokens(h,name,created_at) VALUES(?,?,?)", (_tok_hash(tok), name, datetime.now(timezone.utc).isoformat()))
+    con.commit()
+
+
 def admin(authorization: str = Header("")):
     tok = authorization.removeprefix("Bearer ").strip()
-    if not tok or tok not in TOKENS:
+    if not tok:
         raise HTTPException(401, "Войдите в кабинет")
-    return TOKENS[tok]
+    if tok in TOKENS:
+        return TOKENS[tok]
+    # после перезапуска сервера память пуста: проверяем сохраненные входы
+    c = db.connect()
+    try:
+        c.execute("CREATE TABLE IF NOT EXISTS admin_tokens(h TEXT PRIMARY KEY, name TEXT, created_at TEXT)")
+        r = c.execute("SELECT name, created_at FROM admin_tokens WHERE h=?", (_tok_hash(tok),)).fetchone()
+    finally:
+        c.close()
+    if r:
+        try:
+            fresh = datetime.fromisoformat(r["created_at"]) > datetime.now(timezone.utc) - timedelta(days=TOKEN_DAYS)
+        except ValueError:
+            fresh = False
+        if fresh:
+            TOKENS[tok] = r["name"] or "команда"
+            return TOKENS[tok]
+    raise HTTPException(401, "Войдите в кабинет")
 
 
 def _pw_hash(pw: str, salt: str) -> str:
@@ -1935,6 +1966,7 @@ async def admin_login(req: Request, con=Depends(get_con)):
         raise HTTPException(401, "Неверный пароль")
     tok = secrets.token_urlsafe(32)
     TOKENS[tok] = data.get("name") or "команда"
+    _tok_save(con, tok, TOKENS[tok])
     return {"token": tok}
 
 
@@ -1952,6 +1984,9 @@ async def admin_password(req: Request, authorization: str = Header(""), _=Depend
     keep = authorization.removeprefix("Bearer ").strip()
     for t in [t for t in TOKENS if t != keep]:
         TOKENS.pop(t, None)
+    con.execute("CREATE TABLE IF NOT EXISTS admin_tokens(h TEXT PRIMARY KEY, name TEXT, created_at TEXT)")
+    con.execute("DELETE FROM admin_tokens WHERE h != ?", (_tok_hash(keep),))
+    con.commit()
     return {"ok": True}
 
 
@@ -2054,9 +2089,16 @@ async def admin_members(_=Depends(admin), con=Depends(get_con)):
     if any(not (m.get("first_name") or m.get("username")) for m in out):
         spawn(fill_names())
     last = _last_active(con)
+    pays = {}
+    try:
+        for r in con.execute("SELECT tg_id,event,amount,period_months,expires_at,created_at FROM payments WHERE tg_id IS NOT NULL ORDER BY id DESC").fetchall():
+            pays.setdefault(r[0], []).append({"event": r[1], "amount": r[2], "months": r[3], "until": r[4], "at": r[5]})
+    except Exception:
+        log.exception("оплаты участников")
     for m in out:
         m["points"] = db.balance(con, m["tg_id"])
         m["last_active"] = last.get(m["tg_id"], "")
+        m["pay"] = pays.get(m["tg_id"], [])[:20]
     return out
 
 
