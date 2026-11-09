@@ -251,10 +251,25 @@ async def send_text(chat_id, text, kb=None, key=None, con=None, token=None):
         tok = token or tg.BOT_TOKEN
         try:
             if len(text) <= 1024:
-                payload = {"chat_id": chat_id, "photo": url, "caption": text, "parse_mode": "HTML"}
+                payload = {"chat_id": chat_id, "caption": text, "parse_mode": "HTML"}
                 if kb:
                     payload["reply_markup"] = kb
-                r = await tg._call(tok, "sendPhoto", payload)
+                r = None
+                # 1) отправляем сам файл через посредника: Telegram не всегда может скачать картинку по ссылке
+                try:
+                    f = BOTPICS / url.rsplit("/", 1)[-1]
+                    if f.exists() and f.stat().st_size <= 5_000_000:
+                        r = await tg._call(tok, "sendPhoto", dict(payload), file=("photo", f.read_bytes()))
+                except Exception:
+                    log.exception("отправка файла картинки")
+                # 2) если не вышло: по ссылке, две попытки
+                for attempt in range(2):
+                    if r and r.get("ok"):
+                        break
+                    r = await tg._call(tok, "sendPhoto", {**payload, "photo": url})
+                    if not (r and r.get("ok")):
+                        log.warning("картинка «%s» не ушла (попытка %s): %s", key, attempt + 1, r)
+                        await asyncio.sleep(2)
                 if r and r.get("ok"):
                     _msg_log(chat_id, "[картинка] " + text, key, True, "team" if (token and token == tg.TEAM_BOT_TOKEN) else "main")
                     return r
