@@ -109,8 +109,8 @@ TEXTS = {
                     "default": "🔁 Продление: {who} (id {id}), {months} мес., {amount} ₽. Доступ продлен до {until}."},
     "t_donation": {"title": "Донат", "group": "team", "max": 1000, "vars": "{event}, {id}, {amount}", "hint": "Команде.",
                    "default": "Донат через Tribute ({event}): id {id}, {amount} ₽. Доступ в клуб не выдан."},
-    "t_cancel": {"title": "Отмена подписки", "group": "team", "max": 1000, "vars": "{id}", "hint": "Команде.",
-                 "default": "Отмена подписки: id {id}. Доступ сохранится до конца оплаченного периода."},
+    "t_cancel": {"title": "Отмена подписки", "group": "team", "max": 1000, "vars": "{who}, {id}", "hint": "Команде.",
+                 "default": "Отмена подписки: {who}, id {id}. Доступ сохранится до конца оплаченного периода."},
     "t_badsign": {"title": "Оплата с неверной подписью", "group": "team", "max": 1000, "vars": "", "hint": "Команде.",
                   "default": "Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."},
     "t_birthday": {"title": "День рождения участника, сегодня", "group": "team", "max": 1000, "vars": "{who}, {age} (возраст или пусто), {wish} (готовое поздравление)", "hint": "Команде, утром в день рождения. Поздравить лично.",
@@ -1505,7 +1505,10 @@ async def tribute(req: Request, con=Depends(get_con)):
         spawn(team_notify(render(con, "t_donation", event=event, id=tg_id, amount=amount or "?"), "t_donation"))
     elif event in ("cancelled_subscription", "subscription_cancelled"):
         spawn(push_sheet({"op": "cancel", "tg_id": tg_id, "status": "отмена"}))
-        spawn(team_notify(render(con, "t_cancel", id=tg_id), "t_cancel"))
+        cm = con.execute("SELECT first_name, last_name, username FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+        cname = ((cm["first_name"] or "") + " " + (cm["last_name"] or "")).strip() if cm else ""
+        cwho = (html.escape(cname) + (" @" + html.escape(cm["username"]) if cm and cm["username"] else "")).strip() or "без имени"
+        spawn(team_notify(render(con, "t_cancel", who=Raw(cwho), id=tg_id), "t_cancel"))
     return {"ok": True}
 
 
