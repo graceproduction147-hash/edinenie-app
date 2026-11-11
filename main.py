@@ -1568,16 +1568,20 @@ async def _handle_update(con, upd):
         return {"ok": True}
     if not u or msg.get("chat", {}).get("type") != "private":
         return {"ok": True}
-    if msg.get("contact") or (text or "").strip() == "Пропустить":
+    lf = None
+    if msg.get("contact") or (text and len(text) <= 60 and not text.startswith("/")):
+        lf = con.execute("SELECT f.* FROM funnels f JOIN funnel_members m ON m.funnel_id=f.id WHERE m.tg_id=? AND f.ask_phone=1 ORDER BY m.joined_at DESC LIMIT 1", (int(u["id"]),)).fetchone()
+    skip = bool(lf and (text or "").strip() in (_ftx(lf)["phone_skip"], FTX["phone_skip"]))
+    if msg.get("contact") or skip:
         ct = msg.get("contact") or {}
+        ltx = _ftx(lf, _ev_title(con, lf)) if lf else FTX
         if ct and ct.get("user_id") in (None, u["id"]) and ct.get("phone_number"):
             ph = re.sub(r"[^\d+]", "", str(ct["phone_number"]))
             ph = ph if ph.startswith("+") else "+" + ph
             con.execute("UPDATE members SET phone=? WHERE tg_id=?", (ph[:20], int(u["id"])))
             con.commit()
-        if ct or (text or "").strip() == "Пропустить":
-            await tg.send(u["id"], "Спасибо." if ct else "Хорошо, без номера.", button={"remove_keyboard": True})
-            return {"ok": True}
+        await tg.send(u["id"], md_html(ltx["phone_thanks"] if ct else ltx["phone_skipped"]), button={"remove_keyboard": True})
+        return {"ok": True}
     if msg.get("photo"):
         me_row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
         if me_row and is_team(db.row(me_row)):
@@ -1688,7 +1692,7 @@ def ensure_funnels(con):
                             ("funnels", "keyword", "TEXT DEFAULT ''"), ("funnels", "from_start", "INTEGER DEFAULT 0"),
                             ("funnels", "ask_phone", "INTEGER DEFAULT 0"), ("funnels", "phone_text", "TEXT DEFAULT ''"),
                             ("funnel_steps", "media", "TEXT DEFAULT ''"), ("funnel_steps", "at_hour", "INTEGER DEFAULT -1"),
-                            ("funnel_members", "phone_asked", "INTEGER DEFAULT 0"), ("members", "phone", "TEXT DEFAULT ''")):
+                            ("funnels", "texts", "TEXT DEFAULT ''"), ("funnels", "cover", "TEXT DEFAULT ''"), ("funnel_members", "phone_asked", "INTEGER DEFAULT 0"), ("members", "phone", "TEXT DEFAULT ''")):
         if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
             con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
     con.commit()
@@ -1735,6 +1739,40 @@ MSK = timezone(timedelta(hours=3))
 PHONE_DEFAULT = "Если хотите, оставьте номер телефона: мы пришлем напоминание об эфире и ничего лишнего. Это необязательно, можно просто пропустить."
 
 
+FTX = {  # служебные тексты воронки: кнопки, ответы бота и подписи на странице эфира (можно менять в кабинете)
+    "phone_btn": "Поделиться номером", "phone_skip": "Пропустить",
+    "phone_thanks": "Спасибо, номер сохранили 🫂", "phone_skipped": "Хорошо, без номера. Эфир ждет вас 🪬",
+    "ask_yes": "Да, посмотрел(а)", "ask_no": "Еще не успел(а)",
+    "ask_yes_reply": "Спасибо, что поделились ❤️", "ask_no_reply": "Хорошо, доступ еще открыт",
+    "g_eyebrow": "Открытый эфир клуба", "g_watch": "Смотреть эфир", "g_watch_again": "Смотреть еще раз",
+    "g_left": "Доступ открыт еще", "g_open_for": "Эфир открыт для вас на {часы} с первого нажатия",
+    "g_done": "Я посмотрел(а)", "g_thanks": "Спасибо, что отметили",
+    "g_expired_title": "Доступ к эфиру закончился", "g_expired_text": "Эфир был открыт {часы}. Остальное в Клубе доступно участникам.",
+    "g_norec": "Запись скоро появится, бот напишет вам.",
+    "g_route_title": "Персональный маршрут",
+    "g_route_intro": "Если хотите, ответьте на два коротких вопроса, и мы покажем, какие эфиры и материалы Клуба подойдут вам. Это займет полминуты.",
+    "g_route_btn": "Собрать маршрут", "g_route_ready": "Подобрали то, что стоит посмотреть в Клубе именно вам.",
+    "g_route_lock": "Все это откроется, когда вы станете участником Клуба.",
+    "g_timer": "До закрытия доступа к эфиру",
+    "g_inside_note": "Так выглядит Клуб изнутри. Все, что вы видите, откроется после вступления.",
+    "g_inside_cta": "Войти в клуб",
+}
+
+
+def _ftx(f, ev=""):
+    """Служебные тексты воронки: то, что задано в кабинете, иначе стандартное; {часы} и {эфир} подставляются."""
+    try:
+        own = json.loads((f["texts"] if f is not None and "texts" in f.keys() else "") or "{}")
+    except Exception:
+        own = {}
+    hrs = _hrs(f["access_hours"] or 24) if f is not None else ""
+    out = {}
+    for k, v in FTX.items():
+        t = str(own.get(k) or "").strip() or v
+        out[k] = t.replace("{часы}", hrs).replace("{эфир}", ev or "эфир")
+    return out
+
+
 def _hrs(n):
     """«1 час», «2 часа», «48 часов»."""
     n = max(0, int(n))
@@ -1743,12 +1781,17 @@ def _hrs(n):
     return f"{n} {w}"
 
 
-def _funnel_text(f, st):
+def _ev_title(con, f):
+    r = con.execute("SELECT title FROM events WHERE id=?", (f["event_id"] or 0,)).fetchone()
+    return (r["title"] if r else "") or "эфир"
+
+
+def _funnel_text(f, st, ev=""):
     """Подставляет в текст сообщения {часы} (сколько всего открыт эфир) и {осталось} (сколько останется к моменту сообщения),
     чтобы при смене времени доступа тексты не пришлось править."""
     total = int(f["access_hours"] or 24)
     left = max(1, total - int(round((st["delay_min"] or 0) / 60))) if (st["stage"] == "access" or f["from_start"]) else total
-    return (st["text"] or "").replace("{часы}", _hrs(total)).replace("{осталось}", _hrs(left))
+    return (st["text"] or "").replace("{часы}", _hrs(total)).replace("{осталось}", _hrs(left)).replace("{эфир}", ev or "эфир")
 
 
 def _at_hour(due, hour):
@@ -1796,6 +1839,7 @@ async def funnel_send_due(con, fm, f):
         return
     now = datetime.now(timezone.utc)
     start, end = funnel_window(f, fm)
+    ev = _ev_title(con, f)
     steps = {}
     for st in con.execute("SELECT * FROM funnel_steps WHERE funnel_id=? ORDER BY sort,id", (f["id"],)).fetchall():
         steps.setdefault(st["stage"] or "warm", []).append(st)
@@ -1811,7 +1855,7 @@ async def funnel_send_due(con, fm, f):
             if stage == "access" and now >= end:
                 break
             _CUR_KEY.set("funnel_" + f["code"])
-            await funnel_send_msg(fm["tg_id"], md_html(_funnel_text(f, st)), _funnel_kb(f["code"], st["btn"], st["kind"]), st["media"])
+            await funnel_send_msg(fm["tg_id"], md_html(_funnel_text(f, st, ev)), _funnel_kb(f["code"], st["btn"], st["kind"]), st["media"])
             sent += 1
             con.execute(f"UPDATE funnel_members SET {counter}=? WHERE tg_id=? AND funnel_id=?", (sent, fm["tg_id"], f["id"]))
             con.commit()
@@ -1823,7 +1867,8 @@ async def funnel_send_due(con, fm, f):
         con.commit()
         have = con.execute("SELECT phone FROM members WHERE tg_id=?", (fm["tg_id"],)).fetchone()
         if not (have and have["phone"]):
-            kb = {"keyboard": [[{"text": "Поделиться номером", "request_contact": True}], [{"text": "Пропустить"}]],
+            tx = _ftx(f, ev)
+            kb = {"keyboard": [[{"text": tx["phone_btn"], "request_contact": True}], [{"text": tx["phone_skip"]}]],
                   "resize_keyboard": True, "one_time_keyboard": True}
             _CUR_KEY.set("funnel_phone_" + f["code"])
             await tg.send(fm["tg_id"], md_html((f["phone_text"] or "").strip() or PHONE_DEFAULT), button=kb)
@@ -1831,16 +1876,17 @@ async def funnel_send_due(con, fm, f):
         if now < end:
             await run("access", "sent_access", start)
         if not fm["ask_sent"] and not fm["confirmed_at"] and now < end and start + timedelta(minutes=int(f["ask_delay_min"] or 180)) <= now:
-            kb = {"inline_keyboard": [[{"text": "Да, посмотрел(а)", "callback_data": f"fw:{f['id']}:y"}],
-                                      [{"text": "Еще не успел(а)", "callback_data": f"fw:{f['id']}:n"}]]}
+            tx = _ftx(f, ev)
+            kb = {"inline_keyboard": [[{"text": tx["ask_yes"][:60], "callback_data": f"fw:{f['id']}:y"}],
+                                      [{"text": tx["ask_no"][:60], "callback_data": f"fw:{f['id']}:n"}]]}
             _CUR_KEY.set("funnel_ask_" + f["code"])
-            await tg.send(fm["tg_id"], md_html((f["ask_text"] or "").strip() or ASK_DEFAULT), button=kb)
+            await tg.send(fm["tg_id"], md_html(((f["ask_text"] or "").strip() or ASK_DEFAULT).replace("{эфир}", ev).replace("{часы}", _hrs(f["access_hours"] or 24))), button=kb)
             con.execute("UPDATE funnel_members SET ask_sent=1 WHERE tg_id=? AND funnel_id=?", (fm["tg_id"], f["id"]))
             con.commit()
     conf = _dt(fm["confirmed_at"])
     if conf and not fm["offer_sent"] and (f["offer_text"] or "").strip() and conf + timedelta(minutes=int(f["offer_delay_min"] or 0)) <= now:
         _CUR_KEY.set("funnel_offer_" + f["code"])
-        await tg.send(fm["tg_id"], md_html(f["offer_text"]), button=_funnel_kb(f["code"], f["offer_btn"], "join"))
+        await tg.send(fm["tg_id"], md_html(f["offer_text"].replace("{эфир}", ev).replace("{часы}", _hrs(f["access_hours"] or 24))), button=_funnel_kb(f["code"], f["offer_btn"], "join"))
         con.execute("UPDATE funnel_members SET offer_sent=1 WHERE tg_id=? AND funnel_id=?", (fm["tg_id"], f["id"]))
         con.commit()
     if now >= end:
@@ -1853,12 +1899,14 @@ async def funnel_answer(con, cq, fid, yes):
     fm = con.execute("SELECT * FROM funnel_members WHERE tg_id=? AND funnel_id=?", (u.get("id"), fid)).fetchone()
     if not fm:
         return "Не нашли вашу ссылку"
+    fr = con.execute("SELECT * FROM funnels WHERE id=?", (fid,)).fetchone()
+    tx = _ftx(fr, _ev_title(con, fr))
     if yes:
         if not fm["confirmed_at"]:
             con.execute("UPDATE funnel_members SET confirmed_at=? WHERE tg_id=? AND funnel_id=?", (db.now(), u["id"], fid))
             con.commit()
-        return "Спасибо, что поделились"
-    return "Хорошо, доступ еще открыт"
+        return tx["ask_yes_reply"][:190]
+    return tx["ask_no_reply"][:190]
 
 
 async def funnel_start(con, u, code):
@@ -1961,10 +2009,20 @@ def guest_funnel(f: str = "", m=Depends(current_user), con=Depends(get_con)):
             summary = []
         ev = {"title": e["title"], "speaker": e.get("speaker") or "", "description": e.get("description") or "", "summary": summary,
               "can_watch": bool((e.get("recording_url") or e.get("join_url")) and not expired)}
-    return {"title": fn["title"], "event": ev, "watched": bool(fm["watched_at"]), "confirmed": bool(fm["confirmed_at"]),
+    start, end = funnel_window(fn, fm)
+    now_u = datetime.now(timezone.utc)
+    left_sec = int((end - now_u).total_seconds()) if (start and not expired and m["status"] != "active" and end > now_u) else None
+    inside = {"events": [{"title": x["title"], "speaker": x["speaker"] or "", "rubric": x["rubric"] or ""} for x in con.execute(
+                  "SELECT title,speaker,rubric FROM events WHERE recording_url!='' AND id!=? ORDER BY starts_at DESC LIMIT 6", (fn["event_id"] or 0,))],
+              "lib": [{"title": x["title"], "author": x["author"] or "", "type": x["type"] or ""} for x in con.execute(
+                  "SELECT title,author,type FROM library ORDER BY created_at DESC LIMIT 6")]}
+    cv = fn["cover"] if "cover" in fn.keys() else ""
+    return {"left_sec": left_sec, "total_sec": int(fn["access_hours"] or 24) * 3600, "inside": inside,
+            "cover": (f"/botpic/{cv}" if cv and (BOTPICS / cv).exists() else ""),
+            "title": fn["title"], "event": ev, "watched": bool(fm["watched_at"]), "confirmed": bool(fm["confirmed_at"]),
             "expired": expired, "left_min": left, "access_hours": int(fn["access_hours"] or 24),
             "offer": (fn["offer_text"] or "").strip(), "offer_btn": fn["offer_btn"] or "Вступить в клуб", "join": JOIN_URL,
-            "member": m["status"] == "active",
+            "member": m["status"] == "active", "t": _ftx(fn, (ev or {}).get("title") or ""),
             "focus": [[k, v[0]] for k, v in FUNNEL_FOCUS.items()], "want": [[k, v] for k, v in FUNNEL_WANT.items()],
             "route": _funnel_route(con, fn, ans.get("focus"), ans.get("want")) if ans else None}
 
@@ -2456,6 +2514,11 @@ def _funnel_out(con, f):
         "paid": q("SELECT COUNT(*) FROM funnel_members fm JOIN members m ON m.tg_id=fm.tg_id WHERE fm.funnel_id=? AND m.status='active'"),
     }
     r["link"] = f"{BOT_LINK}?start=f_{f['code']}"
+    r["cover_url"] = f"/botpic/{f['cover']}" if f["cover"] and (BOTPICS / f["cover"]).exists() else ""
+    try:
+        r["texts"] = json.loads(f["texts"] or "{}")
+    except Exception:
+        r["texts"] = {}
     return r
 
 
@@ -2518,7 +2581,12 @@ async def admin_funnel_save(req: Request, _=Depends(admin), con=Depends(get_con)
     vals = (title, int(d["event_id"]) if d.get("event_id") else None, 1 if d.get("active", True) else 0,
             str(d.get("offer_text") or ""), str(d.get("offer_btn") or ""), int(d.get("offer_delay_min") or 0),
             max(1, int(d.get("access_hours") or 24)), str(d.get("ask_text") or ""), int(d.get("ask_delay_min") or 0))
-    extra_vals = (1 if d.get("from_start") else 0, 1 if d.get("ask_phone") else 0, str(d.get("phone_text") or "")[:600])
+    tx_in = d.get("texts") if isinstance(d.get("texts"), dict) else {}
+    cover = os.path.basename(str(d.get("cover") or ""))
+    if cover and not (BOTPICS / cover).exists():
+        cover = ""
+    tx_json = json.dumps({k: str(v).strip()[:600] for k, v in tx_in.items() if k in FTX and str(v or "").strip()}, ensure_ascii=False)
+    extra_vals = (1 if d.get("from_start") else 0, 1 if d.get("ask_phone") else 0, str(d.get("phone_text") or "")[:600], tx_json, cover)
     fid = d.get("id")
     keyword = re.sub(r"\s+", " ", str(d.get("keyword") or "")).strip()[:40]
     if keyword:
@@ -2526,14 +2594,14 @@ async def admin_funnel_save(req: Request, _=Depends(admin), con=Depends(get_con)
         if taken:
             raise HTTPException(400, f"Слово «{keyword}» уже занято воронкой «{taken['title']}»")
     if fid:
-        con.execute("UPDATE funnels SET title=?, event_id=?, active=?, offer_text=?, offer_btn=?, offer_delay_min=?, access_hours=?, ask_text=?, ask_delay_min=?, keyword=?, from_start=?, ask_phone=?, phone_text=? WHERE id=?", (*vals, keyword, *extra_vals, int(fid)))
+        con.execute("UPDATE funnels SET title=?, event_id=?, active=?, offer_text=?, offer_btn=?, offer_delay_min=?, access_hours=?, ask_text=?, ask_delay_min=?, keyword=?, from_start=?, ask_phone=?, phone_text=?, texts=?, cover=? WHERE id=?", (*vals, keyword, *extra_vals, int(fid)))
         used = con.execute("SELECT COUNT(*) FROM funnel_members WHERE funnel_id=?", (int(fid),)).fetchone()[0]
         slug = _kw_slug(keyword)
         if slug and not used:
             con.execute("UPDATE funnels SET code=? WHERE id=?", (_unique_code(con, slug, int(fid)), int(fid)))
     else:
         code = _unique_code(con, _kw_slug(keyword))
-        fid = con.execute("INSERT INTO funnels(title,event_id,active,offer_text,offer_btn,offer_delay_min,access_hours,ask_text,ask_delay_min,keyword,from_start,ask_phone,phone_text,code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        fid = con.execute("INSERT INTO funnels(title,event_id,active,offer_text,offer_btn,offer_delay_min,access_hours,ask_text,ask_delay_min,keyword,from_start,ask_phone,phone_text,texts,cover,code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                           (*vals, keyword, *extra_vals, code, db.now())).lastrowid
     con.execute("DELETE FROM funnel_steps WHERE funnel_id=?", (int(fid),))
     for i, st in enumerate(d.get("steps") or []):
