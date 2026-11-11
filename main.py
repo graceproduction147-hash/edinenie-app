@@ -1692,7 +1692,7 @@ def ensure_funnels(con):
                             ("funnels", "keyword", "TEXT DEFAULT ''"), ("funnels", "from_start", "INTEGER DEFAULT 0"),
                             ("funnels", "ask_phone", "INTEGER DEFAULT 0"), ("funnels", "phone_text", "TEXT DEFAULT ''"),
                             ("funnel_steps", "media", "TEXT DEFAULT ''"), ("funnel_steps", "at_hour", "INTEGER DEFAULT -1"),
-                            ("funnels", "texts", "TEXT DEFAULT ''"), ("funnels", "cover", "TEXT DEFAULT ''"), ("funnel_members", "phone_asked", "INTEGER DEFAULT 0"), ("members", "phone", "TEXT DEFAULT ''")):
+                            ("funnels", "texts", "TEXT DEFAULT ''"), ("funnels", "cover", "TEXT DEFAULT ''"), ("funnel_members", "phone_asked", "INTEGER DEFAULT 0"), ("funnel_members", "sent_after", "INTEGER DEFAULT 0"), ("members", "phone", "TEXT DEFAULT ''")):
         if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
             con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
     con.commit()
@@ -1706,6 +1706,8 @@ def _funnel_kb(code, btn, kind):
         return {"inline_keyboard": [[{"text": btn or "Вступить в клуб", "url": JOIN_URL}]]}
     if kind == "anketa":
         return tg.app_button(btn or "Собрать маршрут", f"static/guest.html?f={code}&go=anketa")
+    if kind == "tour":
+        return tg.app_button(btn or "Заглянуть в Клуб", f"static/guest.html?f={code}&go=tour")
     if kind == "watch":
         return tg.app_button(btn or "Смотреть эфир", f"static/guest.html?f={code}")
     return None
@@ -1753,7 +1755,7 @@ FTX = {  # служебные тексты воронки: кнопки, отв�
     "g_route_intro": "Если хотите, ответьте на два коротких вопроса, и мы покажем, какие эфиры и материалы Клуба подойдут вам. Это займет полминуты.",
     "g_route_btn": "Собрать маршрут", "g_route_ready": "Подобрали то, что стоит посмотреть в Клубе именно вам.",
     "g_route_lock": "Все это откроется, когда вы станете участником Клуба.",
-    "g_timer": "До закрытия доступа к эфиру",
+    "g_tour": "", "g_timer": "До закрытия доступа к эфиру",
     "g_inside_note": "Так выглядит Клуб изнутри. Все, что вы видите, откроется после вступления.",
     "g_inside_cta": "Войти в клуб",
 }
@@ -1790,7 +1792,7 @@ def _funnel_text(f, st, ev=""):
     """Подставляет в текст сообщения {часы} (сколько всего открыт эфир) и {осталось} (сколько останется к моменту сообщения),
     чтобы при смене времени доступа тексты не пришлось править."""
     total = int(f["access_hours"] or 24)
-    left = max(1, total - int(round((st["delay_min"] or 0) / 60))) if (st["stage"] == "access" or f["from_start"]) else total
+    left = max(1, total - int(round((st["delay_min"] or 0) / 60))) if (st["stage"] == "access" or (f["from_start"] and st["stage"] == "warm")) else total
     return (st["text"] or "").replace("{часы}", _hrs(total)).replace("{осталось}", _hrs(left)).replace("{эфир}", ev or "эфир")
 
 
@@ -1872,6 +1874,9 @@ async def funnel_send_due(con, fm, f):
                   "resize_keyboard": True, "one_time_keyboard": True}
             _CUR_KEY.set("funnel_phone_" + f["code"])
             await tg.send(fm["tg_id"], md_html((f["phone_text"] or "").strip() or PHONE_DEFAULT), button=kb)
+    wa = _dt(fm["watched_at"])
+    if wa:
+        await run("after", "sent_after", wa)
     if start:
         if now < end:
             await run("access", "sent_access", start)
@@ -2585,7 +2590,7 @@ async def admin_funnel_save(req: Request, _=Depends(admin), con=Depends(get_con)
     cover = os.path.basename(str(d.get("cover") or ""))
     if cover and not (BOTPICS / cover).exists():
         cover = ""
-    tx_json = json.dumps({k: str(v).strip()[:600] for k, v in tx_in.items() if k in FTX and str(v or "").strip()}, ensure_ascii=False)
+    tx_json = json.dumps({k: str(v).strip()[:(4000 if k == "g_tour" else 600)] for k, v in tx_in.items() if k in FTX and str(v or "").strip()}, ensure_ascii=False)
     extra_vals = (1 if d.get("from_start") else 0, 1 if d.get("ask_phone") else 0, str(d.get("phone_text") or "")[:600], tx_json, cover)
     fid = d.get("id")
     keyword = re.sub(r"\s+", " ", str(d.get("keyword") or "")).strip()[:40]
@@ -2607,8 +2612,8 @@ async def admin_funnel_save(req: Request, _=Depends(admin), con=Depends(get_con)
     for i, st in enumerate(d.get("steps") or []):
         if not str(st.get("text") or "").strip():
             continue
-        kind = st.get("kind") if st.get("kind") in ("watch", "anketa", "join", "") else ""
-        stage = st.get("stage") if st.get("stage") in ("warm", "access", "sales") else "warm"
+        kind = st.get("kind") if st.get("kind") in ("watch", "anketa", "join", "tour", "") else ""
+        stage = st.get("stage") if st.get("stage") in ("warm", "after", "access", "sales") else "warm"
         media = os.path.basename(str(st.get("media") or ""))
         if media and not (BOTPICS / media).exists():
             media = ""
