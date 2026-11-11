@@ -2446,7 +2446,14 @@ async def admin_event(req: Request, _=Depends(admin), con=Depends(get_con)):
 
 @app.get("/admin/api/team")
 def admin_team(_=Depends(admin), con=Depends(get_con)):
+    fixed = set(ADMIN_IDS) | set(tg.MANAGER_CHAT_IDS)
     people = db.rows(con.execute("SELECT tg_id, first_name, last_name, username FROM members WHERE role='team' ORDER BY updated_at"))
+    have = {p["tg_id"] for p in people}
+    for fid in fixed - have:
+        r = con.execute("SELECT tg_id, first_name, last_name, username FROM members WHERE tg_id=?", (fid,)).fetchone()
+        people.append(db.row(r) if r else {"tg_id": fid, "first_name": "", "last_name": "", "username": ""})
+    for p in people:
+        p["fixed"] = p["tg_id"] in fixed
     return {"link": f"https://t.me/edinenie_club_bot?start=team_{db.team_code(con)}", "people": people,
             "fixed": ADMIN_IDS}
 
@@ -2458,7 +2465,13 @@ def admin_team_regen(_=Depends(admin), con=Depends(get_con)):
 
 @app.delete("/admin/api/team/{tg_id}")
 def admin_team_remove(tg_id: int, _=Depends(admin), con=Depends(get_con)):
+    if tg_id in ADMIN_IDS or tg_id in tg.MANAGER_CHAT_IDS:
+        raise HTTPException(400, "Этот человек добавлен в настройках сервера (постоянный доступ команды): из кабинета его не убрать. Скажите мне, уберем в настройках.")
     con.execute("UPDATE members SET role='' WHERE tg_id=?", (tg_id,))
+    r = con.execute("SELECT paid_until, status FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    paid = con.execute("SELECT 1 FROM payments WHERE tg_id=? LIMIT 1", (tg_id,)).fetchone()
+    if r and r["status"] == "active" and not (r["paid_until"] or "") and not paid:
+        con.execute("UPDATE members SET status='guest' WHERE tg_id=?", (tg_id,))  # доступа по оплате у человека не было: закрываем
     con.commit()
     return {"ok": True}
 
