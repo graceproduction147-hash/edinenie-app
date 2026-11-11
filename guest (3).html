@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<meta name="theme-color" content="#0A0D1A">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Открытый эфир · Единение</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#0A0D1A;--fg:#F1E9DF;--muted:#9C97A6;--line:rgba(241,233,223,.13);--accent:#DCA67E;--accent-soft:rgba(220,166,126,.13);--wine:#3B1A25;--surface:rgba(255,255,255,.04);
+--display:"Forum",Georgia,serif;--body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:var(--body);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;font-size:15px;line-height:1.55;overflow-x:hidden}
+.glow{position:fixed;inset:0;pointer-events:none;background:radial-gradient(60% 40% at 100% 0%,rgba(59,26,37,.85),transparent 70%),radial-gradient(55% 40% at 0% 100%,rgba(60,78,140,.28),transparent 70%)}
+main{position:relative;max-width:520px;margin:0 auto;padding:28px 18px 60px;display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600}
+h1{font-family:var(--display);font-weight:400;font-size:30px;line-height:1.15;margin-top:6px;text-wrap:balance}
+.by{color:var(--muted);margin-top:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px}
+.card h2{font-family:var(--display);font-weight:400;font-size:21px;margin-bottom:6px}
+.muted{color:var(--muted)}
+ul.pts{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:10px}
+ul.pts li{padding-left:18px;position:relative}
+ul.pts li::before{content:"";position:absolute;left:0;top:.65em;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+button,.btn{font:inherit;cursor:pointer;border:0;border-radius:999px;padding:14px 22px;font-weight:700;font-size:15px;background:var(--accent);color:#1b1118;width:100%;text-align:center;text-decoration:none;display:block}
+button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.5}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:14px;cursor:pointer;background:none;color:var(--fg);width:auto;font-weight:500}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.q{font-weight:600;margin-top:12px}
+.route{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.it{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px}
+.it .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);min-width:64px}
+.it .t{flex:1}.it small{display:block;color:var(--muted)}
+.lock{opacity:.6}
+.offer{background:linear-gradient(160deg,rgba(59,26,37,.9),rgba(26,32,64,.9));border-color:rgba(220,166,126,.4)}
+.offer p{white-space:pre-wrap;margin-bottom:14px}
+.err{color:#E39595;text-align:center;padding:40px 0}
+
+main{padding-bottom:110px}
+.hero{border-radius:22px;overflow:hidden;aspect-ratio:16/9;width:100%;object-fit:cover;display:block;border:1px solid var(--line)}
+.hero.art{background:radial-gradient(70% 90% at 85% 8%,rgba(220,166,126,.55),transparent 60%),radial-gradient(80% 90% at 8% 100%,rgba(60,78,140,.65),transparent 65%),linear-gradient(160deg,#2c1521,#0e1330);position:relative;display:flex;align-items:flex-end;padding:18px}
+.hero.art svg{position:absolute;inset:0;width:100%;height:100%;opacity:.5}
+.hero.art span{position:relative;font-family:var(--display);font-size:30px;letter-spacing:.05em}
+.hero.art small{position:relative;display:block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.card p+p{margin-top:10px}
+.tmr{text-align:center;background:linear-gradient(160deg,rgba(59,26,37,.55),rgba(26,32,64,.55));border-color:rgba(220,166,126,.35)}
+.tmr .l{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.tmr .v{font-family:var(--display);font-size:42px;line-height:1.1;margin:6px 0 10px;font-variant-numeric:tabular-nums;letter-spacing:.03em}
+.tmr .bar{height:4px;border-radius:4px;background:var(--line);overflow:hidden}.tmr .bar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width 1s linear}
+.note{border:1px dashed rgba(220,166,126,.45);background:var(--accent-soft);border-radius:14px;padding:11px 14px;font-size:13.5px;color:var(--fg)}
+.ex{display:inline-block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);border:1px solid rgba(220,166,126,.4);border-radius:999px;padding:2px 9px;margin-bottom:8px}
+.pc{display:flex;gap:12px;align-items:flex-start}.pc+.pc{margin-top:12px}
+.av{flex:none;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--wine),#3c4e8c);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:16px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.tags span{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.tags b{font-weight:600;color:var(--accent);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;align-self:center}
+.card .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.card .lock{font-size:12.5px;margin-top:8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.stats div{border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}.stats b{display:block;font-family:var(--display);font-size:24px;font-weight:400}.stats span{font-size:12px;color:var(--muted)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(10,13,26,.86);backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);border-top:1px solid var(--line)}
+nav.tabs .in{width:100%;max-width:520px;display:grid;grid-template-columns:repeat(5,1fr);padding:9px 4px 10px}
+nav.tabs button{background:none;border:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px;font:500 9.5px var(--body);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:4px 2px;position:relative;width:auto;border-radius:0}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-selected="true"]{color:var(--accent)}
+nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-10px;width:22px;height:1px;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+
+.tour{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;background:radial-gradient(80% 50% at 100% 0%,rgba(90,34,56,.9),transparent 70%),radial-gradient(70% 50% at 0% 100%,rgba(60,78,140,.5),transparent 70%),#0A0D1A;overflow-y:auto;padding:max(18px,env(safe-area-inset-top,0px)) 20px max(18px,env(safe-area-inset-bottom,0px))}
+.tour .in{width:100%;max-width:480px;flex:1;display:flex;flex-direction:column;gap:16px}
+.tour .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tour .dots{display:flex;gap:6px}.tour .dots i{width:22px;height:3px;border-radius:3px;background:var(--line)}.tour .dots i.on{background:var(--accent)}
+.tour .x{width:36px;height:36px;border-radius:50%;padding:0;background:rgba(255,255,255,.08);color:var(--fg);font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center}
+.tour h2{font-family:var(--display);font-weight:400;font-size:32px;line-height:1.15;text-wrap:balance;margin-top:8px}
+.tour .tx{color:var(--fg);font-size:17px;line-height:1.5;opacity:.92}
+.tour .box{background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:20px;padding:18px;font-size:16px;line-height:1.5}
+.tour .vis{flex:1;display:flex;align-items:center;justify-content:center;min-height:170px}
+.tour .li{display:flex;gap:14px;align-items:center;padding:6px 0}.tour .li+.li{border-top:1px solid var(--line);padding-top:14px;margin-top:8px}
+.tour .li b{flex:none;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-weight:400;font-size:20px}
+.phone{width:210px;border:2px solid rgba(241,233,223,.35);border-radius:30px 30px 0 0;border-bottom:0;padding:14px 12px 0;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));box-shadow:0 0 40px rgba(220,166,126,.18)}
+.phone .r{height:34px;border-radius:12px;background:rgba(255,255,255,.08);margin-bottom:8px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;gap:8px}.phone .r i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.phone .bar{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding:9px 0;margin:6px -12px 0;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.phone .bar b{color:var(--accent);font-weight:600}
+.orbit{position:relative;width:230px;height:230px}.orbit i{position:absolute;inset:0;margin:auto;border-radius:50%;border:1px solid rgba(220,166,126,.4)}
+.orbit .c{position:absolute;inset:0;margin:auto;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle,#dca67e,#7a3a4c);box-shadow:0 0 50px rgba(220,166,126,.55)}
+.pair{display:flex;align-items:center;gap:0}.pair .av{width:64px;height:64px;font-size:20px}.pair u{display:block;width:60px;height:2px;background:linear-gradient(90deg,var(--accent),#7a8be0)}
+.pts2{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:320px}.pts2 span{border:1px solid rgba(220,166,126,.5);background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main id="app"><div class="muted" style="text-align:center;padding:60px 0">Загружаем…</div></main>
+<nav class="tabs" id="tabs" aria-label="Разделы"><div class="in" role="tablist"><button role="tab" data-v="home" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1z"/></svg>Эфир</button><button role="tab" data-v="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10.5l5-3v9l-5-3"/></svg>События</button><button role="tab" data-v="lib" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5.5C6.5 4.5 9.5 4.5 12 6c2.5-1.5 5.5-1.5 8-.5v13c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5z"/><path d="M12 6v13"/></svg>Библиотека</button><button role="tab" data-v="people" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.5"/><circle cx="16.5" cy="10" r="2.8"/><path d="M3 19c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5M15 14.8c2.6-.3 4.8 1 5.6 3.7"/></svg>Люди</button><button role="tab" data-v="profile" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/></svg>Профиль</button></div></nav>
+<script>
+const TG=window.Telegram&&Telegram.WebApp;try{TG&&TG.ready();TG&&TG.expand()}catch(e){}
+const P=new URLSearchParams(location.search),F=P.get("f")||"",GO=P.get("go")||"";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const bold=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+async function api(path,body){const h={"X-Init-Data":(TG&&TG.initData)||"","Content-Type":"application/json"};
+  const dev=P.get("dev");if(dev)h["X-Dev-User"]=dev;
+  const r=await fetch(path,{method:body?"POST":"GET",headers:h,body:body?JSON.stringify(body):undefined});
+  const d=await r.json().catch(()=>null);if(!r.ok)throw new Error((d&&d.detail)||"Не получилось, попробуйте еще раз");return d}
+function openLink(u){try{if(TG&&TG.openLink){TG.openLink(u);return}}catch(e){}window.open(u,"_blank")}
+let D=null,pick={focus:"",want:""},VIEW="home",TT=null;
+function paras(x){x=String(x||"").trim();let a=x.split(/\n+/).map(v=>v.trim()).filter(Boolean);
+  if(a.length===1&&x.length>260){const ss=x.match(/[^.!?]+[.!?]+["»)]*\s*|[^.!?]+$/g)||[x],o=[];let cur="";ss.forEach(q=>{if(cur&&(cur+q).length>230){o.push(cur.trim());cur=""}cur+=q});if(cur.trim())o.push(cur.trim());a=o}
+  return a}
+function tick(){const el=$("#tmrv");if(!el||!D||!D._end)return;const s=Math.max(0,Math.round((D._end-Date.now())/1000));
+  el.textContent=[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,"0")).join(":");
+  const b=$("#tmrb");if(b)b.style.width=Math.min(100,100*s/(D.total_sec||1))+"%";
+  if(s===0){clearInterval(TT);load()}}
+async function load(){try{D=await api("/api/guest/funnel?f="+encodeURIComponent(F));D._end=D.left_sec>0?Date.now()+D.left_sec*1000:0;draw();if(!window._tourDone){window._tourDone=1;tourAuto()}}catch(e){$("#app").innerHTML=`<div class="err">${esc(e.message)}</div>`}}
+
+const TOUR_DEF=[
+ {t:"Что такое Единение?",x:"Масштаб человека раскрывается в единении с собой, другими и миром.",b:"Мы создаем среду, где вас замечают, знакомят по запросам и поддерживают. Здесь не нужно быть кем-то другим."},
+ {t:"Что внутри приложения?",x:"Эфиры с практиками и экспертами, записи и конспекты, библиотека, знакомства и баллы за вклад.",b:"А еще: Random Coffee, витрина предложений участников и личный профиль с вашими целями."},
+ {t:"Что меняется, когда вы в Клубе?",l:[["🫂","Рядом появляются люди, с которыми можно говорить по-настоящему"],["🔥","Вы видите, как растут другие, и это вдохновляет"],["🪬","Ваши запросы слышат: вас знакомят с нужными людьми"],["🚀","Вы вносите вклад, и вас замечают"]],x:"Мы не обещаем чудес. Мы создаем среду, в которой растут."},
+ {t:"Как устроены знакомства?",x:"Мы знакомим по интересам и запросам. Сначала согласие каждого, потом общий чат. Контакты никому не раскрываются без вашего согласия.",b:"Каждый понедельник бот подбирает вам собеседника для Random Coffee: договариваетесь сами, а потом рассказываете, как прошло."},
+ {t:"Баллы и вклад",x:"Баллы копятся за инсайты после эфиров, благодарности, результаты, приглашения друзей и Random Coffee.",b:"Их можно потратить на награды и офлайн-события Клуба."},
+ {t:"Ваш эфир уже ждет",x:"Посмотрите его в удобное время: доступ открыт ограниченное время. А если захочется остаться, дверь в Клуб открыта.",last:1}];
+function tourSlides(){const raw=((D.t||{}).g_tour||"").trim();if(raw==="-")return[];if(!raw)return TOUR_DEF;
+  return raw.split(/\n\s*---+\s*\n/).map(b=>{const L=b.trim().split("\n"),t=L.shift().trim(),r=L.join("\n").trim().split(/\n\s*\n/);return{t,x:r[0]||"",b:r.slice(1).join("\n\n")}}).filter(x=>x.t)}
+function tourVis(i,n){const k=i%6;
+  if(k===0)return`<div class="orbit"><i></i><i style="inset:28px"></i><i style="inset:56px"></i><div class="c"></div></div>`;
+  if(k===1)return`<div class="phone"><div class="r"><i></i>Эфир: закрытая встреча</div><div class="r"><i></i>Библиотека: конспекты</div><div class="r"><i></i>Люди: знакомства</div><div class="r"><i></i>Random Coffee</div><div class="bar"><b>Эфир</b><span>События</span><span>Люди</span><span>Профиль</span></div></div>`;
+  if(k===3)return`<div class="pair"><div class="av">Вы</div><u></u><div class="av">АК</div></div>`;
+  if(k===4)return`<div class="pts2"><span>+ инсайт</span><span>+ благодарность</span><span>+ Random Coffee</span><span>+ приглашение друга</span></div>`;
+  return""}
+let TI=0;
+function tourOpen(start){const S=tourSlides();if(!S.length)return;TI=start||0;document.querySelector(".tour")?.remove();
+  const o=document.createElement("div");o.className="tour";document.body.appendChild(o);tourDraw(S)}
+function tourDraw(S){const o=document.querySelector(".tour");if(!o)return;const s=S[TI],last=TI===S.length-1;
+  o.innerHTML=`<div class="in"><div class="top"><div class="dots">${S.map((_,i)=>`<i class="${i<=TI?"on":""}"></i>`).join("")}</div><button class="x" id="tx" aria-label="Закрыть">✕</button></div>
+  <h2>${esc(s.t)}</h2>${s.x?`<div class="tx">${esc(s.x).replace(/\n/g,"<br>")}</div>`:""}
+  ${s.l?`<div class="box">${s.l.map(r=>`<div class="li"><b>${r[0]}</b><span>${esc(r[1])}</span></div>`).join("")}</div>`:""}
+  ${s.b?`<div class="box">${esc(s.b).replace(/\n/g,"<br>")}</div>`:""}
+  <div class="vis">${tourVis(TI,S.length)}</div>
+  <button id="tn">${last?"К эфиру":"Дальше"}</button></div>`;
+  o.querySelector("#tx").onclick=tourClose;
+  o.querySelector("#tn").onclick=()=>{if(last)tourClose();else{TI++;tourDraw(S);o.scrollTop=0}}}
+function tourClose(){document.querySelector(".tour")?.remove();try{localStorage.setItem("tour_"+F,"1")}catch(e){}window.scrollTo(0,0)}
+function tourAuto(){if(D.member&&GO!=="tour")return;let seen=false;try{seen=!!localStorage.getItem("tour_"+F)}catch(e){}if(GO==="tour"||!seen)tourOpen(0)}
+function drawInside(){const T=D.t||{},t=(k,d)=>T[k]||d,I=D.inside||{events:[],lib:[]};clearInterval(TT);
+  const note=`<div class="note">${esc(t("g_inside_note","Так выглядит Клуб изнутри. Все, что вы видите, откроется после вступления."))}</div>`;
+  const TY={record:"Запись",note:"Конспект",podcast:"Подкаст",article:"Статья",video:"Видео"};
+  let h="";
+  if(VIEW==="events")h=`<div><div class="eyebrow">Клуб изнутри</div><h1>События</h1></div>${note}`+(I.events.length?I.events.map(x=>`<div class="card"><div class="k">${esc(x.rubric||"Эфир")}</div><h2>${esc(x.title)}</h2>${x.speaker?`<div class="muted">${esc(x.speaker)}</div>`:""}<div class="lock muted">Запись и конспект в Клубе</div></div>`).join(""):'<div class="card muted">Эфиры, записи и закрытые встречи Клуба.</div>');
+  else if(VIEW==="lib")h=`<div><div class="eyebrow">Клуб изнутри</div><h1>Библиотека</h1></div>${note}`+(I.lib.length?I.lib.map(x=>`<div class="card"><div class="k">${esc(TY[x.type]||"Материал")}</div><h2>${esc(x.title)}</h2>${x.author?`<div class="muted">${esc(x.author)}</div>`:""}</div>`).join(""):'<div class="card muted">Записи, конспекты и подкасты Клуба.</div>');
+  else if(VIEW==="people")h=`<div><div class="eyebrow">Клуб изнутри</div><h1>Люди</h1></div>${note}<div class="card"><span class="ex">Пример карточек</span><div class="pc"><div class="av">АК</div><div><b>Анна</b> · психолог-консультант<div class="tags"><b>Ищет</b><span>клиентов</span><span>супервизию</span></div><div class="tags"><b>Может</b><span>разбор запроса</span><span>практики</span></div></div></div><div class="pc"><div class="av">МС</div><div><b>Михаил</b> · основатель онлайн-школы<div class="tags"><b>Ищет</b><span>партнеров</span><span>продюсера</span></div><div class="tags"><b>Может</b><span>стратегия бизнеса</span></div></div></div><div class="pc"><div class="av">ЕП</div><div><b>Елена</b> · продюсер событий<div class="tags"><b>Ищет</b><span>спикеров</span></div><div class="tags"><b>Может</b><span>организация эфиров</span></div></div></div></div><div class="card"><h2>Знакомства по запросам</h2><p class="muted">Мы знакомим по интересам и запросам: сначала согласие каждого, потом общий чат. Контакты не раскрываются без вашего согласия.</p></div><div class="card"><h2>Random Coffee</h2><p class="muted">Каждый понедельник бот подбирает вам собеседника из Клуба. Вы договариваетесь о встрече сами, а потом рассказываете, как прошло.</p></div>`;
+  else h=`<div><div class="eyebrow">Клуб изнутри</div><h1>Профиль</h1></div>${note}<div class="card"><span class="ex">Пример профиля</span><div class="pc"><div class="av">ВИ</div><div><b>Ваше имя</b><div class="muted">Club</div><div class="tags"><span>найти клиентов</span><span>запустить проект</span><span>расширить круг</span></div></div></div><div class="stats"><div><b>120</b><span>баллов</span></div><div><b>3</b><span>знакомства</span></div><div><b>1</b><span>встреча</span></div></div></div><div class="card"><h2>Баллы и награды</h2><p class="muted">Баллы копятся за инсайты после эфиров, благодарности, результаты, приглашения и Random Coffee. Их можно потратить на награды и офлайн-события Клуба.</p></div>`;
+  if(!D.member)h+=`<button id="jn">${esc(t("g_inside_cta",D.offer_btn||"Войти в клуб"))}</button>`;
+  $("#app").innerHTML=h;const j=$("#jn");if(j)j.onclick=()=>openLink(D.join)}
+function setView(v){VIEW=v;document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===v?"true":"false"));if(D){draw();window.scrollTo(0,0)}}
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
+function routeHtml(r){const lk=(D.t&&D.t.g_route_lock)||"Все это откроется, когда вы станете участником клуба.";return `<div class="route">${r.map(x=>`<div class="it"><span class="k">${esc(x.kind)}</span><span class="t">${esc(x.title)}${x.sub?`<small>${esc(x.sub)}</small>`:""}</span><span class="lock muted">в клубе</span></div>`).join("")}</div>
+<p class="muted" style="margin-top:12px">${esc(lk)}</p>`}
+function draw(){if(VIEW!=="home")return drawInside();const e=D.event,T=D.t||{},t=(k,d)=>T[k]||d;
+  let h=(D.cover?`<img class="hero" src="${esc(D.cover)}" alt="">`:`<div class="hero art"><svg viewBox="0 0 400 225" fill="none" stroke="#F1E9DF" stroke-opacity=".25"><circle cx="300" cy="70" r="40"/><circle cx="300" cy="70" r="75"/><circle cx="300" cy="70" r="115"/><circle cx="300" cy="70" r="160"/></svg><div><small>Открытый эфир</small><span>Единение</span></div></div>`)+`<div><div class="eyebrow">${esc(t("g_eyebrow","Открытый эфир клуба"))}</div><h1>${esc(e?e.title:D.title)}</h1>${e&&e.speaker?`<div class="by">${esc(e.speaker)}</div>`:""}</div>`;
+  if(e&&(e.description||(e.summary&&e.summary.length)))h+=`<div class="card">${paras(e.description).map(x=>`<p>${esc(x)}</p>`).join("")}${e.summary&&e.summary.length?`<ul class="pts">${e.summary.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`;
+  const left=D.left_min==null?"":(D.left_min>=120?`${Math.floor(D.left_min/60)} ч`:`${Math.max(D.left_min,1)} мин`);
+  if(D.expired)h+=`<div class="card"><h2>${esc(t("g_expired_title","Доступ к эфиру закончился"))}</h2><p class="muted">${esc(t("g_expired_text","Эфир был открыт "+D.access_hours+" ч. Остальное в клубе доступно участникам."))}</p></div>`;
+  else if(e&&e.can_watch){h+=`<button id="watch">${esc(D.watched?t("g_watch_again","Смотреть еще раз"):t("g_watch","Смотреть эфир"))}</button>`;
+    if(D.left_sec>0)h+=`<div class="card tmr"><div class="l">${esc(t("g_timer","До закрытия доступа к эфиру"))}</div><div class="v" id="tmrv">--:--:--</div><div class="bar"><i id="tmrb"></i></div></div>`;
+    else if(D.watched&&left)h+=`<div class="muted" style="text-align:center;margin-top:-6px">${esc(t("g_left","Доступ открыт еще"))} ${left}</div>`;
+    if(D.watched&&!D.confirmed)h+=`<button class="ghost" id="done">${esc(t("g_done","Я посмотрел(а)"))}</button>`;
+    if(D.confirmed)h+=`<div class="muted" style="text-align:center">${esc(t("g_thanks","Спасибо, что отметили"))}</div>`;
+    if(!D.watched)h+=`<div class="muted" style="text-align:center;margin-top:-6px">${esc(t("g_open_for","Эфир открыт для вас на "+D.access_hours+" ч с первого нажатия"))}</div>`}
+  else h+=`<div class="card muted">${esc(t("g_norec","Запись скоро появится, бот напишет вам."))}</div>`;
+  if(tourSlides().length)h+=`<button class="ghost" id="tourBtn">Что внутри Клуба: презентация</button>`;
+  h+=`<div class="card" id="aCard"><h2>${esc(t("g_route_title","Персональный маршрут"))}</h2>`;
+  if(D.route)h+=`<p class="muted">${esc(t("g_route_ready","Подобрали то, что стоит посмотреть в клубе именно вам."))}</p>${routeHtml(D.route)}`;
+  else h+=`<p class="muted">${esc(t("g_route_intro","Если хотите, ответьте на два коротких вопроса, и мы покажем, какие эфиры и материалы клуба подойдут вам. Это займет полминуты."))}</p>
+<div class="q">Что сейчас для вас важнее всего?</div><div class="chips" id="cf">${D.focus.map(x=>`<button class="chip" data-v="${x[0]}">${esc(x[1])}</button>`).join("")}</div>
+<div class="q">Чего хочется больше?</div><div class="chips" id="cw">${D.want.map(x=>`<button class="chip" data-v="${x[0]}">${esc(x[1])}</button>`).join("")}</div>
+<button id="go" disabled>${esc(t("g_route_btn","Собрать маршрут"))}</button>`;
+  h+=`</div>`;
+  if((D.watched||D.route||D.expired)&&D.offer&&!D.member)h+=`<div class="card offer" id="offer"><p>${bold(D.offer)}</p><button id="join">${esc(D.offer_btn)}</button></div>`;
+  $("#app").innerHTML=h;clearInterval(TT);if($("#tmrv")){tick();TT=setInterval(tick,1000)}
+  const tb=$("#tourBtn");if(tb)tb.onclick=()=>tourOpen(0);
+  const w=$("#watch");if(w)w.onclick=async()=>{w.disabled=true;try{const r=await api("/api/guest/watch",{f:F});D.watched=true;openLink(r.url);draw();setTimeout(()=>{const o=$("#offer");o&&o.scrollIntoView({behavior:"smooth"})},400)}catch(x){alert(x.message);w.disabled=false}};
+  const dn=$("#done");if(dn)dn.onclick=async()=>{dn.disabled=true;try{await api("/api/guest/confirm",{f:F});D.confirmed=true;draw();setTimeout(()=>{const o=$("#offer");o&&o.scrollIntoView({behavior:"smooth"})},300)}catch(x){alert(x.message);dn.disabled=false}};
+  const j=$("#join");if(j)j.onclick=()=>openLink(D.join);
+  const upd=()=>{const g=$("#go");if(g)g.disabled=!pick.focus};
+  [["#cf","focus"],["#cw","want"]].forEach(([s,k])=>{const c=$(s);if(!c)return;c.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{pick[k]=b.dataset.v;c.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));upd()})});
+  const g=$("#go");if(g)g.onclick=async()=>{g.disabled=true;try{const r=await api("/api/guest/anketa",{f:F,focus:pick.focus,want:pick.want});D.route=r.route;draw();$("#aCard").scrollIntoView({behavior:"smooth"})}catch(x){alert(x.message);g.disabled=false}};
+  if(GO==="anketa"&&!D._sc){D._sc=1;setTimeout(()=>{const a=$("#aCard");a&&a.scrollIntoView()},200)}}
+load();
+</script>
+</body>
+</html>
