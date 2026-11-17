@@ -15,7 +15,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -2321,7 +2321,21 @@ async def admin_members(_=Depends(admin), con=Depends(get_con)):
         m["points"] = db.balance(con, m["tg_id"])
         m["last_active"] = last.get(m["tg_id"], "")
         m["pay"] = pays.get(m["tg_id"], [])[:20]
+        m["cancel_at"] = _cancel_at(pays.get(m["tg_id"], []))
     return out
+
+
+CANCEL_EV = ("cancelled_subscription", "subscription_cancelled")
+
+
+def _cancel_at(pl):
+    """Дата отмены автопродления, если после нее человек не оплатил снова (pl идет от новых к старым)."""
+    for x in pl:
+        if x["event"] in CANCEL_EV:
+            return x["at"]
+        if x["event"] in NEW_SUB + RENEW_SUB:
+            return ""
+    return ""
 
 
 def _last_active(con):
@@ -2742,6 +2756,211 @@ def admin_usage(_=Depends(admin), con=Depends(get_con)):
 @app.get("/admin/api/payments")
 def admin_payments(_=Depends(admin), con=Depends(get_con)):
     return db.rows(con.execute("SELECT id,tg_id,event,amount,period_months,expires_at,verified,created_at FROM payments ORDER BY id DESC LIMIT 300"))
+
+
+# ---------------- аналитика ----------------
+
+def _pdt(x):
+    try:
+        d = datetime.fromisoformat(str(x).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _pday(x, default):
+    try:
+        d = datetime.strptime(str(x)[:10], "%Y-%m-%d")
+        return datetime(d.year, d.month, d.day, tzinfo=MSK)
+    except Exception:
+        return default
+
+
+@app.get("/admin/api/payouts")
+def payouts_get(_=Depends(admin), con=Depends(get_con)):
+    try:
+        return json.loads(db.get_setting(con, "payouts", "[]") or "[]")
+    except ValueError:
+        return []
+
+
+@app.post("/admin/api/payouts")
+async def payouts_set(req: Request, _=Depends(admin), con=Depends(get_con)):
+    """Выплаты Tribute приходят только уведомлением в Telegram, не вебхуком: команда вносит их вручную."""
+    d = await req.json()
+    cur = payouts_get(con=con)
+    if d.get("del") is not None:
+        cur = [x for x in cur if x.get("id") != d["del"]]
+    else:
+        try:
+            amt = float(str(d.get("amount", "")).replace(" ", "").replace(",", "."))
+        except ValueError:
+            raise HTTPException(400, "Сумма не похожа на число")
+        day = str(d.get("d", ""))[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or amt <= 0:
+            raise HTTPException(400, "Нужны дата и сумма")
+        cur.append({"id": int(datetime.now().timestamp() * 1000), "d": day, "amount": amt})
+    cur = sorted(cur, key=lambda x: x.get("d", ""), reverse=True)[:500]
+    db.set_setting(con, "payouts", json.dumps(cur, ensure_ascii=False))
+    return cur
+
+
+@app.get("/admin/api/analytics")
+def admin_analytics(frm: str = Query("", alias="from"), to: str = "", _=Depends(admin), con=Depends(get_con)):
+    """Основные показатели клуба за период: подписчики, деньги, воронки, активность в приложении.
+    Подписчики считаются по оплатам Tribute: человек подписчик в день D, если на эту дату у него есть оплаченный период."""
+    now = datetime.now(timezone.utc)
+    today0 = now.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = con.execute("SELECT tg_id,event,amount,period_months,expires_at,created_at FROM payments WHERE verified=1 AND tg_id IS NOT NULL").fetchall()
+    iv = {}  # человек -> периоды оплаченной подписки
+    pays = []  # оплаты (новые и продления) и донаты
+    first_pay = None
+    for r in rows:
+        s_ = _pdt(r["created_at"])
+        if not s_:
+            continue
+        if r["event"] in NEW_SUB + RENEW_SUB:
+            mo = r["period_months"] or 1
+            e_ = _pdt(r["expires_at"])
+            if not e_ or e_ <= s_:
+                e_ = s_ + timedelta(days=31 * mo)
+            iv.setdefault(int(r["tg_id"]), []).append((s_, e_, mo, r["event"]))
+            pays.append((s_, float(r["amount"] or 0), mo, r["event"] in NEW_SUB, int(r["tg_id"])))
+            first_pay = s_ if not first_pay or s_ < first_pay else first_pay
+        elif r["event"] in ("new_donation", "recurrent_donation"):
+            pays.append((s_, float(r["amount"] or 0), 0, None, int(r["tg_id"])))
+    d1 = _pday(to, today0)
+    d0 = _pday(frm, None) if frm and frm != "all" else None
+    if d0 is None:
+        d0 = (first_pay.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0) if first_pay else d1 - timedelta(days=30))
+    if d0 > d1:
+        d0, d1 = d1, d0
+    t0 = d0
+    t1 = d1 + timedelta(days=1)  # конец периода: начало следующего дня
+    ndays = max(1, (t1 - t0).days)
+
+    def active(tg, at):
+        return any(a <= at < b for a, b, _m, _e in iv.get(tg, ()))
+
+    # ----- подписчики -----
+    S = {tg for tg in iv if active(tg, t0)}
+    E = {tg for tg in iv if active(tg, t1 - timedelta(seconds=1))}
+    first = {tg: min(a for a, _b, _m, _e in v) for tg, v in iv.items()}
+    N = {tg for tg, f in first.items() if t0 <= f < t1}
+    R = {tg for tg, v in iv.items() if tg not in S and tg not in N and first[tg] < t0 and any(t0 <= a < t1 for a, _b, _m, _e in v)}
+    churn = (S | N | R) - E
+    renewals = [p for p in pays if p[3] is False and t0 <= p[0] < t1]
+    by_mo = {}
+    for tg in E:
+        cur = max((x for x in iv[tg] if x[0] <= t1 and x[1] > t1 - timedelta(seconds=1)), key=lambda x: x[1], default=None)
+        k = str(cur[2]) if cur else "?"
+        by_mo[k] = by_mo.get(k, 0) + 1
+    soon = sum(1 for tg in iv if active(tg, now) and min(b for a, b, _m, _e in iv[tg] if a <= now < b) <= now + timedelta(days=14))
+    no_pay = con.execute("SELECT COUNT(*) FROM members WHERE status='active' AND COALESCE(role,'')!='team' AND tg_id NOT IN (SELECT tg_id FROM payments WHERE verified=1 AND tg_id IS NOT NULL)").fetchone()[0]
+    step = 1 if ndays <= 120 else (7 if ndays <= 800 else 30)
+    series = []
+    d = t0
+    while d < t1:
+        at = min(d + timedelta(days=step), t1) - timedelta(seconds=1)
+        series.append({"d": d.strftime("%Y-%m-%d"), "n": sum(1 for tg in iv if active(tg, at))})
+        d += timedelta(days=step)
+    cl = {}
+    for r in rows:
+        if r["event"] in CANCEL_EV:
+            c_ = _pdt(r["created_at"])
+            if c_ and t0 <= c_ < t1:
+                cl.setdefault(int(r["tg_id"]), c_)
+    cancel_list = []
+    for tg, c_ in sorted(cl.items(), key=lambda x: x[1], reverse=True)[:60]:
+        mm = con.execute("SELECT first_name,last_name,username FROM members WHERE tg_id=?", (tg,)).fetchone()
+        nm_ = ((mm["first_name"] or "") + " " + (mm["last_name"] or "")).strip() if mm else ""
+        back = any(a > c_ for a, _b, _mo, _ev in iv.get(tg, ()))
+        cancel_list.append({"tg_id": tg, "name": nm_ or (("@" + mm["username"]) if mm and mm["username"] else "без имени"),
+                            "username": (mm["username"] if mm else "") or "", "d": c_.astimezone(MSK).strftime("%Y-%m-%d"), "back": back,
+                            "until": max((b for a, b, _mo, _ev in iv.get(tg, ())), default=None).astimezone(MSK).strftime("%Y-%m-%d") if iv.get(tg) else ""})
+    subs = {"cancelled": len(cl), "cancel_list": cancel_list, "start": len(S), "end": len(E), "new": len(N), "back": len(R), "churn": len(churn), "renewed": len(renewals),
+            "renewed_people": len({p[4] for p in renewals}), "by_months": by_mo, "soon": soon, "no_pay": no_pay, "series": series, "step": step}
+
+    # ----- деньги -----
+    def money(a, b):
+        sub = [p for p in pays if p[3] is not None and a <= p[0] < b]
+        don = [p for p in pays if p[3] is None and a <= p[0] < b]
+        tot = sum(p[1] for p in sub)
+        return {"sum": round(tot), "n": len(sub), "avg": round(tot / len(sub)) if sub else 0,
+                "new_sum": round(sum(p[1] for p in sub if p[3])), "new_n": sum(1 for p in sub if p[3]),
+                "renew_sum": round(sum(p[1] for p in sub if not p[3])), "renew_n": sum(1 for p in sub if not p[3]),
+                "don_sum": round(sum(p[1] for p in don)), "don_n": len(don)}
+    cur_m = money(t0, t1)
+    prev_m = money(t0 - (t1 - t0), t0)
+    tariffs = {}
+    for p in pays:
+        if p[3] is not None and t0 <= p[0] < t1:
+            x = tariffs.setdefault(p[2], {"n": 0, "sum": 0.0})
+            x["n"] += 1
+            x["sum"] += p[1]
+    mstep = 1 if ndays <= 62 else 7
+    mseries = []
+    d = t0
+    while d < t1:
+        b = min(d + timedelta(days=mstep), t1)
+        mseries.append({"d": d.strftime("%Y-%m-%d"), "v": round(sum(p[1] for p in pays if p[3] is not None and d <= p[0] < b))})
+        d = b
+    try:
+        pol = json.loads(db.get_setting(con, "payouts", "[]") or "[]")
+    except ValueError:
+        pol = []
+    pol = [x for x in pol if isinstance(x, dict) and t0.strftime("%Y-%m-%d") <= str(x.get("d", "")) <= d1.strftime("%Y-%m-%d")]
+    money_out = {**cur_m, "payouts": pol, "payouts_sum": round(sum(float(x.get("amount") or 0) for x in pol)), "prev": prev_m, "tariffs": [{"months": k, "n": v["n"], "sum": round(v["sum"])} for k, v in sorted(tariffs.items())],
+                 "series": mseries, "mstep": mstep}
+
+    # ----- воронки -----
+    fun = []
+    tot = {"joined": 0, "opened": 0, "watched": 0, "confirmed": 0, "paid": 0}
+    try:
+        fl = con.execute("SELECT f.id,f.title,e.title AS et FROM funnels f LEFT JOIN events e ON e.id=f.event_id ORDER BY f.id DESC").fetchall()
+    except Exception:
+        fl = []
+    for f in fl:
+        c = {"joined": 0, "opened": 0, "watched": 0, "confirmed": 0, "paid": 0}
+        for m in con.execute("SELECT tg_id,joined_at,opened_at,watched_at,confirmed_at FROM funnel_members WHERE funnel_id=?", (f["id"],)):
+            j = _pdt(m["joined_at"])
+            if not j or not (t0 <= j < t1):
+                continue
+            c["joined"] += 1
+            c["opened"] += 1 if m["opened_at"] else 0
+            c["watched"] += 1 if m["watched_at"] else 0
+            c["confirmed"] += 1 if m["confirmed_at"] else 0
+            c["paid"] += 1 if any(a >= j for a, _b, _mo, _ev in iv.get(int(m["tg_id"]), ())) else 0
+        if c["joined"]:
+            fun.append({"id": f["id"], "title": f["title"] or "Без названия", "event": f["et"] or "", **c})
+            for k in tot:
+                tot[k] += c[k]
+
+    # ----- активность в приложении -----
+    con.execute("CREATE TABLE IF NOT EXISTS app_events(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, kind TEXT, created_at TEXT)")
+    a0, a1 = t0.astimezone(timezone.utc).isoformat(timespec="seconds"), t1.astimezone(timezone.utc).isoformat(timespec="seconds")
+    ev = con.execute("SELECT tg_id,kind,created_at FROM app_events WHERE created_at>=? AND created_at<?", (a0, a1)).fetchall()
+    users = {int(r["tg_id"]) for r in ev if r["tg_id"] is not None}
+    kinds = {}
+    per_day = {}
+    for r in ev:
+        k = kinds.setdefault(r["kind"], {"n": 0, "u": set()})
+        k["n"] += 1
+        k["u"].add(r["tg_id"])
+        dd = _pdt(r["created_at"])
+        if dd:
+            per_day.setdefault(dd.astimezone(MSK).strftime("%Y-%m-%d"), set()).add(r["tg_id"])
+    dser = []
+    d = t0
+    while d < t1 and len(dser) < 400:
+        key = d.strftime("%Y-%m-%d")
+        dser.append({"d": key, "u": len(per_day.get(key, ()))})
+        d += timedelta(days=1)
+    act = {"users": len(users), "events": len(ev), "share": round(100 * len(users & E) / len(E)) if E else 0,
+           "avg_day": round(sum(x["u"] for x in dser) / max(1, len(dser)), 1),
+           "kinds": sorted([{"kind": k, "n": v["n"], "u": len(v["u"])} for k, v in kinds.items()], key=lambda x: -x["n"]), "series": dser}
+    return {"from": d0.strftime("%Y-%m-%d"), "to": d1.strftime("%Y-%m-%d"), "days": ndays, "subs": subs, "money": money_out,
+            "funnels": fun, "funnels_total": tot, "activity": act}
 
 
 # ---------------- анкеты ----------------
