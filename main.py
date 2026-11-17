@@ -2776,6 +2776,219 @@ def _pday(x, default):
         return default
 
 
+# ---------------- импорт истории из Tribute (отчет xlsx или выгрузка чата с ботом Tribute) ----------------
+
+_PRICE_MO = {100: 0, 3990: 1, 5000: 1, 9990: 3, 11000: 3, 25000: 6, 27995: 12, 28700: 12, 31500: 12, 45000: 12}
+_PER_MO = {"monthly": 1, "quarterly": 3, "halfyearly": 6, "yearly": 12}
+
+
+def _addm(d, n):
+    import calendar
+    y = d.year + (d.month - 1 + n) // 12
+    m = (d.month - 1 + n) % 12 + 1
+    return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
+
+
+def _xlsx_rows(data):
+    """Читаем первый лист xlsx без сторонних библиотек: строки как списки значений."""
+    import io
+    import xml.etree.ElementTree as ET
+    import zipfile
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    z = zipfile.ZipFile(io.BytesIO(data))
+    sst = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns):
+            sst.append("".join(t.text or "" for t in si.iter("{%s}t" % ns["m"])))
+    names = sorted(n for n in z.namelist() if n.startswith("xl/worksheets/sheet"))
+    root = ET.fromstring(z.read(names[0]))
+    out = []
+    for row in root.iter("{%s}row" % ns["m"]):
+        cells = {}
+        for c in row.findall("m:c", ns):
+            ref = re.match(r"([A-Z]+)", c.get("r", "")).group(1)
+            col = 0
+            for ch in ref:
+                col = col * 26 + ord(ch) - 64
+            v = c.find("m:v", ns)
+            t = c.get("t")
+            if t == "s" and v is not None:
+                val = sst[int(v.text)]
+            elif t == "inlineStr":
+                val = "".join(x.text or "" for x in c.iter("{%s}t" % ns["m"]))
+            else:
+                val = v.text if v is not None else ""
+            cells[col - 1] = val
+        if cells:
+            out.append([cells.get(i, "") for i in range(max(cells) + 1)])
+    return out
+
+
+def _tribute_xlsx_events(data):
+    rows = _xlsx_rows(data)
+    if not rows:
+        return [], {}
+    H = [str(h).strip() for h in rows[0]]
+    ix = {h: i for i, h in enumerate(H)}
+    need = ("Date", "Time", "From", "Type of transaction", "Follower ID", "Amount")
+    if any(k not in ix for k in need):
+        raise HTTPException(400, "Это не отчет Tribute: не нашла нужные столбцы")
+    ev, ids = [], {}
+    for r in rows[1:]:
+        g = lambda k: (r[ix[k]] if ix[k] < len(r) else "")
+        u = str(g("From")).strip().lstrip("@").lower()
+        try:
+            tg = int(float(g("Follower ID")))
+        except ValueError:
+            tg = None
+        if u and tg:
+            ids[u] = tg
+        per = str(g("Period")).strip().lower() if "Period" in ix else ""
+        try:
+            amt = float(g("Amount"))
+        except ValueError:
+            continue
+        ts = _pdt(f"{g('Date')}T{g('Time')}+00:00")
+        if not ts:
+            continue
+        t = str(g("Type of transaction")).lower()
+        ev.append({"ts": ts.isoformat(timespec="seconds"), "k": "new" if "init" in t else "renew", "u": u, "tg": tg,
+                   "a": amt, "mo": _PER_MO.get(per, 0)})
+    return ev, ids
+
+
+def _tribute_chat_events(text):
+    parts = re.split(r'<div class="message (?:default|service)[^"]*" id="message[-\d]+">', text)
+    cur = None
+    ev, payouts = [], []
+    for p in parts[1:]:
+        m = re.search(r'title="(\d\d)\.(\d\d)\.(\d{4}) (\d\d:\d\d:\d\d) UTC\+03:00"', p)
+        t = re.search(r'<div class="text">\s*(.*?)\s*</div>', p, re.S)
+        if m:
+            cur = datetime.fromisoformat(f"{m.group(3)}-{m.group(2)}-{m.group(1)}T{m.group(4)}+03:00")
+        if not t or not cur:
+            continue
+        txt = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", t.group(1).replace("<br>", " ")))).strip()
+        u = re.search(r"@([A-Za-z0-9_]+)", txt)
+        a = re.search(r"₽([\d.]+)", txt)
+        ts = cur.astimezone(timezone.utc).isoformat(timespec="seconds")
+        if "Выплата" in txt and "успешно" in txt:
+            pm = re.search(r"Выплата ([\d.]+) RUB", txt)
+            if pm:
+                payouts.append({"d": cur.strftime("%Y-%m-%d"), "amount": float(pm.group(1))})
+            continue
+        if not u:
+            continue
+        if "оформил подписку" in txt:
+            k = "new"
+        elif "продлил подписку" in txt:
+            k = "renew"
+        elif "отменил(а) подписку" in txt:
+            k = "cancel"
+        else:
+            continue
+        amt = float(a.group(1)) if a else 0.0
+        ev.append({"ts": ts, "k": k, "u": u.group(1).lower(), "tg": None, "a": amt, "mo": _PRICE_MO.get(int(amt), 1) if k != "cancel" else 0})
+    return ev, payouts
+
+
+@app.post("/admin/api/import-tribute")
+async def import_tribute(req: Request, _=Depends(admin), con=Depends(get_con)):
+    """История оплат из отчета Tribute (xlsx, с ID людей) или из выгрузки чата с ботом Tribute (html, только ники).
+    Можно загружать несколько файлов подряд: ники без ID ждут, пока ID появится из отчета или из бота."""
+    data = await req.body()
+    if not data:
+        raise HTTPException(400, "Пустой файл")
+    payouts = []
+    if data[:2] == b"PK":
+        ev, ids = _tribute_xlsx_events(data)
+    else:
+        ev, payouts = _tribute_chat_events(data.decode("utf-8", "replace"))
+        ids = {}
+    try:
+        idmap = json.loads(db.get_setting(con, "tribute_ids", "{}") or "{}")
+    except ValueError:
+        idmap = {}
+    idmap.update({k: v for k, v in ids.items()})
+    try:
+        pend = json.loads(db.get_setting(con, "tribute_pending", "[]") or "[]")
+    except ValueError:
+        pend = []
+    for r in con.execute("SELECT tg_id,username FROM members WHERE username IS NOT NULL AND username!=''").fetchall():
+        idmap.setdefault(str(r["username"]).lower(), int(r["tg_id"]))
+    seen_e, allev = set(), []
+    for e in pend + ev:
+        key = (e["u"], e["ts"], e["k"], e["a"])
+        if key not in seen_e:
+            seen_e.add(key)
+            allev.append(e)
+    added = dup = cancels = 0
+    unresolved, test_skip, team_skip = set(), set(), set()
+    still = []
+    touched = set()
+    for e in sorted(allev, key=lambda x: x["ts"]):
+        tg = e.get("tg") or idmap.get(e["u"])
+        if not tg:
+            still.append(e)
+            unresolved.add(e["u"])
+            continue
+        tg = int(tg)
+        mm = con.execute("SELECT * FROM members WHERE tg_id=?", (tg,)).fetchone()
+        if tg in ADMIN_IDS or (mm and (mm["role"] or "") == "team"):
+            team_skip.add(e["u"])
+            continue
+        if e["k"] != "cancel" and (e["a"] <= 100):
+            test_skip.add(e["u"])
+            continue
+        evname = {"new": "new_subscription", "renew": "renewed_subscription", "cancel": "cancelled_subscription"}[e["k"]]
+        ts = _pdt(e["ts"])
+        near = con.execute("SELECT id,period_months FROM payments WHERE tg_id=? AND event=? AND created_at BETWEEN ? AND ?",
+                           (tg, evname, (ts - timedelta(hours=30)).isoformat(timespec="seconds"),
+                            (ts + timedelta(hours=30)).isoformat(timespec="seconds"))).fetchone()
+        if near:
+            dup += 1
+            continue
+        mo = e["mo"] or (_PRICE_MO.get(int(e["a"]), 1) if e["k"] != "cancel" else 0)
+        exp = _addm(ts, mo).isoformat(timespec="seconds") if mo else None
+        con.execute("INSERT INTO payments(tg_id,event,amount,currency,period_months,expires_at,verified,raw,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (tg, evname, e["a"] if e["k"] != "cancel" else None, "RUB", mo or None, exp, 1, "import:tribute", e["ts"]))
+        added += 1
+        cancels += 1 if e["k"] == "cancel" else 0
+        touched.add((tg, e["u"]))
+    con.commit()
+    # доступ людей по самой поздней оплате
+    upd = 0
+    now_ = datetime.now(timezone.utc)
+    for tg, uname in touched:
+        last = con.execute("SELECT period_months,amount,expires_at FROM payments WHERE tg_id=? AND verified=1 AND event IN ('new_subscription','renewed_subscription','subscription_renewed') "
+                           "AND expires_at IS NOT NULL ORDER BY expires_at DESC LIMIT 1", (tg,)).fetchone()
+        if not last:
+            continue
+        end = _pdt(last["expires_at"])
+        cur = con.execute("SELECT paid_until,status FROM members WHERE tg_id=?", (tg,)).fetchone()
+        cur_end = _pdt(cur["paid_until"]) if cur and cur["paid_until"] else None
+        if cur_end and cur_end >= end:
+            continue
+        upsert_member(con, {"id": tg, "username": uname}, status="active" if end > now_ else "expired",
+                      paid_until=end.isoformat(timespec="seconds"), period_months=last["period_months"], last_amount=last["amount"])
+        upd += 1
+    # выплаты
+    padded = 0
+    if payouts:
+        cur_p = payouts_get(con=con)
+        have = {(x.get("d"), round(float(x.get("amount") or 0))) for x in cur_p}
+        for x in payouts:
+            if (x["d"], round(x["amount"])) not in have:
+                cur_p.append({"id": int(datetime.now().timestamp() * 1000) + padded, "d": x["d"], "amount": x["amount"]})
+                padded += 1
+        cur_p = sorted(cur_p, key=lambda x: x.get("d", ""), reverse=True)[:500]
+        db.set_setting(con, "payouts", json.dumps(cur_p, ensure_ascii=False))
+    db.set_setting(con, "tribute_ids", json.dumps(idmap))
+    db.set_setting(con, "tribute_pending", json.dumps(still[:3000]))
+    return {"added": added, "dup": dup, "cancels": cancels, "members": upd, "payouts": padded,
+            "unresolved": sorted(unresolved)[:200], "unresolved_n": len(unresolved), "test": sorted(test_skip), "team": sorted(team_skip)}
+
+
 @app.get("/admin/api/payouts")
 def payouts_get(_=Depends(admin), con=Depends(get_con)):
     try:
