@@ -2989,6 +2989,46 @@ async def import_tribute(req: Request, _=Depends(admin), con=Depends(get_con)):
             "unresolved": sorted(unresolved)[:200], "unresolved_n": len(unresolved), "test": sorted(test_skip), "team": sorted(team_skip)}
 
 
+@app.get("/admin/api/tribute-pending")
+def tribute_pending(_=Depends(admin), con=Depends(get_con)):
+    """Люди из выгрузки Tribute, у которых пока нет Telegram ID: показываем в кабинете по нику, ID подтянется позже."""
+    try:
+        pend = json.loads(db.get_setting(con, "tribute_pending", "[]") or "[]")
+    except ValueError:
+        return []
+    by = {}
+    for e in sorted(pend, key=lambda x: x["ts"]):
+        by.setdefault(e["u"], []).append(e)
+    now_ = datetime.now(timezone.utc)
+    out = []
+    for u, L in by.items():
+        end = None
+        last = None
+        first = None
+        cancel = None
+        for e in L:
+            d = _pdt(e["ts"])
+            if not d:
+                continue
+            if e["k"] == "cancel":
+                cancel = d
+                continue
+            if e["a"] <= 100:
+                continue
+            mo = e["mo"] or _PRICE_MO.get(int(e["a"]), 1) or 1
+            start = max(d, end) if (end and end > d and e["k"] == "renew") else d
+            end = _addm(start, mo)
+            last = (mo, e["a"])
+            first = first or d
+            if cancel and cancel < d:
+                cancel = None
+        if not end or end < now_:
+            continue
+        out.append({"u": u, "end": end.astimezone(MSK).strftime("%Y-%m-%d"), "months": last[0], "amount": last[1],
+                    "first": first.astimezone(MSK).strftime("%Y-%m-%d"), "cancel": cancel.astimezone(MSK).strftime("%Y-%m-%d") if cancel else ""})
+    return out
+
+
 @app.get("/admin/api/payouts")
 def payouts_get(_=Depends(admin), con=Depends(get_con)):
     try:
