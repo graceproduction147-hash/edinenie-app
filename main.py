@@ -31,7 +31,7 @@ log = logging.getLogger("club")
 # **жирный**, {name} вставит имя, {link} вставит ссылку на вступление. Эмодзи вставляйте прямо в текст.
 TEXTS = {
     "welcome": {"title": "Приветствие после оплаты", "max": 1000, "hint": "Приходит сразу после оплаты. Если задана картинка, этот текст идет под ней.",
-                "default": "**{name}, добрый день! Добро пожаловать в «Единение»!** ❤️\n\nБлагодарим вас, что вы с нами. Мы очень рады, что вы теперь часть Клуба — сообщества людей, которых объединяют развитие, сильное окружение и желание создавать большее вместе.\n\nВсего два шага, чтобы начать:\n\n. **Шаг 1. Заполните анкету.** Расскажите немного о себе, своих интересах и намерениях. Так нам будет проще познакомить вас с нужными людьми.\n\n. **Шаг 2. Откройте Клуб.** Заходите в наше пространство, знакомьтесь с участниками и присоединяйтесь к событиям.\n\nМы рядом, если появятся вопросы ❤️"},
+                "default": "**{name}, добрый день! Добро пожаловать в «Единение»!** ❤️\n\nБлагодарим вас, что вы с нами. Мы очень рады, что вы теперь часть Клуба — сообщества людей, которых объединяют развитие, сильное окружение и желание создавать большее вместе.\n\nВсего один шаг, чтобы начать: **откройте Клуб и заполните карточку знакомств**. Это одна минута: сфера, город, интересы, кого вы ищете и чем можете быть полезны. Так нам будет проще познакомить вас с нужными людьми.\n\nПодробнее о себе, о ваших целях и запросах мы спросим чуть позже, лично.\n\nМы рядом, если появятся вопросы ❤️"},
     "member_start": {"title": "Участнику, когда он нажимает Start", "max": 3000, "hint": "",
                      "default": "**{name}, добрый день!** ❤️\n\nРады видеть вас в Клубе. Свои люди и ваши результаты ждут внутри."},
     "guest_start": {"title": "Тому, кто еще не оплатил", "max": 3000, "hint": "{link} вставит ссылку на вступление.",
@@ -89,12 +89,12 @@ TEXTS = {
                   "default": "Добрый день! Завтра эфир Клуба: **{title}**{link}\n\nБудем рады вас видеть."},
     "event_hour": {"title": "Напоминание об эфире за час", "group": "members", "max": 1000, "vars": "{title}, {link}", "hint": "Записавшимся на эфир.",
                    "default": "Через час эфир Клуба: **{title}**{link}\n\nЖдем вас, будет живо."},
-    "r_anketa_1": {"title": "Напоминание про анкету: 1-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Через сутки после оплаты, если анкета не заполнена.",
-                   "default": "{name}, добрый день!\n\nРады, что вы в Клубе. Заполните, пожалуйста, анкету: десять минут — и мы сможем знакомить вас с нужными людьми."},
+    "r_anketa_1": {"title": "Напоминание про анкету: 1-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Через сутки после оплаты, если карточка знакомств не заполнена.",
+                   "default": "{name}, добрый день!\n\nРады, что вы в Клубе. Откройте приложение и заполните карточку знакомств: это одна минута, и мы сможем знакомить вас с нужными людьми."},
     "r_anketa_3": {"title": "Напоминание про анкету: 3-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На третий день, если анкета все еще не заполнена.",
-                   "default": "{name}, добрый день!\n\nБез анкеты нам сложно понять, с кем вас познакомить. Это займет десять минут, а профиль заполнится сам. Будем благодарны."},
+                   "default": "{name}, добрый день!\n\nПока карточка знакомств не заполнена, другие участники вас не видят, а нам сложно понять, с кем вас познакомить. Это займет одну минуту."},
     "r_anketa_7": {"title": "Напоминание про анкету: 7-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На седьмой день, последнее напоминание.",
-                   "default": "{name}, добрый день!\n\nУже неделя в Клубе, а анкеты пока нет. Если что-то мешает, просто напишите нам, мы поможем."},
+                   "default": "{name}, добрый день!\n\nУже неделя в Клубе, а карточки знакомств пока нет. Если что-то мешает, просто напишите нам, мы поможем."},
     "r_renew_7": {"title": "Продление: за 7 дней", "group": "reminders", "max": 1000, "vars": "{name}, {date} (до какого числа оплачено), {link}", "hint": "За неделю до конца оплаты.",
                   "default": "{name}, добрый день!\n\nВаше участие в Клубе оплачено до {date}. Если подписка продлевается автоматически, ничего делать не нужно. Если нет, продлить можно по ссылке: {link}\n\nБлагодарим вас, что вы с нами."},
     "r_renew_1": {"title": "Продление: за 1 день", "group": "reminders", "max": 1000, "vars": "{name}, {date}, {link}", "hint": "За сутки до конца оплаты.",
@@ -536,6 +536,8 @@ def ensure_norm():
                     con.execute("UPDATE members SET birthday=? WHERE tg_id=?", (bd, r["tg_id"]))
         except Exception:
             log.exception("перенос дат рождения")
+    if "income" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN income TEXT DEFAULT ''")
     if "photo" not in cols:
         con.execute("ALTER TABLE members ADD COLUMN photo TEXT DEFAULT ''")
     if "card_name" not in cols:
@@ -755,7 +757,7 @@ async def reminders_run(con):
             continue
         for day in (7, 3, 1):
             if age >= day:
-                await once(m, f"anketa{day}", "", f"r_anketa_{day}", tg.app_button(get_plain(con, "btn_form"), "static/anketa.html"))
+                await once(m, f"anketa{day}", "", f"r_anketa_{day}", tg.app_button(get_plain(con, "btn_club")))
                 break
     # продление
     for m in members:
@@ -1148,8 +1150,11 @@ async def wants_put(req: Request, m=Depends(member), con=Depends(get_con)):
 @app.put("/api/me")
 async def update_me(req: Request, m=Depends(current_user), con=Depends(get_con)):
     data = await req.json()
-    allowed = {"first_name", "last_name", "sphere", "project", "city", "seek", "give", "offline", "coffee", "tags"}
+    allowed = {"first_name", "last_name", "sphere", "project", "city", "seek", "give", "offline", "coffee", "tags", "income"}
     upd = {k: v for k, v in data.items() if k in allowed}
+    for k, n in (("first_name", 40), ("last_name", 40), ("sphere", 40), ("city", 40), ("project", 90), ("seek", 140), ("give", 140), ("income", 40)):
+        if k in upd:
+            upd[k] = str(upd[k] or "").strip()[:n]
     if "tags" in upd:
         upd["tags"] = json.dumps(upd["tags"][:8], ensure_ascii=False)
     for k in ("offline", "coffee"):
@@ -1638,8 +1643,7 @@ async def tribute(req: Request, con=Depends(get_con)):
                           "bot_started": bool(m.get("bot_started"))}))
         if event in NEW_SUB:
             spawn(send_welcome(tg_id, get_text(con, "welcome", m.get("first_name") or ""),
-                          {"inline_keyboard": tg.app_button(get_plain(con, "btn_form"), "static/anketa.html")["inline_keyboard"]
-                           + tg.app_button(get_plain(con, "btn_club"))["inline_keyboard"]
+                          {"inline_keyboard": tg.app_button(get_plain(con, "btn_club"))["inline_keyboard"]
                            + support_button(con)},
                           pic_url(con, "welcome") or db.get_setting(con, "welcome_photo", "")))
             spawn(team_notify(render(con, "t_pay_new", who=Raw(who), id=tg_id, level=level.capitalize(), months=months or "?",
