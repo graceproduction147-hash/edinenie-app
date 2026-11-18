@@ -58,7 +58,7 @@ TEXTS = {
     "inside_on": {"title": "Inside получен", "group": "members", "max": 1000, "vars": "{days} (сколько дней действует)", "hint": "Когда участник закрыл норму месяца.",
                   "default": "**{name}, поздравляем, вы в Inside!**\n\nБлагодарим вас за вклад в Клуб. Вы закрыли норму месяца, и теперь вам открыты закрытые эфиры, записи и материалы. Статус действует еще {days} дн.\n\nРады за ваше проявление."},
     "inside_off": {"title": "Inside на паузе", "group": "members", "max": 1000, "vars": "", "hint": "Когда норма месяца не закрыта.",
-                   "default": "Inside пока на паузе: норма месяца еще не закрыта.\n\nЧтобы вернуть его, можно пригласить друга, провести встречу Random Coffee или рассказать о Клубе и своих результатах. Мы будем рады вам."},
+                   "default": "Inside пока на паузе: норма месяца еще не закрыта.\n\nЧтобы вернуть его, пригласите друга, дважды расскажите о Клубе в сторис (хештег #делюсь в чате) и напишите инсайт после эфира (#инсайт). Мы будем рады вам."},
     "points_ok": {"title": "Баллы подтверждены", "group": "members", "max": 1000, "vars": "{points}", "hint": "Когда команда подтвердила заявку на баллы.",
                   "default": "Команда Клуба подтвердила +{points} баллов.\n\nБлагодарим вас за вклад и рады за ваше проявление."},
     "recap_record": {"title": "Запись эфира готова", "group": "members", "max": 1000, "vars": "{title} (название эфира), {points}", "hint": "Приходит, когда в кабинете появилась ссылка на запись.",
@@ -69,6 +69,8 @@ TEXTS = {
                      "default": "Вышла запись закрытого эфира «{title}»\n\nОна доступна на уровне Inside. Inside открывается за вклад в Клуб: за месяц привести друга, провести встречу Random Coffee и рассказать о Клубе или о своих результатах. Как это сделать, смотрите в профиле приложения.\n\nБудем рады видеть вас внутри."},
     "insight_ok": {"title": "Инсайт записан", "group": "members", "max": 1000, "vars": "{points}", "hint": "Участник написал #инсайт в чате клуба.",
                    "default": "**Записали ваш инсайт**\n\nЗа него назначено **{points} баллов**. Инсайт передан менеджеру Клуба: если все в порядке, мы начислим вам {points} баллов.\n\nБлагодарим вас за включенность и рады за ваше проявление."},
+    "share_ok": {"title": "Сторис или результат записаны", "group": "members", "max": 1000, "vars": "{points}, {what}", "hint": "Участник написал #делюсь или #замечаю в чате клуба.",
+                 "default": "**Записали: {what}**\n\nЗа это назначено **{points} баллов**. Менеджер проверит и подтвердит, баллы придут сразу после этого.\n\nБлагодарим, что делитесь."},
     "insight_dup": {"title": "Инсайт по эфиру уже был", "group": "members", "max": 1000, "vars": "", "hint": "Второй инсайт по тому же эфиру.",
                     "default": "Инсайт по этому эфиру уже записан.\n\nОдного на эфир достаточно: баллы начисляются за него один раз. Благодарим вас."},
     "match": {"title": "Взаимный интерес в Знакомствах", "group": "members", "max": 1000, "vars": "{peer} (имя), {nick} (например @ivan или пусто)", "hint": "Обоим, когда они отметили друг друга.",
@@ -131,6 +133,8 @@ TEXTS = {
                 "default": "Новая заявка на баллы: **{rule}** +{points} от {who}\n\n{text}\n\nПодтвердить в кабинете: {link}"},
     "t_insight": {"title": "Инсайт из чата", "group": "team", "max": 1500, "vars": "{who}, {event} (по эфиру «...» или пусто), {text}", "hint": "Команде, под сообщением кнопки «Подтвердить» и «Отклонить».",
                   "default": "Инсайт от {who}{event}:\n\n{text}"},
+    "t_share": {"title": "Сторис или результат из чата", "group": "team", "max": 1500, "vars": "{who}, {what}, {text}", "hint": "Команде, под сообщением кнопки «Подтвердить» и «Отклонить». Проверьте, что сторис правда вышла.",
+                "default": "{what} от {who}:\n\n{text}\n\nПроверьте, что сторис опубликована и в ней упомянут клуб."},
     "t_redeem": {"title": "Обмен баллов", "group": "team", "max": 1000, "vars": "{item}, {cost}, {who}", "hint": "Команде.",
                  "default": "Обмен баллов: **{item}** ({cost}) — {who}. Свяжитесь с участником."},
     "t_offer_new": {"title": "Новое предложение на проверку", "group": "team", "max": 1000, "vars": "{title}, {who}", "hint": "Команде.",
@@ -357,6 +361,7 @@ def support_button(con):
 @asynccontextmanager
 async def lifespan(app):
     db.init()
+    ensure_points()
     ensure_norm()
     ensure_recap()
     task = asyncio.create_task(coffee.scheduler())
@@ -412,6 +417,65 @@ def is_team(m):
     return m["tg_id"] in ADMIN_IDS or (m.get("role") or "") == "team"
 
 
+REF_SHARE = 0.5          # за приглашенного друга: 50% от его первой оплаты, 1 балл = 1 рубль
+POINTS_TTL_DAYS = 365    # баллы сгорают через год после начисления
+
+
+def _balance_v2(con, tg_id):
+    """Баланс: учитываем начисления и списания за последний год. Если доступ закрыт, баллы сгорают отдельной записью."""
+    since = (datetime.now(timezone.utc) - timedelta(days=POINTS_TTL_DAYS)).isoformat(timespec="seconds")
+    earned = con.execute("SELECT COALESCE(SUM(points),0) FROM claims WHERE tg_id=? AND status='approved' AND COALESCE(decided_at,created_at)>=?",
+                         (tg_id, since)).fetchone()[0]
+    spent = con.execute("SELECT COALESCE(SUM(cost),0) FROM redemptions WHERE tg_id=? AND status!='rejected' AND created_at>=?",
+                        (tg_id, since)).fetchone()[0]
+    pending = con.execute("SELECT COALESCE(SUM(points),0) FROM claims WHERE tg_id=? AND status='pending'", (tg_id,)).fetchone()[0]
+    return {"balance": max(0, earned - spent), "pending": pending}
+
+
+db.balance = _balance_v2
+
+
+def burn_points(con, tg_id, why="Доступ закрыт"):
+    bal = _balance_v2(con, tg_id)["balance"]
+    if bal > 0:
+        now_ = db.now()
+        con.execute("INSERT INTO claims(tg_id,rule_code,points,text,status,decided_at,created_at) VALUES(?,?,?,?,?,?,?)",
+                    (tg_id, "burn", -bal, "Баллы сгорели: " + why.lower(), "approved", now_, now_))
+        con.commit()
+    return bal
+
+
+def ensure_points():
+    """Один раз при запуске: курс 1 балл = 1 рубль, все цены и накопленные баллы умножаем на 10. Копия базы остается рядом."""
+    import shutil
+    con = db.connect()
+    try:
+        if db.get_setting(con, "shop_no_cottage") != "1":  # закрытые выступления пока не продаем за баллы
+            con.execute("UPDATE shop SET active=0 WHERE title LIKE '%оттедж%' OR title LIKE '%закрыт%выступлен%'")
+            db.set_setting(con, "shop_no_cottage", "1")
+            con.commit()
+        if db.get_setting(con, "pts_scale_1to1") == "1":
+            return
+        try:
+            shutil.copy(str(db.DB_PATH), str(db.DB_PATH) + ".before-points")
+        except Exception:
+            log.exception("не удалось сохранить копию базы перед пересчетом баллов")
+        con.execute("UPDATE point_rules SET points=points*10")
+        con.execute("UPDATE point_rules SET points=2500 WHERE code='invite'")
+        con.execute("INSERT OR IGNORE INTO point_rules(code,title,hint,points,kind,active,sort) VALUES('burn','Баллы сгорели','',0,'text',0,99)")
+        con.execute("UPDATE shop SET cost=cost*10")
+        con.execute("UPDATE claims SET points=points*10")
+        con.execute("UPDATE redemptions SET cost=cost*10")
+        db.set_setting(con, "pts_scale_1to1", "1")
+        con.commit()
+        for r in con.execute("SELECT tg_id FROM members WHERE status='expired' AND COALESCE(role,'')!='team'").fetchall():
+            burn_points(con, int(r["tg_id"]), "доступ закрыт")
+    except Exception:
+        log.exception("пересчет баллов не удался")
+    finally:
+        con.close()
+
+
 def refresh_status(con, m):
     """Подписка закончилась — статус expired. Команда клуба всегда активна."""
     if is_team(m):
@@ -420,6 +484,7 @@ def refresh_status(con, m):
         try:
             if datetime.fromisoformat(m["paid_until"]) < datetime.now(timezone.utc):
                 con.execute("UPDATE members SET status='expired' WHERE tg_id=?", (m["tg_id"],)); con.commit()
+                burn_points(con, m["tg_id"], "доступ закрыт")
                 return "expired"
         except ValueError:
             pass
@@ -452,7 +517,8 @@ def is_inside(m):
 
 # ---------------- норма месяца: Inside за вклад, а не за баллы ----------------
 NORM_DAYS = 30
-NORM_PARTS = (("invite", ("invite",)), ("coffee", ("coffee",)), ("story", ("story", "result")))
+# норма месяца: приглашенный друг (оплатил), два упоминания клуба в сторис (#делюсь), подробный инсайт после эфира (#инсайт)
+NORM_PARTS = (("invite", ("invite",), 1), ("story", ("story",), 2), ("insight", ("insight",), 1))
 
 
 def ensure_norm():
@@ -470,6 +536,8 @@ def ensure_norm():
                     con.execute("UPDATE members SET birthday=? WHERE tg_id=?", (bd, r["tg_id"]))
         except Exception:
             log.exception("перенос дат рождения")
+    if "photo" not in cols:
+        con.execute("ALTER TABLE members ADD COLUMN photo TEXT DEFAULT ''")
     if "card_name" not in cols:
         con.execute("ALTER TABLE members ADD COLUMN card_name TEXT")
     if "card_ask" not in cols:
@@ -484,14 +552,16 @@ def ensure_norm():
 
 
 def norm_state(con, tg_id):
-    """За последние 30 дней подтверждены: приглашенный и оплативший участник, встреча Random Coffee,
-    рассказ о клубе или о своих результатах. Все три пункта = Inside до тех пор, пока самый старый из них не выйдет из окна."""
+    """За последние 30 дней подтверждены: приглашенный и оплативший друг, два упоминания клуба в сторис, инсайт после эфира.
+    Все пункты закрыты = Inside, пока самое старое из нужных подтверждений не выйдет из окна."""
     since = (datetime.now(timezone.utc) - timedelta(days=NORM_DAYS)).isoformat()
-    last = {}
-    for key, codes in NORM_PARTS:
-        q = ("SELECT MAX(decided_at) FROM claims WHERE tg_id=? AND status='approved' AND rule_code IN (%s) AND decided_at>=?"
+    last, cnt = {}, {}
+    for key, codes, need in NORM_PARTS:
+        q = ("SELECT decided_at FROM claims WHERE tg_id=? AND status='approved' AND rule_code IN (%s) AND decided_at>=? ORDER BY decided_at DESC"
              % ",".join("?" * len(codes)))
-        last[key] = con.execute(q, (tg_id, *codes, since)).fetchone()[0]
+        ds = [r[0] for r in con.execute(q, (tg_id, *codes, since)).fetchall() if r[0]]
+        cnt[key] = len(ds)
+        last[key] = ds[need - 1] if len(ds) >= need else None
     done = all(last.values())
     until, days_left = None, 0
     if done:
@@ -501,7 +571,7 @@ def norm_state(con, tg_id):
             days_left = max(0, (until_dt - datetime.now(timezone.utc)).days + 1)
         except ValueError:
             done = False
-    return {"invite": bool(last["invite"]), "coffee": bool(last["coffee"]), "story": bool(last["story"]),
+    return {"invite": bool(last["invite"]), "story": bool(last["story"]), "story_n": cnt["story"], "insight": bool(last["insight"]),
             "done": done, "until": until, "days_left": days_left, "days": NORM_DAYS}
 
 
@@ -525,6 +595,8 @@ async def recalc_inside(con, tg_id):
 
 # ---------------- после эфира: запись, «смотрел», инсайты по хештегу ----------------
 INSIGHT_TAG = re.compile(r"#инсайт\w*", re.I)
+SHARE_TAG = re.compile(r"#делюсь\w*", re.I)      # сторис о клубе -> story
+NOTICE_TAG = re.compile(r"#замечаю\w*", re.I)    # результат от клуба -> result
 
 
 def ensure_recap():
@@ -891,7 +963,11 @@ async def handle_callback(con, cq):
 async def handle_chat_insight(con, msg):
     """Сообщение в чате клуба с хештегом #инсайт: бот фиксирует его как заявку на баллы и отправляет команде."""
     u, text = msg.get("from") or {}, (msg.get("text") or msg.get("caption") or "")
-    if not u or u.get("is_bot") or not INSIGHT_TAG.search(text):
+    if not u or u.get("is_bot"):
+        return
+    if SHARE_TAG.search(text) or NOTICE_TAG.search(text):
+        return await handle_chat_share(con, msg, u, text)
+    if not INSIGHT_TAG.search(text):
         return
     row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
     if not row:
@@ -918,6 +994,33 @@ async def handle_chat_insight(con, msg):
             await send_text(chat, head, kb, key="t_insight", con=con)
         except Exception:
             log.exception("инсайт команде")
+
+
+async def handle_chat_share(con, msg, u, text):
+    """#делюсь (сторис о клубе) и #замечаю (результат): заявка на баллы, команда проверяет и подтверждает."""
+    code, what = ("story", "сторис о клубе") if SHARE_TAG.search(text) else ("result", "результат от клуба")
+    row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
+    if not row:
+        return
+    m = db.row(row)
+    if refresh_status(con, m) != "active":
+        return
+    ref = f"tg:{msg['chat']['id']}:{msg['message_id']}"
+    if con.execute("SELECT 1 FROM claims WHERE tg_id=? AND ref=?", (m["tg_id"], ref)).fetchone():
+        return
+    clean = SHARE_TAG.sub("", NOTICE_TAG.sub("", text)).strip()[:1000]
+    cid, rule = add_claim(con, m["tg_id"], code, clean, ref=ref)
+    con.commit()
+    await send_text(m["tg_id"], render(con, "share_ok", points=rule["points"], what=what), tg.app_button("Мои баллы", "#profile"), key="share_ok", con=con)
+    who = (m.get("first_name") or "") + (f" @{m['username']}" if m.get("username") else "")
+    kb = {"inline_keyboard": [[{"text": f"Подтвердить +{rule['points']}", "callback_data": f"c:{cid}:1"},
+                               {"text": "Отклонить", "callback_data": f"c:{cid}:0"}]]}
+    head = render(con, "t_share", who=who.strip(), what=what.capitalize(), text=clean or "(без текста, смотрите сообщение в чате)")
+    for chat in team_targets(con, "t_share"):
+        try:
+            await send_text(chat, head, kb, key="t_share", con=con)
+        except Exception:
+            log.exception("сторис команде")
 
 
 async def norm_loop():
@@ -947,9 +1050,36 @@ def is_year(m):
 
 
 def public_card(m):
-    d = {k: m.get(k) for k in ("tg_id", "first_name", "last_name", "sphere", "project", "city", "seek", "give", "tags", "offline", "level")}
+    d = {k: m.get(k) for k in ("tg_id", "first_name", "last_name", "sphere", "project", "city", "seek", "give", "tags", "offline", "level", "photo")}
     d["year"] = is_year(m)
     return d
+
+
+@app.post("/api/me/photo")
+async def me_photo(req: Request, m=Depends(member), con=Depends(get_con)):
+    """Фото профиля: приложение уменьшает его и присылает картинкой, мы кладем в общую папку картинок."""
+    data = await req.json()
+    raw = str((data or {}).get("image", ""))
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    try:
+        body = base64.b64decode(raw, validate=False)
+    except Exception:
+        raise HTTPException(400, "Не получилось прочитать фото")
+    if len(body) < 500 or len(body) > 3_000_000 or body[:2] != b"\xff\xd8":
+        raise HTTPException(400, "Нужно обычное фото (JPEG) до 3 МБ")
+    BOTPICS.mkdir(parents=True, exist_ok=True)
+    name = f"u-{m['tg_id']}-{secrets.token_hex(4)}.jpg"
+    (BOTPICS / name).write_bytes(body)
+    old = (m.get("photo") or "")
+    con.execute("UPDATE members SET photo=?, updated_at=? WHERE tg_id=?", (name, db.now(), m["tg_id"]))
+    con.commit()
+    if old and old.startswith("u-"):
+        try:
+            (BOTPICS / old).unlink()
+        except OSError:
+            pass
+    return {"ok": True, "photo": name}
 
 
 @app.get("/api/me")
@@ -1221,12 +1351,12 @@ def library(type: str = "all", q: str = "", m=Depends(member), con=Depends(get_c
 
 # ---------------- баллы ----------------
 
-def add_claim(con, tg_id, code, text="", file=None, ref=None):
+def add_claim(con, tg_id, code, text="", file=None, ref=None, points=None):
     rule = con.execute("SELECT * FROM point_rules WHERE code=? AND active=1", (code,)).fetchone()
     if not rule:
         raise HTTPException(400, "Нет такого действия")
     cur = con.execute("INSERT INTO claims(tg_id,rule_code,points,text,file,ref,created_at) VALUES(?,?,?,?,?,?,?)",
-                      (tg_id, code, rule["points"], text, file, ref, db.now()))
+                      (tg_id, code, int(points) if points is not None else rule["points"], text, file, ref, db.now()))
     return cur.lastrowid, rule
 
 
@@ -1491,7 +1621,8 @@ async def tribute(req: Request, con=Depends(get_con)):
         if m.get("source", "") and m["source"].startswith("ref_") and not con.execute(
                 "SELECT 1 FROM claims WHERE ref=?", (f"invite:{tg_id}",)).fetchone():
             try:
-                add_claim(con, int(m["source"][4:]), "invite", f"Пригласил(а) участника {tg_id}", ref=f"invite:{tg_id}")
+                bonus = round(float(amount) * REF_SHARE) if amount else None  # 1 балл = 1 рубль, 50% от первой оплаты друга
+                add_claim(con, int(m["source"][4:]), "invite", f"Пригласил(а) участника {tg_id}", ref=f"invite:{tg_id}", points=bonus)
                 con.commit()
             except Exception:
                 log.exception("не удалось начислить приглашение")
