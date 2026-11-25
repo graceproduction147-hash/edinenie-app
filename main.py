@@ -4031,7 +4031,7 @@ def orb_pic(name: str):
         raise HTTPException(404)
     if not 0 <= seed < 2000:
         raise HTTPException(404)
-    d = UPLOADS / "orbs"
+    d = UPLOADS / "orbs2"
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{seed}.png"
     if not p.exists():

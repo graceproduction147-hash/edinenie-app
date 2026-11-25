@@ -318,7 +318,7 @@ const inPillar = x => (x.pillar || "env") === libPillar;
 $("#libPills").innerHTML = LIBP.map(([k, v]) => `<button class="chip" data-lp="${k}" aria-pressed="${k === libPillar}">${v}</button>`).join("");
 $$("[data-lp]").forEach(c => c.onclick = () => { libPillar = c.dataset.lp; $$("[data-lp]").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false")); loadLib(); });
 $("#libSearch").oninput = () => { clearTimeout(libTimer); libTimer = setTimeout(loadLib, 300); };
-const orbImg = seed => `<img class="orb" src="/orb/${(seed % 2000 + 2000) % 2000}.png" alt="" loading="lazy">`;
+const orbImg = seed => `<img class="orb" src="/orb/${(seed % 2000 + 2000) % 2000}.png?v=2" alt="" loading="lazy">`;
 const libItem = x => `<button class="item" data-lib="${x.id}">${orbImg(x.event_id || x.id + 500)}
   <div class="t"><b>${esc(x.title)}</b><span>${esc([TYPE[x.type], x.author, x.meta].filter(Boolean).join(" · "))}</span></div>
   <div class="end">${x.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;

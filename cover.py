@@ -119,37 +119,50 @@ def render(title, speaker="", label="ЭФИР", seed=0):
     return out.getvalue()
 
 
+# сдержанные палитры для миниатюр: фон, свечение, планета (свет, тень), металл
+ORB_THEMES = [
+    ((11, 13, 24), (56, 66, 112), ((178, 170, 196), (22, 24, 44)), (214, 176, 132)),   # полночь и бронза
+    ((14, 14, 18), (74, 70, 84), ((196, 192, 200), (30, 30, 38)), (222, 210, 190)),    # графит и жемчуг
+    ((20, 12, 18), (96, 52, 64), ((204, 160, 150), (40, 18, 26)), (224, 184, 128)),    # бордо и золото
+    ((9, 18, 24), (40, 86, 96), ((160, 196, 196), (14, 34, 42)), (222, 200, 160)),     # глубокая бирюза и шампань
+]
+
+
 def orb(seed=0, S=192):
-    """Круглая миниатюра для списков: своя планета и свой оттенок у каждого seed, в стиле обложек."""
-    Q = S * 2
+    """Круглая миниатюра для списков: тёмная, приглушённая, с тонкой золотой линией. У каждого seed своя композиция."""
+    Q = S * 3
     rnd = random.Random(seed * 7919 + 13)
-    base, g1, g2, (pl, pd), gold = THEMES[seed % len(THEMES)]
+    base, glow, (pl, pd), gold = ORB_THEMES[seed % len(ORB_THEMES)]
     img = Image.new("RGBA", (Q, Q), base + (255,))
-    _glow(img, int(Q * rnd.uniform(.55, .95)), int(Q * rnd.uniform(.05, .4)), int(Q * .55), g1, 230)
-    _glow(img, int(Q * rnd.uniform(.0, .4)), int(Q * rnd.uniform(.6, .95)), int(Q * .5), g2, 200)
-    R = int(Q * rnd.uniform(.2, .3))
-    _planet(img, int(Q * rnd.uniform(.3, .7)), int(Q * rnd.uniform(.3, .7)), R, pl, pd, gold)
+    gx, gy = rnd.choice([.25, .75]) * Q, rnd.choice([.2, .8]) * Q
+    _glow(img, int(gx), int(gy), int(Q * .6), glow, 150)
+    # главная планета: небольшая, смещена от центра
+    R = int(Q * rnd.uniform(.17, .24))
+    px, py = Q * rnd.uniform(.4, .62), Q * rnd.uniform(.4, .62)
+    _planet(img, px, py, R, pl, pd, gold)
     ov = Image.new("RGBA", (Q, Q), (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
-    for _ in range(2):
-        cx, cy, r = rnd.randint(0, Q), rnd.randint(0, Q), rnd.randint(int(Q * .35), int(Q * .7))
-        od.ellipse([cx - r, cy - r, cx + r, cy + r], outline=gold + (90,), width=3)
-    for _ in range(26):
-        x, y, r = rnd.randint(0, Q), rnd.randint(0, Q), rnd.choice([1, 2, 3])
-        od.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(110, 230)))
+    # тонкая золотая орбита-эллипс вокруг планеты, у каждого свой наклон
+    a, b = R * rnd.uniform(1.7, 2.2), R * rnd.uniform(.5, .8)
+    tilt = Image.new("RGBA", (Q, Q), (0, 0, 0, 0))
+    ImageDraw.Draw(tilt).ellipse([px - a, py - b, px + a, py + b], outline=gold + (150,), width=3)
+    tilt = tilt.rotate(rnd.uniform(-35, 35), center=(px, py), resample=Image.BICUBIC)
+    img.alpha_composite(tilt)
+    # маленький спутник на орбите
+    ang = rnd.uniform(0, 6.28)
+    sx, sy = px + a * 0.95 * __import__("math").cos(ang), py + b * 0.95 * __import__("math").sin(ang)
+    r2 = Q * .018
+    od.ellipse([sx - r2, sy - r2, sx + r2, sy + r2], fill=gold + (220,))
+    # редкая звёздная пыль, без ярких цветов
+    for _ in range(14):
+        x, y, r = rnd.randint(0, Q), rnd.randint(0, Q), rnd.choice([1, 2, 2])
+        od.ellipse([x - r, y - r, x + r, y + r], fill=(235, 228, 216, rnd.randint(60, 150)))
     img.alpha_composite(ov)
-    shift = (seed // len(THEMES)) % 3 * 10           # разный оттенок для соседних номеров
-    if shift:
-        h, s, v = img.convert("RGB").convert("HSV").split()
-        h = h.point(lambda x: (x + shift) % 256)
-        rgb = Image.merge("HSV", (h, s, v)).convert("RGB")
-    else:
-        rgb = img.convert("RGB")
     m = Image.new("L", (Q, Q), 0)
-    ImageDraw.Draw(m).ellipse([2, 2, Q - 3, Q - 3], fill=255)
+    ImageDraw.Draw(m).ellipse([3, 3, Q - 4, Q - 4], fill=255)
     out = Image.new("RGBA", (Q, Q), (0, 0, 0, 0))
-    out.paste(rgb, (0, 0), m)
-    ImageDraw.Draw(out).ellipse([2, 2, Q - 3, Q - 3], outline=gold + (160,), width=3)
+    out.paste(img.convert("RGB"), (0, 0), m)
+    ImageDraw.Draw(out).ellipse([3, 3, Q - 4, Q - 4], outline=gold + (110,), width=4)
     buf = io.BytesIO()
     out.resize((S, S), Image.LANCZOS).save(buf, "PNG", optimize=True)
     return buf.getvalue()
