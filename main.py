@@ -3961,21 +3961,33 @@ async def send_card_bg(tg_id):
         con.close()
 
 
+def quote_file(idx, bg):
+    """Готовая открытка лежит на диске: рисуем один раз, потом отдаем мгновенно."""
+    d = UPLOADS / "quotes"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{idx}-{bg}.jpg"
+    if not p.exists():
+        p.write_bytes(quotes.render(idx, bg))
+    return p
+
+
 @app.get("/api/quote")
 def quote_of_day(m=Depends(member)):
-    """Послание дня: одна фраза на всех. Картинка отдается по публичной ссылке, чтобы ее можно было скачать из Telegram."""
+    """Послание дня: у каждого своя фраза и свой фон на день."""
     d = quotes.today()
-    return {"date": d.isoformat(), "text": quotes.phrase_for(d), "url": f"{PUBLIC_URL}/quotepic/{d.isoformat()}.png"}
+    idx, bg = quotes.pick(m["tg_id"], d)
+    quote_file(idx, bg)  # прогреваем, чтобы картинка открылась сразу
+    return {"date": d.isoformat(), "text": quotes.PHRASES[idx], "url": f"{PUBLIC_URL}/quotepic/{idx}-{bg}.jpg"}
 
 
 @app.post("/api/quote/send")
 async def quote_send(m=Depends(member)):
     """Присылает открытку дня фотографией в чат с ботом: ее можно сохранить в галерею (нажать и выбрать «Сохранить»)."""
-    d = quotes.today()
-    png = quotes.render(d)
+    idx, bg = quotes.pick(m["tg_id"], quotes.today())
+    png = quote_file(idx, bg).read_bytes()
     r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": m["tg_id"], "caption": "Послание дня"}, file=("photo", png))
     if not (r and r.get("ok")):
-        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": m["tg_id"], "photo": f"{PUBLIC_URL}/quotepic/{d.isoformat()}.png", "caption": "Послание дня"})
+        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": m["tg_id"], "photo": f"{PUBLIC_URL}/quotepic/{idx}-{bg}.jpg", "caption": "Послание дня"})
     if not (r and r.get("ok")):
         raise HTTPException(502, "Не получилось отправить картинку в чат. Попробуйте позже.")
     return {"ok": True}
@@ -4034,14 +4046,13 @@ async def send_event_photo(tg_id, e, text, key, con):
 
 @app.api_route("/quotepic/{name}", methods=["GET", "HEAD"])
 def quotepic(name: str):
-    from datetime import date as _date
     try:
-        d = _date.fromisoformat(name.removesuffix(".png"))
+        idx, bg = (int(x) for x in name.removesuffix(".jpg").split("-"))
     except ValueError:
         raise HTTPException(404)
-    if abs((d - quotes.today()).days) > 1:  # только вчера, сегодня и завтра
+    if not (0 <= idx < len(quotes.PHRASES) and 0 <= bg < 60):
         raise HTTPException(404)
-    return Response(quotes.render(d), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(quote_file(idx, bg), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.api_route("/cardpic/{name}", methods=["GET", "HEAD"])

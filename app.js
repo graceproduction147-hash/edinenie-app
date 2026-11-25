@@ -803,7 +803,7 @@ async function openQuote() {
     ov.querySelector(".qsave").onclick = async () => {
       // 1) системное меню «Поделиться» с файлом: там есть «Сохранить изображение» в галерею; 2) если его нет, бот присылает фото в чат
       try {
-        const blob = await (await fetch(q.url)).blob(), file = new File([blob], `edinenie-${q.date}.png`, {type: "image/png"});
+        const blob = await (await fetch(q.url)).blob(), file = new File([blob], `edinenie-${q.date}.jpg`, {type: "image/jpeg"});
         if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file]}); return; }
       } catch (e) { if (e && e.name === "AbortError") return; }
       try { await api("/api/quote/send", {method: "POST", json: {}}); toast("Прислали картинку в чат с ботом: нажмите на нее и выберите «Сохранить в галерею»"); }
