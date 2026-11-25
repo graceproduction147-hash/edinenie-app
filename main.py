@@ -4249,6 +4249,13 @@ def health():
 STATIC = BASE / "static"
 
 
+@app.get("/api/version")
+def app_version():
+    """Версия приложения (по времени файла app.js): открытое в фоне мини-приложение само обновляется, когда она меняется."""
+    fp = STATIC / "app.js"
+    return JSONResponse({"v": int(fp.stat().st_mtime) if fp.exists() else 0}, headers={"Cache-Control": "no-store"})
+
+
 def _page(name: str):
     """Отдаем страницу без кеша, а к скриптам и стилям добавляем версию: после обновления Telegram сразу берет новые файлы."""
     txt = (STATIC / name).read_text(encoding="utf-8")

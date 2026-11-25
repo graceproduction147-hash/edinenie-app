@@ -677,6 +677,21 @@ function renderMonth() {
 }
 function refreshHome() { renderWeekAction(); renderMonth(); }
 
+/* ---------- самообновление ---------- */
+// Мини-приложение в Telegram может неделями жить в фоне. Когда его открывают снова, сверяем версию и перезагружаем, если вышла новая.
+(function () {
+  const sc = document.querySelector('script[src*="/static/app.js"]'), m = sc && /[?&]v=(\d+)/.exec(sc.src);
+  if (!m) return;
+  const mine = m[1];
+  async function check() {
+    try { const r = await fetch("/api/version", {cache: "no-store"}); const d = await r.json();
+      if (d.v && String(d.v) !== mine && !document.getElementById("quoteFs")) location.reload(); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+  window.addEventListener("focus", check);
+  setInterval(check, 5 * 60 * 1000);
+})();
+
 /* ---------- послание дня ---------- */
 async function openQuote() {
   try {
