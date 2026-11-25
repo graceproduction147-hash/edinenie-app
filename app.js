@@ -527,7 +527,7 @@ function renderHomeCoffee() {
 /* ---------- вкладка «Бонусы» ---------- */
 async function loadPerks() { renderPerks(); try { const d = await api("/api/offers"); S.offers = d.items; S.slots = d.slots; S.offerDays = d.days; } catch (e) {} renderPerks(); }
 const OK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.500 4.500L19 7.500"/></svg>';
-const NO_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const NO_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9.500" rx="2.500"/><path d="M8.500 11V8a3.500 3.500 0 017 0v3"/></svg>';
 function renderPerks() {
   const el = $("#perksBox"); if (!el || !S.me) return;
   const yr = !!S.year, amb = S.me.level === "inside", sl = S.slots || {}, g = S.events && S.events.guest, n = S.norm;
@@ -547,8 +547,8 @@ function renderPerks() {
     + row(amb, "Персональные знакомства", "Подбор людей под ваш запрос", "", "");
   const yearFoot = yr ? "" : `<button class="btn solid" id="pkTeam">Сделать апгрейд</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
-  const full = `<h3>Мои возможности</h3>` + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot, "Статус за активное участие в жизни клуба. Бонусы действуют на любом тарифе: годовом и ежемесячном.")
-    + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot, "Тариф на год со своими бонусами, плюс дополнительные для Амбассадоров.");
+  const full = `<h3>Мои возможности</h3>` + card(amb, "Амбассадор", amb ? "Открыто для вас" : "", ambRows, ambFoot, "Статус за активное участие в жизни клуба. Бонусы действуют на любом тарифе: годовом и ежемесячном.")
+    + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "", yearRows, yearFoot, "Тариф на год со своими бонусами, плюс дополнительные для Амбассадоров.");
   const sub = [yr ? "годовой тариф" : "", amb ? "амбассадор" : ""].filter(Boolean).join(", ");
   el.innerHTML = `<button class="panel rowcard slim hot" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Годовой тариф и Амбассадор"}</span></div><i>&#8250;</i></button>`;
   $("#perksOpen").onclick = () => openSheet(full, s => {
