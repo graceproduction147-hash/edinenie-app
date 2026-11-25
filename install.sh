@@ -44,7 +44,7 @@ if [ ! -f "$APP_DIR/.env" ]; then
   WEBHOOK_SECRET=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32)
   cat > "$APP_DIR/.env" <<EOF
 PUBLIC_URL=https://$DOMAIN
-PAY_URL=https://t.me/m/-3doU5bbMGYy
+PAY_URL=https://t.me/tribute/app?startapp=s14lC
 BOT_TOKEN=$BOT_TOKEN
 TEAM_BOT_TOKEN=$TEAM_BOT_TOKEN
 ADMIN_IDS=$ADMIN_IDS
