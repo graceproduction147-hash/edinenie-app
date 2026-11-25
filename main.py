@@ -4019,6 +4019,23 @@ def cover_url(e):
     return f"/eventcover/{e['id']}.png?v={k}"
 
 
+@app.api_route("/orb/{name}", methods=["GET", "HEAD"])
+def orb_pic(name: str):
+    """Круглая миниатюра материала: у каждого номера своя планета."""
+    try:
+        seed = int(name.removesuffix(".png"))
+    except ValueError:
+        raise HTTPException(404)
+    if not 0 <= seed < 2000:
+        raise HTTPException(404)
+    d = UPLOADS / "orbs"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{seed}.png"
+    if not p.exists():
+        p.write_bytes(cover.orb(seed))
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.api_route("/eventcover/{name}", methods=["GET", "HEAD"])
 def eventcover(name: str, con=Depends(get_con)):
     try:
