@@ -1144,7 +1144,7 @@ async def fetch_tg_avatar(mem):
                     if img:
                         return img
         except Exception:
-            log.info("аватарка с t.me не получилась для %s", mem.get("tg_id"))
+            log.warning("аватарка с t.me не получилась для %s", mem.get("tg_id"))
     try:
         r = await tg._call(tg.BOT_TOKEN, "getUserProfilePhotos", {"user_id": mem["tg_id"], "limit": 1})
         ph = (((r or {}).get("result") or {}).get("photos") or [])
@@ -1154,7 +1154,7 @@ async def fetch_tg_avatar(mem):
             if path:
                 return _ava_jpeg(await _http_get(f"https://api.telegram.org/file/bot{tg.BOT_TOKEN}/{path}", 10) or b"")
     except Exception:
-        log.info("аватарка через бота не получилась для %s", mem.get("tg_id"))
+        log.warning("аватарка через бота не получилась для %s", mem.get("tg_id"))
     return None
 
 
