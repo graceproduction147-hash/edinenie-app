@@ -84,15 +84,18 @@ function renderLvl(v) {
 function levelsSheet() {
   const amb = S.me && S.me.level === "inside", yr = !!S.year, n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
-  const tier = (cls, mine, name, how, perks, extra) => `<div class="tier ${cls}${mine ? " mine" : ""}"><div class="th"><h4>${name}</h4>${mine ? '<span class="you">у вас</span>' : ""}</div><p class="how">${how}</p><ul class="pk">${perks.map(p => `<li>${p}</li>`).join("")}</ul>${extra || ""}</div>`;
-  openSheet(`<h3>Возможности клуба</h3><p class="sub">Что внутри и за что это дается. Годовой тариф и статус Амбассадора можно иметь одновременно.</p>
-    ${tier("res", !amb, "Резидент", "Для каждого участника клуба", ["Эфиры, конспекты и библиотека", "События партнеров", "Витрина предложений по приглашениям", "2 рекомендации знакомств в месяц"])}
-    ${tier("yr", yr, "Годовой тариф", "За оплату годового участия", ["Статус «Партнер» в карточке знакомств и в шапке", "Место на витрине без приглашений весь год", "2 гостевых пропуска на эфиры: позовите друга бесплатно"], yr ? "" : '<button class="btn sm" id="lvYear">Узнать про годовой тариф</button>')}
-    ${tier("amb", amb, "Амбассадор", "За вклад, а не за оплату. Подтверждает команда", ["Провести свой эфир внутри клуба и опубликовать его", "Постоянное место на витрине предложений", "4 рекомендации знакомств в месяц вместо 2"],
-      (n ? `<p class="sub" style="margin:10px 0 6px">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : "")
-      + '<div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button><button class="btn sm ghost" id="lvStream">Свой эфир</button></div>')}`,
+  const ok = '<i class="ck">&#10003;</i>', no = '<i class="no">&mdash;</i>';
+  const rows = [["Эфиры и библиотека", [ok, ok, ok]], ["События партнеров", [ok, ok, ok]],
+    ["Знакомства в месяц", ["2", "4", no]], ["Место на витрине", ["за друга", ok, ok]],
+    ["Свой эфир", [no, ok, ok]], ["Статус «Партнер»", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
+  const mine = [!amb, amb, yr], heads = [["Резидент", "по оплате"], ["Амбассадор", "за вклад"], ["Годовой", "+ к уровню"]];
+  const grid = `<div class="mx"><div class="mh"></div>${heads.map((h, i) => `<div class="mh c${i}${mine[i] ? " mine" : ""}"><b>${h[0]}</b><span>${h[1]}</span>${mine[i] ? '<em>у вас</em>' : ""}</div>`).join("")}
+    ${rows.map(r => `<div class="ml">${r[0]}</div>${r[1].map((v, i) => `<div class="mc c${i}${mine[i] ? " mine" : ""}">${v}</div>`).join("")}`).join("")}</div>`;
+  openSheet(`<h3>Возможности клуба</h3><p class="sub">Годовой тариф добавляется к любому уровню. Амбассадором становятся за вклад, а не за оплату.</p>${grid}
+    <div class="amb-how"><h4>Как стать Амбассадором</h4>${n ? `<p class="sub" style="margin:6px 0">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
+      <div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button>${amb || yr ? '<button class="btn sm ghost" id="lvStream">Свой эфир</button>' : ""}${yr ? "" : '<button class="btn sm ghost" id="lvYear">Годовой тариф</button>'}</div></div>`,
     s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
-      const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); streamSheet(); };
+      const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); ownStream(); };
       const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); }; });
 }
 let _trk = {};
