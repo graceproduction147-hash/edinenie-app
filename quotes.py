@@ -144,7 +144,7 @@ def render(d):
     for ln in lines:
         _nf(size); card.text_c(dr, 540, y, ln, "PoiretOne", size, INK, ls=1.2)
         y += lh
-    card.text_c(dr, 540, 1740, "ЕДИНЕНИЕ", "Forum.ttf", 46, INK, ls=9)
+    card.text_c(dr, 540, 1600, "ЕДИНЕНИЕ", "Forum.ttf", 46, INK, ls=9)
     out = io.BytesIO()
     img.convert("RGB").save(out, "PNG", optimize=True)
     return out.getvalue()
