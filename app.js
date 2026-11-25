@@ -642,7 +642,7 @@ function runStep(st) { closeSheet(); if (st.tab) go(st.tab); else if (st.ev) eve
 function renderWeekAction() {
   const w = $("#welcome"), el = $("#weekAction"); if (!el || !S.me) return;
   const amb = S.me.level === "inside", n = S.norm, done = n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0;
-  if (w) w.innerHTML = `<div class="hello">${avaEl(S.me)}<div class="t"><b>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</b><span>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</span></div></div>`;
+  if (w) w.innerHTML = `<div class="hero"><span class="k">Клуб Единение</span><h3>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</h3><p>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</p></div>`;
   const steps = routeSteps(), st = steps[0], C = 113.1;
   el.hidden = false;
   el.innerHTML = `<span class="eyebrow">Ваш маршрут</span>
