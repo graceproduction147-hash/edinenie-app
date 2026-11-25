@@ -1247,7 +1247,7 @@ def me(m=Depends(current_user), con=Depends(get_con)):
         "insights": con.execute("SELECT COUNT(*) FROM claims WHERE tg_id=? AND rule_code='insight'", (m["tg_id"],)).fetchone()[0],
         "coffee": con.execute("SELECT COUNT(*) FROM coffee_pairs WHERE (a=? AND met_a=1) OR (b=? AND met_b=1)", (m["tg_id"], m["tg_id"])).fetchone()[0],
     }
-    return {"me": m, "points": db.balance(con, m["tg_id"]), "stats": stats, "join": JOIN_URL,
+    return {"me": m, "points": db.balance(con, m["tg_id"]), "stats": stats, "join": JOIN_URL, "support": SUPPORT_URL,
             "is_admin": is_team(m), "year": is_year(m), "norm": norm_state(con, m["tg_id"])}
 
 
