@@ -325,3 +325,12 @@ details.more{margin-top:18px;border-top:1px solid var(--line);padding-top:10px}d
 .panel.rowcard{flex-direction:row;align-items:center;gap:14px}.panel.rowcard .t{flex:1}.panel.rowcard .avrow{flex:none}.panel.rowcard i{flex:none;align-self:center}.panel.rowcard .eyebrow{white-space:nowrap}
 .panel.qcard{flex-direction:column;align-items:flex-start}
 .rowcard .eyebrow::before,.qcard .eyebrow::before,.panel.nx .eyebrow::before{display:none}.rowcard .eyebrow,.panel.nx .eyebrow{white-space:normal}
+
+.tier{border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-top:12px}
+.tier.mine{border-color:var(--accent);background:var(--accent-soft)}
+.tier.amb{background:linear-gradient(135deg,rgba(196,111,82,.16),rgba(129,152,218,.1))}
+.tier .th{display:flex;align-items:center;justify-content:space-between}.tier h4{margin:0;font:400 20px var(--font-display);letter-spacing:.03em;text-transform:uppercase}
+.tier .you{font:600 10px var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:3px 8px}
+.tier .how{margin:4px 0 8px;font-size:12px;color:var(--muted)}
+.tier .pk{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}.tier .pk li{font-size:14px;padding-left:22px;position:relative}.tier .pk li::before{content:"";position:absolute;left:2px;top:6px;width:6px;height:10px;border:solid var(--accent);border-width:0 2px 2px 0;transform:rotate(40deg) scale(.8)}
+.tier .btn{margin-top:12px}
