@@ -774,14 +774,6 @@ fetch("/api/version", {cache: "no-store"}).then(r => r.json()).then(j => { const
 
 /* ---------- итоги месяца: кнопка с 28 числа, пока не заполнены ---------- */
 const MON_G = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"], MON_N = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
-async function loadMonthly() { try { S.monthly = await api("/api/monthly-status"); } catch (e) { S.monthly = null; } renderMonthly(); }
-function renderMonthly() {
-  const q = S.monthly, html = q && q.open ? `<a class="mbtn" href="/static/monthly.html?month=${q.month}"><div class="t"><span class="eyebrow">Итоги месяца</span><b>Подведите итоги: ${MON_N[+q.month.slice(5) - 1]}</b><span class="sub">5 минут. По ним мы подберем эфиры и людей на следующий месяц</span></div><i>&#8250;</i></a>` : "";
-  ["#mbHome", "#mbProf"].forEach(id => { const el = $(id); if (el) el.innerHTML = html; });
-}
-document.addEventListener("visibilitychange", () => { if (!document.hidden && S.me) loadMonthly(); });
-window.addEventListener("pageshow", () => { if (S.me) loadMonthly(); });
-
 /* ---------- самообновление ---------- */
 // Мини-приложение в Telegram может неделями жить в фоне. Когда его открывают снова, сверяем версию и перезагружаем, если вышла новая.
 (function () {
@@ -874,25 +866,27 @@ function renderRitual() {
   const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
   const done = n >= 4;
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
-  el.innerHTML = `<div class="rhead"><div><span class="eyebrow">Сегодня</span><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3></div><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"}<br>подряд</span></div></div>
-    <div class="rweek">${wk}</div>
-    <div class="rstep ${d.mood != null ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Как вы сейчас?</b></div>
-      <div class="moods">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
-    <div class="rstep ${d.areas.length ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Чему уделите внимание сегодня?</b></div>
+  const row = (ok, t, sub, btn) => `<div class="rstep rrow ${ok ? "ok" : ""}"><div class="rt"><i class="ck"></i><div class="rtx"><b>${t}</b>${sub ? `<span>${sub}</span>` : ""}</div>${btn || ""}</div></div>`;
+  const mood = d.mood != null && !S.mEdit ? row(1, "Состояние: " + MOODS[d.mood - 1][0].toLowerCase(), "", '<button class="btn sm ghost" id="rmEdit">Изменить</button>')
+    : `<div class="rstep"><div class="rt"><i class="ck"></i><b>Как вы сейчас?</b></div>
+      <div class="moods">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>`;
+  const areas = d.areas.length && !S.aEdit ? row(1, "Внимание: " + d.areas.map(k => AREAS[k].toLowerCase()).join(", "), "", '<button class="btn sm ghost" id="raEdit">Изменить</button>')
+    : `<div class="rstep"><div class="rt"><i class="ck"></i><b>Чему уделите внимание сегодня?</b></div>
       <div class="chips" id="rAreas">${Object.keys(AREAS).map(k => `<button class="chip" data-a="${k}" aria-pressed="${d.areas.includes(k)}">${AREAS[k]}</button>`).join("")}</div>
-      <p class="sub">Можно несколько. По этим отметкам вы потом увидите, что влияет на ваше состояние.</p></div>
-    <div class="rstep ${d.focus ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Ваш фокус</b></div>
-      ${edit || !fp ? `<p class="sub">${fp ? "Измените сферу или цель месяца." : "Выберите главную сферу и одну цель на месяц."}</p>
+      ${d.areas.length ? '<div class="btns"><button class="btn sm solid" id="raDone">Готово</button></div>' : '<p class="sub">Можно несколько. Потом увидите, что влияет на состояние.</p>'}</div>`;
+  const focus = edit || !fp ? `<div class="rstep"><div class="rt"><i class="ck"></i><b>Ваш фокус</b></div><p class="sub">${fp ? "Измените сферу или цель месяца." : "Выберите главную сферу и одну цель на месяц."}</p>
         <div class="chips" id="rfChips">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
         <textarea id="rfGoal" rows="2" placeholder="Что хочу сделать за месяц: один-два конкретных шага">${esc(w.goal || "")}</textarea>
-        <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div>`
-      : `<p class="sub">${esc(fp.t)}${w.goal ? ": " + esc(w.goal) : ""}</p>
-        <div class="btns"><button class="btn sm ${d.focus ? "ghost" : ""}" id="rFocus">${d.focus ? "Помню" : "Помню о нем"}</button><button class="btn sm ghost" id="rfEdit">Изменить</button></div>`}</div>
-    <div class="rstep ${d.card ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Карта дня</b></div>
-      <p class="sub">${d.card ? "Ваша карта на сегодня получена." : "Вытяните послание на день."}</p><button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть снова" : "Вытянуть карту"}</button></div>
-    ${done ? `<p class="rdone">Все шаги сделаны. До завтра.</p>` : ""}`;
+        <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div></div>`
+    : row(d.focus, "Ваш фокус: " + esc(fp.t), w.goal ? esc(w.goal) : "", `<span class="rbt">${d.focus ? "" : '<button class="btn sm" id="rFocus">Помню</button>'}<button class="btn sm ghost" id="rfEdit">Изменить</button></span>`);
+  const card = row(d.card, "Карта дня", "", `<button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть" : "Вытянуть"}</button>`);
+  el.innerHTML = `<div class="rhead"><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
+    <div class="rweek">${wk}</div>${mood}${areas}${focus}${card}`;
+  const em = $("#rmEdit"); if (em) em.onclick = () => { S.mEdit = true; renderRitual(); };
+  const ea = $("#raEdit"); if (ea) ea.onclick = () => { S.aEdit = true; renderRitual(); };
+  const ad = $("#raDone"); if (ad) ad.onclick = () => { S.aEdit = false; renderRitual(); };
   $$("#ritual #rAreas .chip").forEach(b => b.onclick = () => { const cur = new Set(S.daily.areas), k = b.dataset.a; cur.has(k) ? cur.delete(k) : cur.add(k); dailyStep("areas", {value: [...cur]}); });
-  $$("#ritual [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
+  $$("#ritual [data-mood]").forEach(b => b.onclick = () => { S.mEdit = false; dailyStep("mood", {value: +b.dataset.mood}); });
   const f = $("#rFocus"); if (f) f.onclick = () => dailyStep("focus", {on: true});
   const re = $("#rfEdit"); if (re) re.onclick = () => { S.rfEdit = true; renderRitual(); };
   const rc = $("#rfCancel"); if (rc) rc.onclick = () => { S.rfEdit = false; renderRitual(); };
@@ -927,7 +921,7 @@ function tgAvatar() {
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
-  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly(), loadDaily(), loadMeet()]);
+  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadDaily(), loadMeet()]);
   refreshHome(); tgAvatar();
   route();
 }
