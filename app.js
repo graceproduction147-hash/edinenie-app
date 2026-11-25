@@ -60,7 +60,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSheet
 
 /* ---------- навигация ---------- */
 const TITLES = {home:["Клуб","Главная"], events:["Встречи и предложения","События"], lib:["Знания клуба","Библиотека"], people:["Круг","Люди"], profile:["Ваше участие","Профиль"]};
-/* ---------- уровни Club и Inside ---------- */
+/* ---------- уровни Резидент и Амбассадор (внутри кода уровень Амбассадора по-прежнему называется inside) ---------- */
 const LVL_NOTE = {
   home: null,
   events: ["эфиры, события партнеров, витрина предложений", "закрытые эфиры и их записи"],
@@ -78,16 +78,16 @@ function renderLvl(v) {
   $("#lvlMore").onclick = levelsSheet;
 }
 function levelsSheet() {
-  const inside = S.me && S.me.level === "inside";
-  const rows = [["Эфиры клуба и их конспекты", 1, 1], ["События партнеров, скидки и промокоды", 1, 1], ["Витрина предложений участников", 1, 1], ["Знакомства и Random Coffee", 1, 1],
-    ["Баллы и награды Club", 1, 1], ["Закрытые эфиры и их записи", 0, 1], ["Закрытые материалы библиотеки", 0, 1], ["Награды только для Inside", 0, 1]];
-  openSheet(`<p class="sub">Ваш уровень: ${inside ? "Inside" : "Club"}</p><h3>Club и Inside</h3>
-    <div class="cmp"><div class="h">Раздел</div><div class="h y">Club</div><div class="h y in">Inside</div>
-    ${rows.map(r => `<div>${esc(r[0])}</div><div class="${r[1] ? "y" : "n"}">${r[1] ? "да" : "нет"}</div><div class="y in">да</div>`).join("")}</div>
-    <p class="sub">Club открывается оплатой участия. Inside не продается: он открывается за вклад в клуб. За месяц нужно привести друга, написать людям из рекомендаций и рассказать о клубе или о своих результатах. Каждый пункт подтверждает команда. Баллы за действия копятся отдельно и тратятся на награды.</p>
-    <p class="sub" style="margin-top:8px">Годовой тариф Inside не дает, но добавляет бонусы, которых нет за баллы: статус «Партнер», место на витрине без приглашений и гостевые пропуска на эфиры.</p>
-    ${inside ? "" : '<button class="btn" id="lvToPts">Что нужно для Inside</button>'}`,
-    s => { const b = s.querySelector("#lvToPts"); if (b) b.onclick = () => { closeSheet(); go("profile"); }; });
+  const amb = S.me && S.me.level === "inside", n = S.norm;
+  const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
+  openSheet(`<p class="sub">Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</p><h3>Резидент и Амбассадор</h3>
+    <p class="sub"><b>Резидент</b>: каждый участник клуба. Эфиры, конспекты, библиотека, события партнеров, витрина предложений и рекомендации знакомств.</p>
+    <p class="sub"><b>Амбассадор</b>: тот, кто проявляется в клубе и приводит друзей. Дополнительно открываются закрытые эфиры, их записи и закрытые материалы библиотеки. Статус дается не за оплату, а за вклад, и его подтверждает команда.</p>
+    ${n ? `<p class="sub" style="margin-top:8px">${n.done ? `Вы Амбассадор. Статус действует еще ${n.days_left} дн. Чтобы сохранить его, повторите три шага за следующие ${n.days} дней.` : `Чтобы стать Амбассадором, за ${n.days} дней сделайте три шага:`}</p>
+    <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
+    <p class="sub" style="margin-top:8px">Годовой тариф добавляет бонусы: статус «Партнер», место на витрине без приглашений и гостевые пропуска на эфиры.</p>
+    <button class="btn" id="lvInv">Пригласить друга</button>`,
+    s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); }; });
 }
 let _trk = {};
 function track(k) {
@@ -112,24 +112,16 @@ function route() { const h = location.hash.slice(1);
   if (h === "coffee" || h === "matches") go("people", h); else if (h === "calendar") go("events", "soon"); else if (h === "offers") go("events", "off"); else if (TITLES[h]) go(h); }
 
 /* ---------- баллы ---------- */
-function setPoints(p) {
-  S.points = p; $$(".ptsv").forEach(e => e.textContent = p.balance);
-  const next = S.shop.filter(x => !x.inside_only).map(x => x.cost).filter(c => c > p.balance).sort((a, b) => a - b)[0];
-  const item = S.shop.find(x => x.cost === next);
-  $("#goalOf").textContent = next ? ` / ${next}` : "";
-  $("#prog").style.width = next ? Math.min(100, p.balance / next * 100) + "%" : "100%";
-  $("#goalText").textContent = (next ? `До награды «${item.title}» осталось ${next - p.balance}. ` : "Хватает на любую награду из раздела «Профиль». ")
-    + (p.pending ? `На проверке еще ${p.pending}.` : "Баллы даются за вклад в клуб, а не за присутствие.");
-}
+function setPoints(p) { S.points = p; }
 async function refreshPoints() { const d = await api("/api/points"); S.rules = d.rules; S.shop = d.shop; S.invite = d.invite_link; S.claims = d.claims;
-  setPoints({balance: d.balance, pending: d.pending}); renderTasks(); renderShop(); }
+  setPoints({balance: d.balance, pending: d.pending}); renderTasks(); }
 
 const HINTS = {insight: "Напишите в чате клуба с хештегом #инсайт или отправьте здесь", story: "Выложите сторис о клубе и напишите в чат с хештегом #делюсь", result: "Чего достигли благодаря клубу: напишите в чат с хештегом #замечаю", invite: "Баллы придут, когда друг оплатит участие: 50% от его первой оплаты"};
 const hintOf = k => HINTS[k.code] || k.hint;
 function renderTasks() {
   const pendingCodes = new Set((S.claims || []).filter(c => c.status === "pending").map(c => c.rule_code));
   const rules = S.rules.filter(r => r.code !== "coffee");
-  renderNorm();
+  renderLevels();
   if (!$("#tasks")) return;
   $("#tasks").innerHTML = rules.map(k => `<div class="task${pendingCodes.has(k.code) ? " done" : ""}"><div class="t"><b>${esc(k.title)} <span class="plus">+${k.points}</span></b><span>${esc(hintOf(k))}</span></div>
     <button class="btn sm" data-task="${esc(k.code)}">${pendingCodes.has(k.code) ? "Еще раз" : "Сделать"}</button></div>`).join("");
@@ -137,38 +129,30 @@ function renderTasks() {
 }
 function taskSheet(k, ref) {
   if (k.kind === "link") {
-    openSheet(`<h3>${esc(k.title)}</h3><p class="sub">Ваша личная ссылка. Когда друг оплатит участие, баллы придут на подтверждение сами.</p>
+    openSheet(`<h3>${esc(k.title)}</h3><p class="sub">Ваша личная ссылка. Отправьте ее другу: когда он оплатит участие, это засчитается вам как шаг к статусу Амбассадора.</p>
       <div class="msg">${esc(S.invite)}</div><button class="btn" id="cp">Скопировать ссылку</button>`,
       s => s.querySelector("#cp").onclick = () => { copy(S.invite); toast("Ссылка скопирована"); closeSheet(); });
     return;
   }
-  openSheet(`<h3>${esc(k.title)}</h3><p class="sub">${esc(k.hint)}. После проверки командой клуба на балансе появится +${k.points}.</p>
+  openSheet(`<h3>${esc(k.title)}</h3><p class="sub">${esc(k.hint)}. Команда клуба проверит и подтвердит.</p>
     ${k.kind === "file" ? '<label class="f" for="tf">СКРИНШОТ<input type="file" id="tf" accept="image/*"></label>' : ""}
     <label class="f" for="tx">${k.kind === "file" ? "КОММЕНТАРИЙ" : "ВАШ ТЕКСТ"}<textarea id="tx" rows="4"></textarea></label>
     <button class="btn" id="snd">Отправить на подтверждение</button>`, s => s.querySelector("#snd").onclick = async () => {
       const fd = new FormData(); fd.append("rule_code", k.code); fd.append("text", s.querySelector("#tx").value); if (ref) fd.append("ref", ref);
       const f = s.querySelector("#tf"); if (f && f.files[0]) fd.append("file", f.files[0]);
       if (k.kind === "file" && !(f && f.files[0])) { toast("Приложите скриншот"); return; }
-      try { s.querySelector("#snd").disabled = true; await api("/api/claims", {body: fd}); closeSheet(); toast(`+${k.points} ждут подтверждения`); haptic("medium"); refreshPoints(); }
+      try { s.querySelector("#snd").disabled = true; await api("/api/claims", {body: fd}); closeSheet(); toast("Отправлено на подтверждение"); haptic("medium"); refreshPoints(); }
       catch (e) { s.querySelector("#snd").disabled = false; fail(e); }
     });
 }
-function renderShop() {
-  const inside = S.me.level === "inside";
-  if (!S.shop.length) { $("#shop").innerHTML = '<p class="empty-line">Подарки скоро появятся. Копите баллы.</p>'; return; }
-  $("#shop").innerHTML = S.shop.map(s => `<div class="item" style="cursor:default">${s.img_url ? `<img class="gimg" src="${esc(s.img_url)}" alt="">` : `<div class="ic">${ICONS[s.icon] || ICONS.gift}</div>`}
-    <div class="t"><b>${esc(s.title)}</b><span>${esc(s.hint)}</span></div>
-    <div class="end" style="flex-direction:column;align-items:flex-end;gap:6px"><span class="plus">${s.cost}</span>
-    ${s.inside_only && !inside ? `<span class="lock">${lockSVG}Inside</span>` : `<button class="btn sm" data-buy="${esc(s.code)}" ${S.points.balance < s.cost ? "disabled" : ""}>${S.points.balance < s.cost ? "Копим" : "Обменять"}</button>`}</div></div>`).join("");
-  $$("[data-buy]").forEach(b => b.onclick = async () => { try { await api("/api/shop/" + b.dataset.buy, {method: "POST"}); toast("Заявка отправлена, менеджер напишет вам"); refreshPoints(); } catch (e) { fail(e); } });
-}
+function renderShop() {}
 
 /* ---------- эфиры ---------- */
 async function loadEvents() { S.events = await api("/api/events"); renderEvents(); renderHero(); }
 function evRow(e) { const w = when(e.starts_at);
   return `<button class="item" data-ev="${e.id}"><div class="date"><b>${w.d}</b><span>${w.m}</span></div>
     <div class="t"><b>${esc(e.title)}</b><span>${w.wd}, ${w.t} · ${esc(e.rubric || "Эфир")} · ${esc(e.place)}</span></div>
-    <div class="end">${e.locked ? `<span class="lock">${lockSVG}Inside</span>` : e.going ? '<span class="going">Иду</span>' : ""}</div></button>`; }
+    <div class="end">${e.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : e.going ? '<span class="going">Иду</span>' : ""}</div></button>`; }
 function renderEvents() { renderFeed(); }
 function feedItems() {
   const own = (S.events ? S.events.soon : []).map(e => ({k: String(e.starts_at).slice(0, 10), html: evRow(e), ev: e}));
@@ -228,14 +212,14 @@ function renderHero() {
   const w = when(e.starts_at);
   $("#heroBox").innerHTML = `<div class="hero"><span class="k">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t} МСК</span><h3>${esc(e.title)}</h3>
     <p>${esc([e.rubric, e.speaker, e.place].filter(Boolean).join(" · "))}</p>
-    <div class="btns"><button class="btn sm" id="heroGo">${e.locked ? "Только Inside" : e.going ? "Вы идете" : "Буду"}</button><button class="btn sm ghost" data-tab="events">Все эфиры</button></div></div>`;
+    <div class="btns"><button class="btn sm" id="heroGo">${e.locked ? "Только для Амбассадоров" : e.going ? "Вы идете" : "Буду"}</button><button class="btn sm ghost" data-tab="events">Все эфиры</button></div></div>`;
   $("#heroGo").onclick = () => eventSheet(e);
 }
 function eventSheet(e) { const w = when(e.starts_at);
   openSheet(`<p class="sub">${w.wd}, ${w.d} ${w.m} · ${w.t} МСК · ${esc(e.place)}</p><h3>${esc(e.title)}</h3>
-    <div class="tags">${e.rubric ? `<span class="tag">${esc(e.rubric)}</span>` : ""}${e.speaker ? `<span class="tag">${esc(e.speaker)}</span>` : ""}${e.inside_only ? `<span class="lock">${lockSVG}Inside-level</span>` : ""}</div>
+    <div class="tags">${e.rubric ? `<span class="tag">${esc(e.rubric)}</span>` : ""}${e.speaker ? `<span class="tag">${esc(e.speaker)}</span>` : ""}${e.inside_only ? `<span class="lock">${lockSVG}Амбассадор-level</span>` : ""}</div>
     ${e.description ? `<p style="margin:0">${esc(e.description)}</p>` : ""}
-    ${e.locked ? '<p class="sub">Закрытое событие для участников Inside-level. Условия перехода в разделе «Профиль».</p>'
+    ${e.locked ? '<p class="sub">Закрытое событие для Амбассадоров. Как им стать, написано в разделе «Профиль».</p>'
       : `<p class="sub">${e.going ? "Вы записаны. Бот напомнит за день и за час." : "Отметьтесь, и бот пришлет ссылку и напомнит о начале. После эфира оставьте инсайт: он засчитает участие и даст баллы."}</p>
         ${e.going && e.join_url ? `<a class="btn" href="${esc(e.join_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Подключиться</a>` : ""}
         <button class="btn ${e.going ? "ghost" : ""}" id="eg">${e.going ? "Не смогу прийти" : "Буду"}</button>
@@ -261,7 +245,7 @@ function guestSheet(e) {
 function recSheet(r) { const w = when(r.starts_at);
   const ideas = r.summary || [], ts = r.timecodes || [];
   openSheet(`<p class="sub">${esc(r.speaker)} · ${w.d} ${w.m}</p><h3>${esc(r.title)}</h3>
-    ${r.locked ? '<p class="sub">Запись доступна участникам Inside-level.</p>' : `
+    ${r.locked ? '<p class="sub">Запись доступна Амбассадорам.</p>' : `
     <div class="btns">${r.recording_url ? `<a class="btn sm" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}
       ${r.podcast_url ? `<a class="btn sm ghost" href="${esc(r.podcast_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Слушать подкастом</a>` : ""}</div>
     ${ideas.length ? `<div><p class="sub" style="margin-bottom:6px">Главное из эфира</p><ul>${ideas.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>` : ""}
@@ -299,14 +283,14 @@ $$("[data-lt]").forEach(c => c.onclick = () => { $$("[data-lt]").forEach(x => x.
 $("#libSearch").oninput = () => { clearTimeout(libTimer); libTimer = setTimeout(loadLib, 300); };
 const libItem = x => `<button class="item" data-lib="${x.id}"><div class="ic">${ICONS[x.type] || ICONS.note}</div>
   <div class="t"><b>${esc(x.title)}</b><span>${esc([TYPE[x.type], x.author, x.meta].filter(Boolean).join(" · "))}</span></div>
-  <div class="end">${x.locked ? `<span class="lock">${lockSVG}Inside</span>` : ""}</div></button>`;
+  <div class="end">${x.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
 function bindLib(root, items) { root.querySelectorAll("[data-lib]").forEach(b => b.onclick = () => libSheet(items.find(x => x.id == b.dataset.lib))); }
 async function loadLib() {
   try { const items = await api(`/api/library?type=${libType}&q=${encodeURIComponent($("#libSearch").value)}`);
     const q = $("#libSearch").value.trim().toLowerCase();
     const recs = (S.events && (libType === "all" || libType === "rec")) ? S.events.records.filter(r => !items.some(x => x.event_id == r.id) && (!q || (r.title + " " + r.speaker).toLowerCase().includes(q))) : [];
     const recRow = r => `<button class="item" data-rec="${r.id}"><div class="ic">${ICONS.rec}</div>
-      <div class="t"><b>${esc(r.title)}</b><span>${esc(["Запись эфира", r.speaker].filter(Boolean).join(" · "))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Inside</span>` : ""}</div></button>`;
+      <div class="t"><b>${esc(r.title)}</b><span>${esc(["Запись эфира", r.speaker].filter(Boolean).join(" · "))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
     $("#libList").innerHTML = (recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">Здесь пока пусто. Материалы появятся после первых эфиров.</p>';
     $$("#libList [data-rec]").forEach(b => b.onclick = () => recSheet(recs.find(r => r.id == b.dataset.rec)));
     bindLib($("#libList"), items); } catch (e) { fail(e); }
@@ -315,7 +299,7 @@ async function loadHomeLib() { const items = (await api("/api/library")).slice(0
   $("#homeLib").innerHTML = items.length ? items.map(libItem).join("") : '<p class="empty-line">Первые материалы появятся после эфиров клуба.</p>'; bindLib($("#homeLib"), items); }
 function libSheet(x) {
   openSheet(`<p class="sub">${esc([TYPE[x.type], x.author, x.meta].filter(Boolean).join(" · "))}</p><h3>${esc(x.title)}</h3>
-    ${x.locked ? '<p class="sub">Материал открыт участникам Inside-level.</p>'
+    ${x.locked ? '<p class="sub">Материал открыт Амбассадорам.</p>'
       : `${x.body ? `<div style="white-space:pre-wrap;font-size:15px">${esc(x.body)}</div>` : ""}
          ${x.url ? `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Открыть</a>` : ""}`}`);
 }
@@ -332,9 +316,7 @@ function renderOffers() {
   const all = S.offers || [], mine = all.filter(o => o.mine), rest = all.filter(o => !o.mine && o.status === "active");
   const sl = S.slots || {free: 0, invited: 0};
   $("#evOff").innerHTML = `<p class="sub">Участники клуба предлагают свои услуги и продукты по специальной цене или в обмен. Выберите предложение и отправьте заявку: автор получит ее в Telegram.</p>
-    <div class="panel"><div class="row2"><span>Ваши места на витрине</span><b>${sl.team ? "без лимита" : sl.free}</b></div>
-      <p class="sub">Один приглашенный в клуб и оплативший участник дает месяц размещения одного вашего предложения. Два приглашенных дают два места.${sl.team ? "" : ` Приглашено: ${sl.invited}.`}${sl.year ? " На годовом тарифе у вас еще одно постоянное место без приглашений." : ""}</p>
-      <button class="btn" id="offNew">${sl.free > 0 ? "Опубликовать свое предложение" : "Получить место: пригласить друга"}</button></div>
+    <button class="btn" id="offNew">${sl.free > 0 ? "Опубликовать свое предложение" : "Получить место: пригласить друга"}</button>
     ${mine.length ? `<h2 class="sec">Мои предложения</h2><div class="list">${mine.map(offerRow).join("")}</div>` : ""}
     <h2 class="sec">Предложения клуба</h2>
     <div class="list">${rest.length ? rest.map(offerRow).join("") : '<p class="empty-line">Первые предложения появятся здесь после проверки командой.</p>'}</div>`;
@@ -395,7 +377,7 @@ const cardHTML = (p, top) => `<article class="card${top ? "" : " back"}" data-id
   ${top ? '<span class="stamp yes">Знакомимся</span><span class="stamp no">Дальше</span>' : ""}</div>
   <div class="body">${parseTags(p.tags).length ? `<div class="tags">${parseTags(p.tags).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
    <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek)}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give)}</p></div>
-   <div class="tags">${p.level === "inside" ? '<span class="tag">inside</span>' : ""}${p.year ? '<span class="tag">партнер</span>' : ""}${p.offline ? '<span class="tag">офлайн</span>' : ""}</div></div></article>`;
+   <div class="tags"><span class="tag">${p.level === "inside" ? "амбассадор" : "резидент"}</span>${p.year ? '<span class="tag">партнер</span>' : ""}${p.offline ? '<span class="tag">офлайн</span>' : ""}</div></div></article>`;
 function renderDeck() {
   const d = $("#deck");
   if (!S.feed.length) { d.innerHTML = `<div class="empty"><h3>Вы посмотрели всех</h3><p>Новые участники появятся после вступления в клуб, бот пришлет уведомление.</p></div>`; return; }
@@ -476,7 +458,7 @@ function recAsk(c) {
     <div class="btns"><button class="btn" id="raYes">Да, списались</button><button class="btn ghost" id="raNo">Пока нет</button></div>`, s => {
     s.querySelector("#raNo").onclick = async () => { try { await api("/api/recs/refresh", {json: {met: false}}); closeSheet(); toast("Хорошо, ждем вашего сообщения"); } catch (e) { fail(e); } };
     s.querySelector("#raYes").onclick = async () => { try { const r = await api("/api/recs/refresh", {json: {met: true}}); 
-      s.innerHTML = `<h3>Спасибо!</h3><p class="sub">Оставьте короткий отзыв о знакомстве в чате клуба с хештегом <b>${esc(r.tag || "#знакомство")}</b>: после подтверждения командой придут баллы.</p>
+      s.innerHTML = `<h3>Спасибо!</h3><p class="sub">Оставьте короткий отзыв о знакомстве в чате клуба с хештегом <b>${esc(r.tag || "#знакомство")}</b>. Нам важно знать, что получилось.</p>
         <button class="btn" id="raDone">Хорошо</button>`; s.querySelector("#raDone").onclick = () => { closeSheet(); loadCoffee(); }; } catch (e) { fail(e); } };
   });
 }
@@ -495,13 +477,8 @@ function bindPreview() {
   ["pName", "pCity"].forEach(id => { const el = $("#" + id); if (el && !el.dataset.pv) { el.dataset.pv = 1; el.addEventListener("input", previewCard); } });
 }
 function previewCard() {
-  const el = $("#cardPreview"); if (!el || !S.me) return;
   const v = id => ($("#" + id).value || "").trim();
   PV.forEach(x => { const n = ($("#" + x[0]).value || "").length, c = $("#" + x[1]); if (c) { c.textContent = n + " / " + x[2]; c.classList.toggle("warn", n > x[2] - 15); } });
-  const p = {tg_id: S.me.tg_id, first_name: v("pName"), last_name: S.me.last_name || "", sphere: v("pSphere"), city: v("pCity"), project: v("pProject"), seek: v("pSeek") || "Пока не заполнено", give: v("pGive") || "Пока не заполнено", level: S.me.level, year: S.year, photo: S.me.photo};
-  el.innerHTML = cardHTML(p, false);
-  const miss = [["pSphere", "сферу"], ["pCity", "город"], ["pSeek", "«ищу»"], ["pGive", "«могу помочь»"]].filter(x => !v(x[0])).map(x => x[1]);
-  const st = $("#profState"); if (st) st.textContent = miss.length ? "Карточка пока скрыта от других. Добавьте: " + miss.join(", ") + "." : "Карточка готова: вас видят в «Найди своих».";
 }
 function uploadPhoto(f) {
   if (!f) return;
@@ -518,13 +495,12 @@ function uploadPhoto(f) {
 function fillProfile() {
   const m = S.me;
   renderYear();
-  $("#lvTag").textContent = (m.level === "inside" ? "Inside" : "Club") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
+  $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
   $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}">${m.photo ? "" : esc(initials(m))}</div>
-    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Inside-level" : "Club-level"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div></div>
-    <div class="stats"><div class="stat"><b class="ptsv">${S.points ? S.points.balance : 0}</b><span>баллов</span></div><div class="stat"><b>${S.stats.matches}</b><span>знакомств</span></div><div class="stat"><b>${S.stats.coffee}</b><span>встреч</span></div></div>
+    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div></div>
     <div class="photo-nudge"><p class="sub">${m.photo ? "Фото на месте. Его видят люди, когда вы появляетесь у них в знакомствах." : "Добавьте фото: людям легче знакомиться с теми, кого они видят. Это займет минуту."}</p><label class="btn ghost sm" style="display:inline-block;cursor:pointer">${m.photo ? "Сменить фото" : "Добавить фото"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>`;
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
-  renderNorm();
+  renderLevels();
   renderWants();
   $("#pName").value = m.first_name || ""; $("#pSphere").value = m.sphere || ""; $("#pProject").value = m.project || ""; $("#pCity").value = m.city || "";
   $("#pSeek").value = m.seek || ""; $("#pGive").value = m.give || ""; bindPreview(); previewCard();
@@ -557,19 +533,12 @@ async function renderWants() {
     try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, data, {updated_at: r.updated_at}); Object.assign(S.me, {seek: data.seek, give: data.give}); toast("Запросы сохранены"); haptic(); renderWants(); refreshHome(); } catch (e) { fail(e); }
   };
 }
-function renderNorm() {
-  const el = $("#insideCard"), n = S.norm, m = S.me; if (!el) return;
-  if (!n) { el.hidden = true; return; }
-  el.hidden = false;
-  const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `Выложите сторис и напишите в чат клуба с хештегом #делюсь. Сейчас подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "Напишите в чат клуба с хештегом #инсайт"]];
-  const left = items.filter(i => !n[i[0]]).length;
-  el.innerHTML = `<span class="eyebrow">Edinenie Inside</span>
-    <h3>${n.done ? "Вы в Inside" : "Норма месяца"}</h3>
-    <p class="sub">${n.done ? `Норма выполнена. Inside действует еще ${n.days_left} дн. Чтобы удержать его, повторите все пункты в следующие ${n.days} дней.` : `Inside открывается за вклад: закройте три пункта за ${n.days} дней${left < 3 ? `, осталось ${left}` : ""}. Баллы за них приходят отдельно и тратятся на награды.`}</p>
-    <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>
-    <button class="btn" id="invBtn">Пригласить друга</button><button class="btn ghost" id="toInside" style="margin-top:8px">Что открывает Inside</button>`;
-  $("#toInside").onclick = levelsSheet;
-  $("#invBtn").onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
+function renderLevels() {
+  const el = $("#levelsCard"), amb = S.me && S.me.level === "inside"; if (!el) return;
+  el.innerHTML = `<span class="eyebrow">Ваш статус</span><h3>${amb ? "Амбассадор" : "Резидент"}</h3>
+    <p class="sub">${amb ? "Вы проявляетесь в клубе и приводите друзей. Вам открыты закрытые эфиры и материалы." : "Станьте Амбассадором: приводите друзей и делитесь клубом. Тогда откроются закрытые эфиры и материалы."}</p>
+    <button class="btn ghost" id="toLevels">Как стать Амбассадором</button>`;
+  $("#toLevels").onclick = levelsSheet;
 }
 
 /* ---------- бонусы годового тарифа ---------- */
@@ -580,8 +549,8 @@ function renderYear() {
     <li><b>Место на витрине без приглашений</b><span>Одно ваше предложение размещено весь год, пока вы на годовом тарифе.</span></li>
     <li><b>Гостевые пропуски на эфиры</b><span>${S.year ? `Можно позвать друга на эфир бесплатно. Осталось ${left} из ${tot} за год.` : `${tot} в год: позовите друга на эфир бесплатно.`}</span></li></ul>`;
   el.innerHTML = S.year
-    ? `<span class="eyebrow">Партнер клуба</span><h3>Ваши бонусы годового тарифа</h3>${list}<p class="sub">Эти бонусы не получить за баллы: они есть только на годовом тарифе.</p>`
-    : `<span class="eyebrow">Годовой тариф</span><h3>Бонусы, которых нет за баллы</h3>${list}<p class="sub">Годовой тариф не дает Inside, Inside открывается за вклад в клуб. Но дает эти бонусы.</p><button class="btn ghost" id="toYear">Узнать про годовой тариф</button>`;
+    ? `<span class="eyebrow">Партнер клуба</span><h3>Ваши бонусы годового тарифа</h3>${list}<p class="sub">Эти бонусы есть только на годовом тарифе.</p>`
+    : `<span class="eyebrow">Годовой тариф</span><h3>Бонусы годового тарифа</h3>${list}<p class="sub">Статус Амбассадора открывается за вклад в клуб, а не за оплату. Годовой тариф добавляет эти бонусы.</p><button class="btn ghost" id="toYear">Узнать про годовой тариф</button>`;
   const b = $("#toYear"); if (b) b.onclick = () => { if (TG && TG.openLink) TG.openLink(S.join); else window.open(S.join, "_blank"); };
 }
 
@@ -688,7 +657,7 @@ async function boot() {
     $("#boot").hidden = true;
     if (d.me.status !== "active") {
       $("#gate").hidden = false;
-      if (d.me.status === "expired") { $("#gateTitle").textContent = "Участие закончилось"; $("#gateText").textContent = "Продлите участие, и все ваши знакомства, баллы и материалы вернутся."; $("#gateJoin").textContent = "Продлить участие"; }
+      if (d.me.status === "expired") { $("#gateTitle").textContent = "Участие закончилось"; $("#gateText").textContent = "Продлите участие, и все ваши знакомства и материалы вернутся."; $("#gateJoin").textContent = "Продлить участие"; }
       return;
     }
     if (!d.me.consent_at || !d.me.profile_done) { showOnboard(); return; }
