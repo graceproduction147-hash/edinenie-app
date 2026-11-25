@@ -3,7 +3,7 @@
 import io
 import random
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 try:
     from . import card, quotes
@@ -47,16 +47,24 @@ def _planet(img, cx, cy, R, light, dark, rim):
     img.alpha_composite(layer, (int(cx - c), int(cy - c)))
 
 
-def _bg(seed, W, H):
+def _bg(seed, W, H, muted=False):
     rnd = random.Random(seed)
-    base, g1, g2, (pl, pd), gold = THEMES[seed % len(THEMES)]
+    if muted:   # благородная гамма приложения: приглушённые цвета, как у кружков-планет
+        base, g1, (pl, pd), gold = ORB_THEMES[seed % len(ORB_THEMES)]
+        g2 = ORB_THEMES[(seed + 1) % len(ORB_THEMES)][1]
+        g1 = tuple(min(255, int(c * 1.15)) for c in g1)
+        pl2, pd2, rim2 = (150, 158, 196), (18, 22, 52), (176, 184, 214)
+    else:
+        base, g1, g2, (pl, pd), gold = THEMES[seed % len(THEMES)]
+        pl2, pd2, rim2 = (170, 190, 255), (18, 22, 70), (190, 205, 255)
     img = Image.new("RGBA", (W, H), base + (255,))
     k = H / 1350 * 1.0
-    _glow(img, W * 0.88, H * 0.10, int(560 * k), g1, 235)
-    _glow(img, W * 0.04, H * 0.85, int(520 * k), g2, 215)
-    _glow(img, W * 0.55, H * 1.05, int(460 * k), g1, 120)
+    ga = .62 if muted else 1.0
+    _glow(img, W * 0.88, H * 0.10, int(560 * k), g1, int(235 * ga))
+    _glow(img, W * 0.04, H * 0.85, int(520 * k), g2, int(215 * ga))
+    _glow(img, W * 0.55, H * 1.05, int(460 * k), g1, int(120 * ga))
     _planet(img, W * 0.90, H * 0.14, int(300 * k * 1.1), pl, pd, gold)
-    _planet(img, W * 0.03, H * 0.86, int(190 * k * 1.1), (170, 190, 255), (18, 22, 70), (190, 205, 255))
+    _planet(img, W * 0.03, H * 0.86, int(190 * k * 1.1), pl2, pd2, rim2)
     ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
     for _ in range(4):
@@ -70,7 +78,7 @@ def _bg(seed, W, H):
         if 200 < x < W - 200 and H * .28 < y < H * .8 and rnd.random() < .85:
             continue
         r = rnd.choice([1, 1, 2, 2, 3, 4])
-        dd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(90, 230)))
+        dd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(50, 130) if muted else rnd.randint(90, 230)))
     img.alpha_composite(dust.filter(ImageFilter.GaussianBlur(0.7)))
     # лёгкая тёмная подложка снизу для читаемости текста
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -82,9 +90,9 @@ def _bg(seed, W, H):
     return img
 
 
-def render(title, speaker="", label="ЭФИР", seed=0):
+def render(title, speaker="", label="ЭФИР", seed=0, muted=False, footer=True):
     W, H = 1280, 720
-    img = _bg(seed, W, H)
+    img = _bg(seed, W, H, muted)
     quotes._logo(img, W // 2, 62, 0.5)
     dr = ImageDraw.Draw(img, "RGBA")
     size = 112
@@ -113,7 +121,8 @@ def render(title, speaker="", label="ЭФИР", seed=0):
         y += lh
     if speaker:
         card.text_c(dr, W // 2, y - lh / 2 + 66, speaker.upper(), "Manrope-Medium.ttf", 34, ACC, ls=7, max_w=1100)
-    card.text_c(dr, W // 2, H - 52, "ЕДИНЕНИЕ", "Forum.ttf", 28, INK, ls=8)
+    if footer:
+        card.text_c(dr, W // 2, H - 52, "ЕДИНЕНИЕ", "Forum.ttf", 28, INK, ls=8)
     out = io.BytesIO()
     img.convert("RGB").save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()
@@ -173,109 +182,3 @@ if __name__ == "__main__":
     open("/tmp/cover_b.jpg", "wb").write(render("Как собрать событие с нуля", "Влад Митьковский", seed=2))
     open("/tmp/cover_c.jpg", "wb").write(render("Большая игра", "Влад Митьковский", seed=3))
 
-
-# ---------------- сдержанные карточки для сообщений бота ----------------
-_MSG_THEMES = [
-    ((10, 12, 24), (44, 52, 96)),     # полночь
-    ((13, 13, 17), (62, 58, 70)),     # графит
-    ((18, 11, 17), (84, 44, 56)),     # бордо
-    ((8, 17, 22), (34, 74, 84)),      # глубокая бирюза
-]
-_GOLD_STOPS = [(0, (250, 236, 206)), (.45, (226, 184, 124)), (.75, (246, 222, 172)), (1, (196, 150, 92))]
-
-
-def _gold_img(size):
-    w, h = size
-    g = Image.linear_gradient("L").resize((w, h), Image.BILINEAR)   # сверху вниз: 0..255
-    chans = []
-    for i in range(3):
-        lut = []
-        for v in range(256):
-            t = v / 255
-            for (t0, c0), (t1, c1) in zip(_GOLD_STOPS, _GOLD_STOPS[1:]):
-                if t <= t1:
-                    k = (t - t0) / (t1 - t0) if t1 > t0 else 0
-                    lut.append(int(c0[i] + (c1[i] - c0[i]) * max(0, min(1, k))))
-                    break
-            else:
-                lut.append(_GOLD_STOPS[-1][1][i])
-        chans.append(g.point(lut))
-    return Image.merge("RGB", chans)
-
-
-def msg_card(title, label="", seed=0):
-    """Сдержанная карточка 1280×720 для сообщений бота: тёмный фон, знак клуба золотом, тонкая рамка, подпись и заголовок.
-    Слово «Единение» на картинке не повторяется: надписи клуба нет, остаётся только знак."""
-    try:
-        from . import logo_asset
-    except ImportError:
-        import logo_asset
-    W, H = 1280, 720
-    base, glow = _MSG_THEMES[seed % len(_MSG_THEMES)]
-    img = Image.new("RGB", (W, H), base)
-    # мягкое свечение за знаком
-    gm = Image.radial_gradient("L").point(lambda v: int(255 - v)).resize((int(W * 1.1), int(H * 1.5)), Image.BILINEAR)
-    gm = gm.point(lambda v: int((v / 255) ** 2.2 * 215))
-    gl = Image.new("L", (W, H), 0)
-    gl.paste(gm, (int(W / 2 - gm.width / 2), int(H * .36 - gm.height / 2)))
-    img.paste(Image.new("RGB", (W, H), glow), (0, 0), gl)
-    # виньетка по краям
-    vm = Image.radial_gradient("L").resize((int(W * 1.5), int(H * 1.5)), Image.BILINEAR).point(lambda v: int((v / 255) ** 2.4 * 140))
-    vl = Image.new("L", (W, H), 0)
-    vl.paste(vm, (int(W / 2 - vm.width / 2), int(H / 2 - vm.height / 2)))
-    img.paste(Image.new("RGB", (W, H), (0, 0, 0)), (0, 0), vl)
-    img = img.convert("RGBA")
-    ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    od = ImageDraw.Draw(ov)
-    gold = (226, 184, 132)
-    # едва заметные большие кольца
-    for cx, cy, r in ((W * .5, H * 1.05, H * .95), (W * .5, H * 1.05, H * 1.25)):
-        od.ellipse([cx - r, cy - r, cx + r, cy + r], outline=gold + (22,), width=2)
-    # двойная тонкая рамка
-    od.rectangle([34, 34, W - 35, H - 35], outline=gold + (120,), width=2)
-    od.rectangle([44, 44, W - 45, H - 45], outline=gold + (42,), width=1)
-    # ромбики по центру верхней и нижней линии рамки
-    for cy in (34, H - 35):
-        dd = 7
-        od.polygon([(W / 2, cy - dd), (W / 2 + dd, cy), (W / 2, cy + dd), (W / 2 - dd, cy)], fill=(14, 14, 24, 255), outline=gold + (230,))
-    img.alpha_composite(ov)
-    # знак клуба
-    sun = logo_asset.sun_mask()
-    S = 150
-    sun = sun.resize((S, int(S * sun.height / sun.width)), Image.LANCZOS)
-    pos = ((W - sun.width) // 2, 92)
-    big = Image.new("L", (W, H), 0); big.paste(sun, pos)
-    halo = big.filter(ImageFilter.GaussianBlur(14)).point(lambda v: int(v * .5))
-    img.paste(Image.new("RGB", (W, H), (150, 104, 70)), (0, 0), halo)
-    img.paste(_gold_img(sun.size), pos, sun)
-    dr = ImageDraw.Draw(img, "RGBA")
-    # заголовок: до двух строк, строки выровнены по длине
-    size = 88
-    while True:
-        f = card.font("Forum.ttf", size)
-        lines = quotes._wrap(title, f, 980)
-        if len(lines) <= 2 or size <= 52:
-            break
-        size -= 4
-    n, w = len(lines), 980
-    while n > 1 and w > 300:
-        w -= 20
-        t = quotes._wrap(title, f, w)
-        if len(t) > n:
-            break
-        lines = t
-    lh = int(size * 1.18)
-    top_block = 304
-    # подпись с тонкими линиями по бокам
-    if label:
-        lw = card.text_c(dr, W // 2, top_block, label, "Manrope-Medium.ttf", 21, ACC, ls=8, max_w=640)
-        for sgn in (-1, 1):
-            x0 = W // 2 + sgn * (lw / 2 + 26)
-            dr.line([(x0, top_block), (x0 + sgn * 70, top_block)], fill=ACC + (150,), width=1)
-    mid = top_block + (118 if len(lines) == 1 else 142)
-    y0 = mid - (len(lines) - 1) * lh / 2
-    for i, ln in enumerate(lines):
-        card.text_c(dr, W // 2, y0 + i * lh, ln, "Forum.ttf", size, INK, ls=1.2)
-    out = io.BytesIO()
-    img.convert("RGB").save(out, "JPEG", quality=92, optimize=True)
-    return out.getvalue()
