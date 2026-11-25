@@ -258,7 +258,7 @@ AUTO_PICS = {
     "offer_live": ("ВИТРИНА", "Предложение опубликовано"),
     "birthday_wish": ("С ДНЕМ РОЖДЕНИЯ", "Единение с вами"),
 }
-AUTO_VER = 2
+AUTO_VER = 3
 
 
 def auto_on_pics(con):
@@ -274,7 +274,7 @@ def auto_pic_file(key):
         label, title = AUTO_PICS[key]
         BOTPICS.mkdir(parents=True, exist_ok=True)
         seed = list(AUTO_PICS).index(key)
-        f.write_bytes(cover.msg_card(title, label, seed))
+        f.write_bytes(cover.render(title, "", label, seed, muted=True, footer=False))
     return f
 
 
