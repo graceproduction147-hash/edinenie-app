@@ -924,13 +924,34 @@ function renderRitual() {
 
 $("#anketaToggle").onclick = () => { const b = $("#anketaBody"), o = b.hidden; b.hidden = !o; $("#anketaToggle").setAttribute("aria-expanded", String(o)); };
 /* ---------- аватарка из Telegram ---------- */
-function tgAvatar() {
-  // Если у участника нет фото, просим сервер подтянуть аватарку из Telegram (адрес, который дал Telegram, или публичная страница).
+async function tgAvatar() {
+  // Нет фото: сначала пробуем забрать аватарку из Telegram прямо в приложении (это работает и когда сервер не достает до Telegram),
+  // не вышло, просим сервер.
   try {
     const u = TG && TG.initDataUnsafe && TG.initDataUnsafe.user, m = S.me;
     if (!m || m.photo || sessionStorage.getItem("ava")) return;
     sessionStorage.setItem("ava", "1");
-    api("/api/me/photo-tg", {json: {url: (u && u.photo_url) || ""}}).then(r => { if (r && r.photo) { S.me.photo = r.photo; fillProfile(); refreshHome(); } }).catch(() => {});
+    const url = (u && u.photo_url) || "";
+    const save = async blob => {
+      const bmp = await new Promise((ok, no) => { const im = new Image(), o = URL.createObjectURL(blob); im.onload = () => ok(im); im.onerror = no; im.src = o; });
+      const side = 640, k = Math.min(1, side / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      const r = await api("/api/me/photo", {method: "POST", json: {image: c.toDataURL("image/jpeg", 0.85)}});
+      S.me.photo = r.photo; fillProfile(); refreshHome(); return true;
+    };
+    if (url) {
+      try { if (await save(await (await fetch(url, {mode: "cors"})).blob())) return; } catch (e) {}
+      try {
+        const done = await new Promise(ok => { const img = new Image(); img.crossOrigin = "anonymous";
+          img.onload = async () => { try { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0);
+            c.toBlob(async b => { try { ok(b ? await save(b) : false); } catch (e) { ok(false); } }, "image/jpeg", 0.9); } catch (e) { ok(false); } };
+          img.onerror = () => ok(false); img.src = url; });
+        if (done) return;
+      } catch (e) {}
+    }
+    const r = await api("/api/me/photo-tg", {json: {url}});
+    if (r && r.photo) { S.me.photo = r.photo; fillProfile(); refreshHome(); }
   } catch (e) {}
 }
 
