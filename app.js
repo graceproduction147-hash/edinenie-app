@@ -677,6 +677,23 @@ function renderMonth() {
 }
 function refreshHome() { renderWeekAction(); renderMonth(); }
 
+/* ---------- послание дня ---------- */
+async function openQuote() {
+  try {
+    const q = await api("/api/quote"); track("quote");
+    openSheet(`<p class="sub">Послание дня</p><img class="qimg" src="${esc(q.url)}" alt="${esc(q.text)}" style="max-height:60vh;max-width:100%;width:auto;border-radius:18px;display:block;margin:0 auto;animation:qin .7s ease both">
+      <button class="btn" id="qSave" style="margin-top:14px">Сохранить картинку</button>`, s => {
+      s.querySelector("#qSave").onclick = () => {
+        const name = `edinenie-${q.date}.png`;
+        try { if (TG && TG.downloadFile && TG.isVersionAtLeast && TG.isVersionAtLeast("8.0")) { TG.downloadFile({url: q.url, file_name: name}); return; } } catch (e) {}
+        try { if (TG && TG.openLink) { TG.openLink(q.url); toast("Нажмите на картинку и удерживайте, чтобы сохранить"); return; } } catch (e) {}
+        window.open(q.url, "_blank");
+      };
+    });
+  } catch (e) { fail(e); }
+}
+const _qb = $("#quoteBtn"); if (_qb) _qb.onclick = openQuote;
+
 /* ---------- аватарка из Telegram ---------- */
 function tgAvatar() {
   // Если у участника нет фото, один раз пробуем взять аватарку из Telegram и сохранить как фото профиля.
