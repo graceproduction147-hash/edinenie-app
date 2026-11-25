@@ -287,3 +287,8 @@ a.link{color:var(--accent)}
 
 .photo-nudge{margin-top:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .person .ava{background-size:cover}
+
+/* главная: компактные баллы и действие недели */
+.panel.compact{padding:14px 18px;gap:8px}
+.panel.compact .sub{font-size:12px}
+.panel.focus{border-color:var(--accent)}

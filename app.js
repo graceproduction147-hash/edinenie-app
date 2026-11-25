@@ -547,7 +547,7 @@ async function renderWants() {
   $$("#wFocus .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#wFocus .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); });
   $("#wSave").onclick = async () => {
     const f = $("#wFocus .chip[aria-pressed=true]"), data = {focus: f ? f.dataset.sph : "", goal: $("#wGoal").value.trim(), seek: $("#wSeek").value.trim(), give: $("#wGive").value.trim()};
-    try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, data, {updated_at: r.updated_at}); Object.assign(S.me, {seek: data.seek, give: data.give}); toast("Запросы сохранены"); haptic(); renderWants(); } catch (e) { fail(e); }
+    try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, data, {updated_at: r.updated_at}); Object.assign(S.me, {seek: data.seek, give: data.give}); toast("Запросы сохранены"); haptic(); renderWants(); refreshHome(); } catch (e) { fail(e); }
   };
 }
 function renderNorm() {
@@ -630,11 +630,48 @@ function showOnboardOld() {
   $("#oGo").onclick = () => { location.href = "/static/anketa.html" + location.hash; };
 }
 
+/* ---------- главная: действие недели и «Ваш месяц» по трем столпам ---------- */
+// Шесть сфер анкеты сгруппированы в три столпа клуба.
+const PILLARS = [
+  {k: "env", t: "Окружение", sph: ["Знакомства", "Впечатления"], hint: "Знакомства и Random Coffee", btn: "К людям", tab: "people"},
+  {k: "game", t: "Большая игра", sph: ["Возможности", "Деньги"], hint: "Материалы про сцену, события и репутацию", btn: "В библиотеку", tab: "lib"},
+  {k: "state", t: "Состояние", sph: ["Смыслы", "Практики"], hint: "Практики и эфиры", btn: "В библиотеку", tab: "lib"}
+];
+async function loadWants() { try { S.wants = await api("/api/wants"); } catch (e) { S.wants = null; } }
+function wantsStale() {
+  const w = S.wants; if (!w) return false;
+  if (!w.focus || !w.goal) return true;
+  if (!w.updated_at) return false;
+  const u = new Date(w.updated_at), n = new Date();
+  return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
+}
+function renderWeekAction() {
+  const el = $("#weekAction"), c = S.coffee; if (!el) return;
+  let a = null;
+  if (c && c.pair && c.met == null) a = {k: "Главное на этой неделе", h: "Назначьте встречу с парой Random Coffee", p: `${fullName(c.pair)}${c.pair.sphere ? ", " + c.pair.sphere : ""}. Полчаса разговора, который может дать нужное знакомство.`, b: "Открыть пару", tab: "people", seg: "coffee"};
+  else if (S.wants && wantsStale()) a = {k: "Главное на этой неделе", h: "Выберите фокус и цель месяца", p: "Одна сфера и один-два конкретных шага. По ним мы подбираем знакомства и показываем, куда идти.", b: "Задать цель", tab: "profile"};
+  el.hidden = !a; if (!a) return;
+  el.innerHTML = `<span class="eyebrow">${a.k}</span><h3>${esc(a.h)}</h3><p class="sub">${esc(a.p)}</p><button class="btn" data-tab="${a.tab}"${a.seg ? ` data-seg="${a.seg}"` : ""}>${esc(a.b)}</button>`;
+}
+function renderMonth() {
+  const el = $("#monthCard"), w = S.wants; if (!el) return;
+  if (!w) { el.hidden = true; return; }
+  el.hidden = false;
+  const fp = PILLARS.find(p => p.sph.includes(w.focus));
+  const head = fp ? `Фокус месяца: ${fp.t}` : "Фокус месяца не выбран";
+  const goal = w.goal ? `<p class="sub">Ваша цель: ${esc(w.goal)}</p>` : `<p class="sub">Задайте один-два конкретных шага на месяц. Так проще дойти до результата.</p>`;
+  el.innerHTML = `<span class="eyebrow">Ваш месяц</span><h3>${esc(head)}</h3>${goal}
+    <div class="list">${PILLARS.map(p => `<button class="item" data-tab="${p.tab}"><div class="t"><b>${esc(p.t)}</b><span>${esc(p.hint)}</span></div><div class="end">${fp && fp.k === p.k ? '<span class="going">Фокус</span>' : ""}</div></button>`).join("")}</div>
+    <div class="btns"><button class="btn sm" data-tab="profile">${w.focus && w.goal ? "Изменить цель" : "Задать цель"}</button><a class="btn sm ghost" href="/static/monthly.html" style="text-align:center;text-decoration:none">Итоги месяца</a></div>`;
+}
+function refreshHome() { renderWeekAction(); renderMonth(); }
+
 /* ---------- запуск ---------- */
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
-  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee()]);
+  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants()]);
+  refreshHome();
   route();
 }
 async function boot() {
