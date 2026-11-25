@@ -245,10 +245,39 @@ function guestSheet(e) {
           s2 => { const c = s2.querySelector("#gsCp"); if (c) c.onclick = () => { copy(r.join_url); toast("Ссылка скопирована"); }; }); }
       catch (err) { btn.disabled = false; fail(err); } });
 }
+/* «За 60 секунд»: главное из эфира карточками, как сторис */
+const S60_BG = ["radial-gradient(circle at 85% 10%,#e8704866,transparent 55%),radial-gradient(circle at 5% 90%,#5a6ee555,transparent 55%),#10122a",
+  "radial-gradient(circle at 10% 15%,#d6608a55,transparent 55%),radial-gradient(circle at 90% 85%,#46a0e855,transparent 55%),#0f1528",
+  "radial-gradient(circle at 80% 20%,#f0964666,transparent 55%),radial-gradient(circle at 15% 85%,#3caac855,transparent 55%),#0c1828",
+  "radial-gradient(circle at 15% 10%,#b464f055,transparent 55%),radial-gradient(circle at 85% 90%,#f0786455,transparent 55%),#16102c"];
+function storyViewer(r) {
+  const ideas = r.summary || []; if (!ideas.length) return;
+  const cards = [{k: "За 60 секунд", t: r.title, s: r.speaker}].concat(ideas.map((t, i) => ({k: `${i + 1} из ${ideas.length}`, t}))), N = cards.length, DUR = 7000;
+  let i = 0, timer = null;
+  const ov = document.createElement("div"); ov.id = "s60v";
+  document.body.appendChild(ov);
+  const close = () => { clearTimeout(timer); ov.remove(); };
+  const show = n => {
+    clearTimeout(timer); i = Math.max(0, Math.min(N - 1, n)); const c = cards[i], last = i === N - 1;
+    ov.style.background = S60_BG[i % S60_BG.length];
+    ov.innerHTML = `<div class="bars">${cards.map((_, j) => `<span class="${j < i ? "done" : j === i ? "cur" : ""}"><i ${j === i && !last ? `style="animation-duration:${DUR}ms"` : ""}></i></span>`).join("")}</div>
+      <button class="qx" aria-label="Закрыть">&#10005;</button>
+      <div class="zone l"></div><div class="zone r"></div>
+      <div class="body"><span class="eyebrow">${esc(c.k)}</span><p class="${i === 0 ? "ttl" : ""}">${esc(c.t)}</p>${c.s ? `<span class="sp">${esc(c.s)}</span>` : ""}
+        ${last ? `<div class="end">${r.recording_url ? `<a class="btn solid" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}<button class="btn ghost" id="s60i">Оставить инсайт</button></div>` : ""}</div>`;
+    ov.querySelector(".qx").onclick = close;
+    ov.querySelector(".zone.l").onclick = () => show(i - 1);
+    ov.querySelector(".zone.r").onclick = () => last ? close() : show(i + 1);
+    const ib = ov.querySelector("#s60i"); if (ib) ib.onclick = () => { close(); taskSheet(S.rules.find(k => k.code === "insight"), "event:" + r.id); };
+    if (!last) timer = setTimeout(() => show(i + 1), DUR);
+  };
+  show(0); track("s60");
+}
 function recSheet(r) { const w = when(r.starts_at);
   const ideas = r.summary || [], ts = r.timecodes || [];
   openSheet(`${r.cover ? `<img class="cvr big" src="${esc(r.cover)}" alt="${esc(r.title)}">` : ""}<p class="sub">${esc(r.speaker)} · ${w.d} ${w.m}</p><h3>${esc(r.title)}</h3>
     ${r.locked ? '<p class="sub">Запись доступна Амбассадорам.</p>' : `
+    ${ideas.length ? `<button class="btn solid" id="s60">За 60 секунд · ${ideas.length} ${ideas.length === 1 ? "мысль" : ideas.length < 5 ? "мысли" : "мыслей"}</button>` : ""}
     <div class="btns">${r.recording_url ? `<a class="btn sm" id="recGo" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}
       ${r.podcast_url ? `<a class="btn sm ghost" href="${esc(r.podcast_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Слушать подкастом</a>` : ""}</div>
     ${ideas.length ? `<div><p class="sub" style="margin-bottom:6px">Главное из эфира</p><ul>${ideas.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>` : ""}
@@ -258,6 +287,7 @@ function recSheet(r) { const w = when(r.starts_at);
     s => {
       const w = s.querySelector("#recW"), setW = async on => { try { await api(`/api/events/${r.id}/watch`, {json: {on}}); r.watched = on; if (w) w.setAttribute("aria-pressed", on ? "true" : "false"); renderWeekAction(); } catch (e) { fail(e); } };
       if (w) w.onclick = () => setW(w.getAttribute("aria-pressed") !== "true");
+      const s6 = s.querySelector("#s60"); if (s6) s6.onclick = () => { closeSheet(); storyViewer(r); };
       const go = s.querySelector("#recGo"); if (go) go.addEventListener("click", () => { if (!r.watched) setW(true); });
       const b = s.querySelector("#ins"); if (b) b.onclick = () => taskSheet(S.rules.find(k => k.code === "insight"), "event:" + r.id); });
 }
