@@ -55,9 +55,9 @@ TEXTS = {
     "card_wait": {"title": "Карточка пока недоступна", "group": "members", "max": 700, "vars": "", "hint": "Если человек просит карточку, а итоги месяца еще не заполнены.",
                   "default": "Карточка появится сразу после итогов месяца. Заполнить их можно командой /monthly."},
     # ---- участникам ----
-    "inside_on": {"title": "Inside получен", "group": "members", "max": 1000, "vars": "{days} (сколько дней действует)", "hint": "Когда участник закрыл норму месяца.",
+    "inside_on": {"title": "Статус Амбассадора получен", "group": "members", "max": 1000, "vars": "{days} (сколько дней действует)", "hint": "Когда участник закрыл норму месяца.",
                   "default": '**{name}, поздравляем, вы теперь Амбассадор Клуба!**\n\nБлагодарим вас за вклад. Вы закрыли три шага месяца, и теперь вам открыты закрытые эфиры, записи, материалы, а еще можно предложить свой эфир внутри Клуба и разместиться на витрине. Статус действует еще {days} дн.\n\nРады за ваше проявление.'},
-    "inside_off": {"title": "Inside на паузе", "group": "members", "max": 1000, "vars": "", "hint": "Когда норма месяца не закрыта.",
+    "inside_off": {"title": "Статус Амбассадора на паузе", "group": "members", "max": 1000, "vars": "", "hint": "Когда норма месяца не закрыта.",
                    "default": 'Статус Амбассадора пока на паузе: три шага месяца еще не закрыты.\n\nЧтобы вернуть его, пригласите друга, дважды расскажите о Клубе в сторис (хештег #делюсь в чате) и напишите инсайт после эфира (#инсайт). Мы будем рады вам.'},
     "points_ok": {"title": "Баллы подтверждены", "group": "members", "max": 1000, "vars": "{points}", "hint": "Когда команда подтвердила заявку на баллы.",
                   "default": 'Команда Клуба подтвердила ваше действие.\n\nБлагодарим вас за вклад и рады за ваше проявление.'},
@@ -65,7 +65,7 @@ TEXTS = {
                      "default": 'Запись эфира «{title}» готова.\n\nПосмотрите, когда будет время: в приложении у записи есть отметка «Смотрел(а)». А главную мысль напишите в чате Клуба с хештегом #инсайт: бот ее зафиксирует, а команда подтвердит.\n\nНам очень важно узнать, что откликнулось.'},
     "recap_nudge": {"title": "Напоминание про запись (через 48 часов)", "group": "members", "max": 1000, "vars": "{title}, {points}", "hint": "Только тем, кто не нажал «Смотрел».",
                     "default": 'Добрый день! Напоминаем про запись эфира «{title}»\n\nЕсли уже смотрели, напишите свой инсайт в чат Клуба с хештегом #инсайт.\n\nБудем рады услышать, что вам откликнулось.'},
-    "recap_closed": {"title": "Запись закрытого эфира, не Inside", "group": "members", "max": 1000, "vars": "{title}", "hint": "Тем, у кого нет Inside. Приходит один раз.",
+    "recap_closed": {"title": "Запись закрытого эфира, не Амбассадор", "group": "members", "max": 1000, "vars": "{title}", "hint": "Тем, у кого нет статуса Амбассадора. Приходит один раз.",
                      "default": 'Вышла запись закрытого эфира «{title}»\n\nОна доступна Амбассадорам Клуба. Амбассадором становятся за вклад: за месяц привести друга, дважды рассказать о Клубе в сторис и написать инсайт после эфира. Подробности в разделе «Профиль» приложения.\n\nБудем рады видеть вас среди Амбассадоров.'},
     "insight_ok": {"title": "Инсайт записан", "group": "members", "max": 1000, "vars": "{points}", "hint": "Участник написал #инсайт в чате клуба.",
                    "default": '**Записали ваш инсайт**\n\nМы передали его команде Клуба. Когда команда подтвердит, он засчитается как шаг к статусу Амбассадора.\n\nБлагодарим вас за включенность и рады за ваше проявление.'},
@@ -705,7 +705,7 @@ async def _send_recap(con, e, kind):
                 continue  # повторно закрытый эфир тем, у кого нет Inside, не напоминаем
             text = render(con, "recap_closed", title=e["title"])
             try:
-                await send_text(m["tg_id"], text, tg.app_button("Как перейти на Inside", "#profile"), key="recap_closed", con=con)
+                await send_text(m["tg_id"], text, tg.app_button("Как стать Амбассадором", "#profile"), key="recap_closed", con=con)
             except Exception:
                 log.exception("напоминание о закрытом эфире")
             await asyncio.sleep(0.15)
@@ -835,7 +835,7 @@ def stats_items(con, days=7):
     new_n = sum(1 for p in pays if p["event"] in NEW_SUB)
     sum_all = int(sum((p["amount"] or 0) for p in pays))
     items = [f"Оплат: {len(pays)} на {sum_all} ₽ (новых участников {new_n}, продлений {len(pays) - new_n})"]
-    items.append(f"Участников сейчас: {q('SELECT COUNT(*) FROM members WHERE status=?', 'active')}, из них в Inside {q('SELECT COUNT(*) FROM members WHERE status=? AND level=?', 'active', 'inside')}")
+    items.append(f"Участников сейчас: {q('SELECT COUNT(*) FROM members WHERE status=?', 'active')}, из них Амбассадоров {q('SELECT COUNT(*) FROM members WHERE status=? AND level=?', 'active', 'inside')}")
     soon = q("SELECT COUNT(*) FROM members WHERE status='active' AND paid_until BETWEEN ? AND ?", now.isoformat(), (now + timedelta(days=14)).isoformat())
     items.append(f"Оплата заканчивается в ближайшие 14 дней: {soon}")
     items.append(f"Подтверждено заявок на баллы: {q('SELECT COUNT(*) FROM claims WHERE status=? AND decided_at>=?', 'approved', since)}, баллов начислено {q('SELECT SUM(points) FROM claims WHERE status=? AND decided_at>=?', 'approved', since)}")
@@ -1615,7 +1615,7 @@ async def event_guest(eid: int, req: Request, m=Depends(member), con=Depends(get
     if not e or e["starts_at"] < (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat():
         raise HTTPException(404, "Эфир уже прошел")
     if e["inside_only"] and not is_inside(m):
-        raise HTTPException(403, "Это закрытый эфир для Inside")
+        raise HTTPException(403, "Это закрытый эфир для Амбассадоров")
     if not con.execute("SELECT 1 FROM rsvp WHERE event_id=? AND tg_id=?", (eid, m["tg_id"])).fetchone():
         raise HTTPException(400, "Сначала отметьте, что придете сами: нажмите «Буду»")
     if guest_left(con, m) < 1:
@@ -1689,7 +1689,7 @@ def rsvp(eid: int, m=Depends(member), con=Depends(get_con)):
     if not e:
         raise HTTPException(404, "Эфир не найден")
     if e["inside_only"] and not is_inside(m):
-        raise HTTPException(403, "Только для Inside-level")
+        raise HTTPException(403, "Только для Амбассадоров")
     if con.execute("SELECT 1 FROM rsvp WHERE event_id=? AND tg_id=?", (eid, m["tg_id"])).fetchone():
         con.execute("DELETE FROM rsvp WHERE event_id=? AND tg_id=?", (eid, m["tg_id"])); going = False
     else:
@@ -1767,7 +1767,7 @@ async def redeem(code: str, m=Depends(member), con=Depends(get_con)):
     if not item:
         raise HTTPException(404, "Нет такой награды")
     if item["inside_only"] and not is_inside(m):
-        raise HTTPException(403, "Только для Inside-level")
+        raise HTTPException(403, "Только для Амбассадоров")
     if db.balance(con, m["tg_id"])["balance"] < item["cost"]:
         raise HTTPException(400, "Пока не хватает баллов")
     con.execute("INSERT INTO redemptions(tg_id,code,cost,created_at) VALUES(?,?,?,?)", (m["tg_id"], code, item["cost"], db.now()))
