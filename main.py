@@ -258,7 +258,7 @@ AUTO_PICS = {
     "offer_live": ("ВИТРИНА", "Предложение опубликовано"),
     "birthday_wish": ("С ДНЕМ РОЖДЕНИЯ", "Единение с вами"),
 }
-AUTO_VER = 4
+AUTO_VER = 5
 
 
 def auto_on_pics(con):
