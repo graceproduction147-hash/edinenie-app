@@ -16,7 +16,7 @@
 <div class="app">
   <header class="top">
     <div class="brand" aria-label="Единение"><svg id="logo" hidden></svg><span class="mk"></span><span class="wd"></span></div>
-    <button class="pill" id="ptsPill" aria-label="Баллы" hidden><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 7.1L21 12l-7.1 2.9L12 22l-1.9-7.1L3 12l7.1-2.9z"/></svg><span class="ptsv">0</span><i class="lvtag" id="lvTag"></i></button>
+    <button class="pill" id="ptsPill" aria-label="Ваш статус" hidden><i class="lvtag" id="lvTag"></i></button>
   </header>
 
   <div id="boot" class="loading">Открываем клуб</div>
@@ -57,12 +57,6 @@
       <div id="heroBox"></div>
       <div class="panel" id="monthCard"></div>
       <div class="panel" id="homeCoffee"></div>
-      <div class="panel inside" id="insideCard" hidden></div>
-      <div class="panel compact">
-        <div class="row2"><span>Ваши баллы</span><span><b class="ptsv">0</b><span id="goalOf"></span></span></div>
-        <div class="progress"><i id="prog" style="width:0"></i></div>
-        <p class="sub" id="goalText"></p>
-      </div>
       <div class="panel" id="homeCal"></div>
       <h2 class="sec">Новое в библиотеке</h2>
       <div class="list" id="homeLib"></div>
@@ -118,21 +112,11 @@
       <div class="panel" id="meCard"></div>
       <div class="panel" id="wantsCard"></div>
       <div class="panel" id="yearCard"></div>
-      <h2 class="sec">Обменять баллы</h2>
-      <div class="list" id="shop"></div>
-      <div class="panel">
-        <h3>Правила клуба</h3>
-        <details class="rule"><summary>Club-level</summary><p>Участие на 1, 3, 6 месяцев или на год. Открывает эфиры, библиотеку, рекомендации знакомств. Условия, купленные по специальной цене, сохраняются при продлении.</p></details>
-        <details class="rule"><summary>Inside-level</summary><p>Открывается за вклад в клуб, а не за оплату. Каждый месяц нужно привести друга, написать людям из рекомендаций и рассказать о клубе или о своих результатах. Дает все возможности Club и дополнительно закрытые эфиры с записями, закрытые материалы и награды только для Inside. Каждый пункт подтверждает команда клуба.</p></details>
-        <details class="rule"><summary>За что начисляются баллы</summary><p>Баллы копятся отдельно от Inside и тратятся на награды. Начисляются не за присутствие в Zoom, а за действия: отзыв и инсайт после эфира, благодарность участнику, результат, которым вы делитесь, сторис о клубе с хештегом, приглашенный участник, отзыв о знакомстве с хештегом #знакомство. Каждое начисление подтверждает команда клуба.</p></details>
-        <details class="rule"><summary>Как знакомиться</summary><p>Контакт человека открывается только при взаимном интересе. Пишите от себя, коротко и по делу: кто вы, что увидели в анкете, что предлагаете.</p></details>
-      </div>
+      <div class="panel" id="levelsCard"></div>
       <div class="panel">
         <span class="eyebrow">Знакомства</span>
-        <h3>Моя карточка</h3>
-        <p class="note-soft">Так вас видят в «Найди своих». Пишите коротко, по одному предложению: чем конкретнее, тем легче вас выбрать.</p>
-        <div class="pv" id="cardPreview"></div>
-        <p class="prof-state" id="profState"></p>
+        <h3>Моя анкета</h3>
+        <p class="note-soft">Так вас видят другие участники в рекомендациях. Пишите коротко, по одному предложению: чем конкретнее, тем легче вас выбрать.</p>
         <label class="f" for="pName">ИМЯ<input type="text" id="pName" maxlength="40"></label>
         <label class="f" for="pSphere">СФЕРА<span class="cnt" id="cSphere"></span><input type="text" id="pSphere" maxlength="40" placeholder="Например: психолог, маркетинг, архитектура"></label>
         <label class="f" for="pCity">ГОРОД<input type="text" id="pCity" maxlength="40"></label>
