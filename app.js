@@ -84,15 +84,11 @@ function renderLvl(v) {
 function levelsSheet() {
   const amb = S.me && S.me.level === "inside", yr = !!S.year, n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
-  const ok = '<i class="ck">&#10003;</i>', no = '<i class="no">&mdash;</i>';
-  const rows = [["Жизнь клуба и чат", [ok, ok, ok]], ["Приложение и Random Coffee", [ok, ok, ok]], ["Скидки до 50% на события", [ok, ok, ok]], ["Реферальная ссылка", [ok, ok, ok]],
-    ["Знакомства в месяц", ["2", "4", no]], ["Персональные знакомства", [no, ok, no]],
-    ["Свой эфир", [no, ok, ok]], ["Место на витрине", ["за друга", "1 месяц", "весь год"]], ["Выступление на сцене", [no, '<small class="and">+ годовой</small>', '<small class="and">+ Амбассадор</small>']], ["Ментор, своя рубрика", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
-  const mine = [!amb, amb, yr], heads = [["Резидент", "по оплате"], ["Амбассадор", "за вклад"], ["Годовой", "+ к уровню"]];
-  const grid = `<div class="mx"><div class="mh"></div>${heads.map((h, i) => `<div class="mh c${i}${mine[i] ? " mine" : ""}"><b>${h[0]}</b><span>${h[1]}</span>${mine[i] ? '<em>у вас</em>' : ""}</div>`).join("")}
-    ${rows.map(r => `<div class="ml">${r[0]}</div>${r[1].map((v, i) => `<div class="mc c${i}${mine[i] ? " mine" : ""}">${v}</div>`).join("")}`).join("")}</div>`;
-  openSheet(`<h3>Возможности клуба</h3><p class="sub">Годовой тариф добавляется к любому уровню. Амбассадором становятся за вклад, а не за оплату.</p>${grid}
-    <p class="sub" style="margin:10px 2px 0">За приглашенного по вашей ссылке участника: статус Амбассадора на месяц. Выступление на сцене доступно, когда у вас одновременно годовой тариф и статус Амбассадора.</p>
+  const blk = (t, sub, items, mine, plus) => `<div class="lv${mine ? " mine" : ""}"><div class="lh"><b>${t}</b><span>${sub}</span>${mine ? "<em>у вас</em>" : ""}</div><ul>${items.map(i => `<li>${plus ? "+ " : ""}${i}</li>`).join("")}</ul></div>`;
+  const grid = blk("Резидент", "по оплате", ["Жизнь клуба и чат", "Приложение и Random Coffee", "2 знакомства в месяц", "Скидки до 50% на события", "Место на витрине за приглашенного друга"], !amb && !yr)
+    + blk("Амбассадор", "за вклад", ["4 знакомства в месяц", "Персональные знакомства", "Свой эфир в клубе", "Место на витрине на 1 месяц"], amb, true)
+    + blk("Годовой тариф", "к любому уровню", ["Место на витрине на весь год", "Ментор клуба и своя рубрика", "2 гостевых пропуска на эфиры", "Выступление на сцене (вместе с Амбассадором)"], yr, true);
+  openSheet(`<h3>Возможности клуба</h3>${grid}
     <div class="amb-how"><h4>Как стать Амбассадором</h4>${n ? `<p class="sub" style="margin:6px 0">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
       <div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button>${amb || yr ? '<button class="btn sm ghost" id="lvStream">Свой эфир</button>' : ""}${yr ? "" : '<button class="btn sm ghost" id="lvYear">Годовой тариф</button>'}</div></div>`,
     s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
