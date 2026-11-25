@@ -314,7 +314,7 @@ function calSheet(e) {
 /* ---------- библиотека ---------- */
 let libType = "all", libTimer, libPillar = "env";
 const LIBP = [["env", "Окружение"], ["game", "Большая игра"], ["state", "Состояние"]];
-const inPillar = x => !x.pillar || x.pillar === libPillar;
+const inPillar = x => (x.pillar || "env") === libPillar;
 $("#libPills").innerHTML = LIBP.map(([k, v]) => `<button class="chip" data-lp="${k}" aria-pressed="${k === libPillar}">${v}</button>`).join("");
 $$("[data-lp]").forEach(c => c.onclick = () => { libPillar = c.dataset.lp; $$("[data-lp]").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false")); loadLib(); });
 $("#libSearch").oninput = () => { clearTimeout(libTimer); libTimer = setTimeout(loadLib, 300); };
@@ -329,7 +329,9 @@ async function loadLib() {
     const recs = (S.events && (libType === "all" || libType === "rec")) ? S.events.records.filter(inPillar).filter(r => !items.some(x => x.event_id == r.id) && (!q || (r.title + " " + r.speaker).toLowerCase().includes(q))) : [];
     const recRow = r => `<button class="item" data-rec="${r.id}">${orbImg(r.id)}
       <div class="t"><b>${esc(r.title)}</b><span>${esc(["Запись эфира", r.speaker === "Влад" ? "Влад Митьковский" : r.speaker].filter(Boolean).join(" · "))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
-    $("#libList").innerHTML = (recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">В этом разделе пока пусто.</p>';
+    $("#libList").innerHTML = ((recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">В этом разделе пока пусто.</p>')
+      + `<button class="btn ghost" id="libStream" style="margin-top:10px">Провести эфир в клубе</button>`;
+    $("#libStream").onclick = ownStream;
     $$("#libList [data-rec]").forEach(b => b.onclick = () => recSheet(recs.find(r => r.id == b.dataset.rec)));
     bindLib($("#libList"), items); } catch (e) { fail(e); }
 }
@@ -760,6 +762,17 @@ function renderMonth() {
 function refreshHome() { renderWeekAction(); renderMonth(); renderRitual(); }
 
 /* ---------- заявка на свой эфир ---------- */
+function ownStream() {
+  const E = S.events || {}, contact = E.stream_contact;
+  if (S.year) {
+    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">На годовом тарифе вы можете провести свой эфир для участников клуба. Напишите нам, договоримся о теме и дате.</p><button class="btn" id="osGo">Написать</button>`,
+      s => s.querySelector("#osGo").onclick = () => { closeSheet(); if (contact) openTg(contact); else toast("Контакт пока не указан"); });
+  } else if (S.me && S.me.level === "inside") { streamSheet(); }
+  else {
+    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">Свой эфир для участников клуба доступен на годовом тарифе.</p><button class="btn" id="osBuy">Перейти на годовой тариф</button>`,
+      s => s.querySelector("#osBuy").onclick = () => { closeSheet(); const u = E.buy_url || "https://edinenie-club.com"; if (TG && TG.openLink) TG.openLink(u); else window.open(u, "_blank"); });
+  }
+}
 function streamSheet() {
   if (!S.me || S.me.level !== "inside") { openSheet(`<h3>Свой эфир</h3><p class="sub">Провести свой эфир внутри клуба могут Амбассадоры. Статус открывается за вклад: друг, два рассказа о клубе в сторис, инсайт после эфира.</p><button class="btn" id="stHow">Как стать Амбассадором</button>`, s => s.querySelector("#stHow").onclick = () => { closeSheet(); levelsSheet(); }); return; }
   openSheet(`<h3>Предложить свой эфир</h3><p class="sub">Расскажите, о чем хотите провести эфир. Команда свяжется с вами и договорится о формате.</p>
