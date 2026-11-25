@@ -16,10 +16,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import card, coffee, db, recs, tg
+from . import card, coffee, db, quotes, recs, tg
 from .config import (ADMIN_IDS, ADMIN_PASSWORD, BASE, DEV_MODE, INSIDE_MONTHS, JOIN_URL, PERIOD_MAP,
                      PUBLIC_URL, RECS_COUNT, RECS_COUNT_AMB, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
 
@@ -3680,6 +3680,25 @@ async def send_card_bg(tg_id):
         log.exception("карточка месяца")
     finally:
         con.close()
+
+
+@app.get("/api/quote")
+def quote_of_day(m=Depends(member)):
+    """Послание дня: одна фраза на всех. Картинка отдается по публичной ссылке, чтобы ее можно было скачать из Telegram."""
+    d = quotes.today()
+    return {"date": d.isoformat(), "text": quotes.phrase_for(d), "url": f"{PUBLIC_URL}/quotepic/{d.isoformat()}.png"}
+
+
+@app.api_route("/quotepic/{name}", methods=["GET", "HEAD"])
+def quotepic(name: str):
+    from datetime import date as _date
+    try:
+        d = _date.fromisoformat(name.removesuffix(".png"))
+    except ValueError:
+        raise HTTPException(404)
+    if abs((d - quotes.today()).days) > 1:  # только вчера, сегодня и завтра
+        raise HTTPException(404)
+    return Response(quotes.render(d), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.api_route("/cardpic/{name}", methods=["GET", "HEAD"])
