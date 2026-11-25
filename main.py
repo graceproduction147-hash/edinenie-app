@@ -261,6 +261,10 @@ AUTO_PICS = {
 AUTO_VER = 1
 
 
+def auto_on_pics(con):
+    return db.get_setting(con, "auto_pics", "1") != "0"
+
+
 def auto_pic_file(key):
     """Файл автоматической картинки сообщения (рисуется один раз и хранится рядом с остальными картинками бота)."""
     if key not in AUTO_PICS:
@@ -4036,7 +4040,9 @@ def admin_texts(_=Depends(admin), con=Depends(get_con)):
         pic = db.get_setting(con, "pic:" + k, "")
         out.append({"key": k, "title": t["title"], "hint": t["hint"], "max": t["max"], "plain": bool(t.get("plain")),
                     "group": t.get("group") or ("bot" if t.get("plain") or k in ("welcome", "member_start", "guest_start", "anketa", "monthly") else "members"),
-                    "vars": t.get("vars", ""), "can_pic": not t.get("plain"), "limit": (PIC_LIMIT if pic and (BOTPICS / pic).exists() else t["max"]),
+                    "vars": t.get("vars", ""), "can_pic": not t.get("plain"),
+                    "limit": (PIC_LIMIT if (pic and (BOTPICS / pic).exists()) or (k in AUTO_PICS and auto_on_pics(con)) else t["max"]),
+                    "auto_pic": (f"/botpic/{auto_pic_file(k).name}" if k in AUTO_PICS and auto_on_pics(con) and not (pic and (BOTPICS / pic).exists()) else ""),
                     "route": (None if t.get("group") != "team" else _route_value(con, k)), "route_own": t.get("group") == "team" and k != "t_digest_claim",
                     "pic": (f"/botpic/{pic}" if pic and (BOTPICS / pic).exists() else ""),
                     "value": cur if cur and cur.strip() else t["default"], "default": t["default"], "custom": bool(cur and cur.strip())})
