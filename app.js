@@ -716,16 +716,19 @@ async function openQuote() {
   try {
     const q = await api("/api/quote"); track("quote");
     const ov = document.createElement("div"); ov.id = "quoteFs";
-    ov.innerHTML = `<img src="${esc(q.url)}" alt="${esc(q.text)}"><button class="qx" aria-label="Закрыть">&#10005;</button><button class="btn qsave">Сохранить картинку</button>`;
+    ov.innerHTML = `<img src="${esc(q.url)}" alt="${esc(q.text)}"><button class="qsave" aria-label="Сохранить в галерею"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 19h14"/></svg></button><button class="qx" aria-label="Закрыть">&#10005;</button>`;
     document.body.appendChild(ov);
     const close = () => { ov.classList.remove("on"); setTimeout(() => ov.remove(), 250); };
     requestAnimationFrame(() => ov.classList.add("on"));
     ov.querySelector(".qx").onclick = close;
-    ov.querySelector(".qsave").onclick = () => {
-      const name = `edinenie-${q.date}.png`;
-      try { if (TG && TG.downloadFile && TG.isVersionAtLeast && TG.isVersionAtLeast("8.0")) { TG.downloadFile({url: q.url, file_name: name}); return; } } catch (e) {}
-      try { if (TG && TG.openLink) { TG.openLink(q.url); toast("Нажмите на картинку и удерживайте, чтобы сохранить"); return; } } catch (e) {}
-      window.open(q.url, "_blank");
+    ov.querySelector(".qsave").onclick = async () => {
+      // 1) системное меню «Поделиться» с файлом: там есть «Сохранить изображение» в галерею; 2) если его нет, бот присылает фото в чат
+      try {
+        const blob = await (await fetch(q.url)).blob(), file = new File([blob], `edinenie-${q.date}.png`, {type: "image/png"});
+        if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file]}); return; }
+      } catch (e) { if (e && e.name === "AbortError") return; }
+      try { await api("/api/quote/send", {method: "POST", json: {}}); toast("Прислали картинку в чат с ботом: нажмите на нее и выберите «Сохранить в галерею»"); }
+      catch (e) { fail(e); }
     };
   } catch (e) { fail(e); }
 }
