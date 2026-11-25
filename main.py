@@ -1124,6 +1124,17 @@ def _daily_ensure(con):
     con.execute("""CREATE TABLE IF NOT EXISTS daily(
       tg_id INTEGER, day TEXT, mood INTEGER, focus INTEGER DEFAULT 0, card INTEGER DEFAULT 0, updated_at TEXT,
       PRIMARY KEY(tg_id, day))""")
+    try:
+        con.execute("ALTER TABLE daily ADD COLUMN areas TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+
+AREAS = ("body", "relations", "rest", "fun", "money")  # тело, отношения, отдых, веселье, деньги
+
+
+def _areas(r):
+    return [a for a in (r["areas"] or "").split(",") if a in AREAS] if r and r["areas"] else []
 
 
 def _daily_state(con, m):
@@ -1134,7 +1145,7 @@ def _daily_state(con, m):
     rows = {r["day"]: r for r in con.execute("SELECT * FROM daily WHERE tg_id=? AND day>=?", (m["tg_id"], (today - timedelta(days=400)).isoformat())).fetchall()}
 
     def steps(r):
-        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"]))
+        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"])) + int(bool(_areas(r)))
     t = rows.get(today.isoformat())
     streak, misses, d = 0, 0, today if steps(t) >= 2 else today - timedelta(days=1)
     while True:
@@ -1152,7 +1163,7 @@ def _daily_state(con, m):
         day = today - timedelta(days=i)
         r = rows.get(day.isoformat())
         week.append({"d": day.isoformat(), "mood": r["mood"] if r else None, "n": steps(r)})
-    return {"day": today.isoformat(), "mood": t["mood"] if t else None, "focus": bool(t and t["focus"]), "card": bool(t and t["card"]),
+    return {"day": today.isoformat(), "mood": t["mood"] if t else None, "focus": bool(t and t["focus"]), "card": bool(t and t["card"]), "areas": _areas(t),
             "streak": streak, "week": week}
 
 
@@ -1173,6 +1184,9 @@ async def daily_set(req: Request, m=Depends(member), con=Depends(get_con)):
         if not 1 <= v <= 5:
             raise HTTPException(400, "Состояние от 1 до 5")
         con.execute("UPDATE daily SET mood=?, updated_at=? WHERE tg_id=? AND day=?", (v, db.now(), m["tg_id"], day))
+    elif step == "areas":
+        vals = [a for a in (d.get("value") or []) if a in AREAS]
+        con.execute("UPDATE daily SET areas=?, updated_at=? WHERE tg_id=? AND day=?", (",".join(dict.fromkeys(vals)), db.now(), m["tg_id"], day))
     elif step in ("focus", "card"):
         con.execute(f"UPDATE daily SET {step}=?, updated_at=? WHERE tg_id=? AND day=?", (1 if d.get("on", True) else 0, db.now(), m["tg_id"], day))
     else:
@@ -1190,7 +1204,7 @@ def progress(days: int = 30, m=Depends(member), con=Depends(get_con)):
     rows = {r["day"]: r for r in con.execute("SELECT * FROM daily WHERE tg_id=? AND day>=?", (m["tg_id"], (today - timedelta(days=400)).isoformat())).fetchall()}
 
     def n(r):
-        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"]))
+        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"])) + int(bool(_areas(r)))
 
     def avg(a, b):  # дни [today-b+1 .. today-a]
         v = [rows[(today - timedelta(days=i)).isoformat()]["mood"] for i in range(a, b)
@@ -1208,10 +1222,20 @@ def progress(days: int = 30, m=Depends(member), con=Depends(get_con)):
             best = max(best, cur)
         else:
             cur = 0
+    # связь сфер жизни с состоянием: среднее состояние в дни с этой сферой и без нее
+    pm = [(rows.get((today - timedelta(days=i)).isoformat())) for i in range(days)]
+    pm = [r for r in pm if r and r["mood"] is not None]
+    areas = []
+    for a in AREAS:
+        w = [r["mood"] for r in pm if a in _areas(r)]
+        wo = [r["mood"] for r in pm if a not in _areas(r)]
+        days_n = sum(1 for i in range(days) if a in _areas(rows.get((today - timedelta(days=i)).isoformat())))
+        eff = round(sum(w) / len(w) - sum(wo) / len(wo), 1) if len(w) >= 3 and len(wo) >= 3 else None
+        areas.append({"k": a, "days": days_n, "effect": eff, "avg": round(sum(w) / len(w), 1) if w else None})
     st = _daily_state(con, m)
     best = max(best, st["streak"])
     return {"days": days, "series": series, "streak": st["streak"], "best": best, "avg": avg(0, days), "prev": avg(days, days * 2),
-            "done": sum(1 for x in series if x["n"] >= 2), "push": db.get_setting(con, f"nodr:{m['tg_id']}") != "1"}
+            "done": sum(1 for x in series if x["n"] >= 2), "areas": areas, "push": db.get_setting(con, f"nodr:{m['tg_id']}") != "1"}
 
 
 @app.post("/api/daily/push")
@@ -1239,8 +1263,8 @@ async def _daily_push(con):
         m = dict(m)
         if db.get_setting(con, f"nodr:{m['tg_id']}") == "1":
             continue
-        r = con.execute("SELECT mood, focus, card FROM daily WHERE tg_id=? AND day=?", (m["tg_id"], day)).fetchone()
-        if r and (r["mood"] is not None or r["focus"] or r["card"]):
+        r = con.execute("SELECT mood, focus, card, areas FROM daily WHERE tg_id=? AND day=?", (m["tg_id"], day)).fetchone()
+        if r and (r["mood"] is not None or r["focus"] or r["card"] or r["areas"]):
             continue
         st = _daily_state(con, m)
         streak = Raw(f"\n\nСерия: {st['streak']} дн. Не прерывайте ее." if st["streak"] >= 2 else "")
