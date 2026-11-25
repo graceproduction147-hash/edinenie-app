@@ -57,6 +57,18 @@ function when(iso) { const d = new Date(iso); return {d: String(d.getDate()).pad
   t: d.toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow"})}; }
 
 /* ---------- окна ---------- */
+/* типографика: короткие слова и числа не отрываются от следующего слова, нет висящей последней строки */
+const NB = "\u00A0", SHORT = "в|к|с|у|о|и|а|я|но|на|за|по|из|от|до|не|ни|же|бы|ли|ко|со|об|во|для|при|над|под|без|что|как|или|это|все|еще|уже|мне|вам|нас|вас|его|ее|их";
+const RE_SH = new RegExp("(^|[\\s(«\"])(" + SHORT + ") (?=\\S)", "gi"), RE_NUM = /(\d+) (?=[А-Яа-яЁёA-Za-z%₽#])/g, RE_DASH = / (?=[—–])/g;
+function typo(t) { return t.replace(RE_SH, (m, p, w) => p + w + NB).replace(RE_SH, (m, p, w) => p + w + NB).replace(RE_NUM, "$1" + NB).replace(RE_DASH, NB); }
+function typoTree(root) {
+  if (!root || root.nodeType !== 1) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => /^(SCRIPT|STYLE|TEXTAREA|INPUT)$/.test(n.parentNode.nodeName) || !/ /.test(n.nodeValue) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const ns = []; while (w.nextNode()) ns.push(w.currentNode);
+  ns.forEach(n => { const v = typo(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; });
+  root.querySelectorAll("p,li,.t>span,.sub").forEach(el => { const l = el.lastChild; if (l && l.nodeType === 3 && l.nodeValue.length > 24) { const v = l.nodeValue.replace(/ ([^ ]{1,14})$/, NB + "$1"); if (v !== l.nodeValue) l.nodeValue = v; } });
+}
+let _tq = 0; new MutationObserver(ms => { if (_tq) return; _tq = setTimeout(() => { _tq = 0; ms.forEach(m => m.addedNodes.forEach(n => typoTree(n.nodeType === 1 ? n : n.parentNode))); }, 30); }).observe(document.body, { childList: true, subtree: true });
 function openSheet(html, bind) { $("#sheet").innerHTML = '<div class="grab"></div>' + html; $("#sheetWrap").hidden = false; bind && bind($("#sheet")); }
 function closeSheet() { $("#sheetWrap").hidden = true; }
 $("#sheetWrap").onclick = e => { if (e.target.id === "sheetWrap") closeSheet(); };
