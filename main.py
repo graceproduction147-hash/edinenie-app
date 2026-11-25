@@ -234,6 +234,46 @@ def pic_url(con, key):
     return f"{PUBLIC_URL}/botpic/{n}" if n and (BOTPICS / n).exists() else ""
 
 
+# Картинки для сообщений бота, у которых своей картинки в кабинете нет: рисуются автоматически в стиле обложек эфиров.
+# ключ сообщения: (подпись, заголовок). Свою картинку из кабинета бот берет в первую очередь.
+AUTO_PICS = {
+    "welcome": ("ДОБРО ПОЖАЛОВАТЬ", "Вы в Единении"),
+    "member_start": ("ЕДИНЕНИЕ", "Рады вас видеть"),
+    "guest_start": ("ЕДИНЕНИЕ", "Окружение, которое двигает вперед"),
+    "r_anketa_1": ("АНКЕТА", "Расскажите о себе"),
+    "r_anketa_3": ("АНКЕТА", "Одна минута для знакомств"),
+    "r_anketa_7": ("АНКЕТА", "Пусть вас найдут"),
+    "r_renew_7": ("УЧАСТИЕ", "Скоро продление"),
+    "r_renew_1": ("УЧАСТИЕ", "Завтра продление"),
+    "r_quiet": ("ЕДИНЕНИЕ", "Вас давно не было"),
+    "inside_on": ("СТАТУС", "Вы Амбассадор"),
+    "inside_off": ("СТАТУС", "Пауза Амбассадора"),
+    "recap_record": ("ЭФИР", "Запись готова"),
+    "recap_nudge": ("ЭФИР", "Не пропустите запись"),
+    "recap_closed": ("ЭФИР", "Запись готова"),
+    "match": ("ЗНАКОМСТВА", "Взаимный интерес"),
+    "coffee_pair": ("RANDOM COFFEE", "Ваша пара недели"),
+    "event_day": ("ЭФИР", "Завтра в клубе"),
+    "event_hour": ("ЭФИР", "Начинаем через час"),
+    "offer_live": ("ВИТРИНА", "Предложение опубликовано"),
+    "birthday_wish": ("С ДНЕМ РОЖДЕНИЯ", "Единение с вами"),
+}
+AUTO_VER = 1
+
+
+def auto_pic_file(key):
+    """Файл автоматической картинки сообщения (рисуется один раз и хранится рядом с остальными картинками бота)."""
+    if key not in AUTO_PICS:
+        return None
+    f = BOTPICS / f"auto_{key}_v{AUTO_VER}.jpg"
+    if not f.exists():
+        label, title = AUTO_PICS[key]
+        BOTPICS.mkdir(parents=True, exist_ok=True)
+        seed = list(AUTO_PICS).index(key)
+        f.write_bytes(cover.render(title, "", label, seed))
+    return f
+
+
 def auto_on(con):
     """Общий выключатель автоматических рассылок участникам (по умолчанию выключен, включается в кабинете)."""
     return db.get_setting(con, "auto_on", "0") == "1"
@@ -285,6 +325,31 @@ async def send_text(chat_id, text, kb=None, key=None, con=None, token=None):
         finally:
             if not con:
                 c.close()
+    if not url and key in AUTO_PICS and not (token and token == tg.TEAM_BOT_TOKEN):
+        c = con or db.connect()
+        try:
+            on = db.get_setting(c, "auto_pics", "1") != "0"
+        finally:
+            if not con:
+                c.close()
+        if on:
+            try:
+                f = auto_pic_file(key)
+                plain = re.sub(r"<[^>]+>", "", text)
+                payload = {"chat_id": chat_id, "parse_mode": "HTML"}
+                if len(plain) <= PIC_LIMIT:
+                    payload["caption"] = text
+                    if kb:
+                        payload["reply_markup"] = kb
+                r = await tg._call(token or tg.BOT_TOKEN, "sendPhoto", payload, file=("photo", f.read_bytes()))
+                if r and r.get("ok"):
+                    _msg_log(chat_id, "[картинка] " + text, key, True, "main")
+                    if len(plain) <= PIC_LIMIT:
+                        return r
+                    return await tg.send(chat_id, text, kb, token=token)
+                log.warning("автокартинка «%s» не ушла: %s", key, r)
+            except Exception:
+                log.exception("автокартинка сообщения")
     if url:
         tok = token or tg.BOT_TOKEN
         try:
