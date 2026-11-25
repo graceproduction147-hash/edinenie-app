@@ -87,7 +87,7 @@ function levelsSheet() {
   const ok = '<i class="ck">&#10003;</i>', no = '<i class="no">&mdash;</i>';
   const rows = [["Жизнь клуба и чат", [ok, ok, ok]], ["Приложение и Random Coffee", [ok, ok, ok]], ["Скидки до 50% на события", [ok, ok, ok]], ["Реферальная ссылка", [ok, ok, ok]],
     ["Знакомства в месяц", ["2", "4", no]], ["Персональные знакомства", [no, ok, no]],
-    ["Свой эфир, рубрика", [no, ok, ok]], ["Место на витрине", ["за друга", ok, ok]], ["Выступление на сцене", [no, '<small class="and">+ годовой</small>', '<small class="and">+ Амбассадор</small>']], ["Статус «Партнер»", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
+    ["Свой эфир", [no, ok, ok]], ["Место на витрине", ["за друга", "1 месяц", "весь год"]], ["Выступление на сцене", [no, '<small class="and">+ годовой</small>', '<small class="and">+ Амбассадор</small>']], ["Ментор, своя рубрика", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
   const mine = [!amb, amb, yr], heads = [["Резидент", "по оплате"], ["Амбассадор", "за вклад"], ["Годовой", "+ к уровню"]];
   const grid = `<div class="mx"><div class="mh"></div>${heads.map((h, i) => `<div class="mh c${i}${mine[i] ? " mine" : ""}"><b>${h[0]}</b><span>${h[1]}</span>${mine[i] ? '<em>у вас</em>' : ""}</div>`).join("")}
     ${rows.map(r => `<div class="ml">${r[0]}</div>${r[1].map((v, i) => `<div class="mc c${i}${mine[i] ? " mine" : ""}">${v}</div>`).join("")}`).join("")}</div>`;
@@ -243,7 +243,7 @@ function guestSheet(e) {
     s => s.querySelector("#gsGo").onclick = async () => {
       const btn = s.querySelector("#gsGo"); btn.disabled = true;
       try { const r = await api(`/api/events/${e.id}/guest`, {method: "POST", json: {name: s.querySelector("#gsN").value}});
-        S.events.guest.left = r.left; renderYear();
+        S.events.guest.left = r.left; renderPerks();
         openSheet(`<h3>Готово</h3><p class="sub">Гость записан. Отправьте другу ссылку на эфир${r.join_url ? "" : ": команда пришлет ее в Telegram"}. Осталось пропусков: ${r.left}.</p>
           ${r.join_url ? `<div class="msg">${esc(r.join_url)}</div><button class="btn" id="gsCp">Скопировать ссылку</button>` : ""}`,
           s2 => { const c = s2.querySelector("#gsCp"); if (c) c.onclick = () => { copy(r.join_url); toast("Ссылка скопирована"); }; }); }
@@ -426,7 +426,7 @@ const cardHTML = (p, top) => `<article class="card${top ? "" : " back"}" data-id
   ${top ? '<span class="stamp yes">Знакомимся</span><span class="stamp no">Дальше</span>' : ""}</div>
   <div class="body">${parseTags(p.tags).length ? `<div class="tags">${parseTags(p.tags).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
    <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek)}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give)}</p></div>
-   <div class="tags"><span class="tag">${p.level === "inside" ? "амбассадор" : "резидент"}</span>${p.year ? '<span class="tag">партнер</span>' : ""}${p.offline ? '<span class="tag">офлайн</span>' : ""}</div></div></article>`;
+   <div class="tags"><span class="tag">${p.level === "inside" ? "амбассадор" : "резидент"}</span>${p.offline ? '<span class="tag">офлайн</span>' : ""}</div></div></article>`;
 function renderDeck() {
   const d = $("#deck");
   if (!S.feed.length) { d.innerHTML = `<div class="empty"><h3>Вы посмотрели всех</h3><p>Новые участники появятся после вступления в клуб, бот пришлет уведомление.</p></div>`; return; }
@@ -531,11 +531,11 @@ function renderPerks() {
   const card = (open, name, sub, rows, foot) => `<div class="pcard ${open ? "open" : "closed"}"><div class="ph"><div><h3>${name}</h3><span class="sub">${sub}</span></div><span class="pst ${open ? "ok" : "no"}" aria-label="${open ? "Открыто" : "Закрыто"}">${open ? OK_SVG : NO_SVG}</span></div>${rows}${foot || ""}</div>`;
   const nextEv = ((S.events && S.events.soon) || []).find(e => !e.locked);
   const guestLeft = g ? g.left : 0;
-  const yearRows = row(yr, "Статус «Партнер»", "Виден в вашей карточке знакомств и в шапке приложения")
+  const yearRows = row(yr, "Ментор клуба и своя рубрика", "Станьте ментором клуба и ведите свою рубрику: договоритесь с командой", yr ? "Написать" : "", "pkMentor")
     + row(yr, "Место на витрине", yr ? (sl.year_free ? "Ваше постоянное место свободно: разместите предложение" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине весь год без приглашений", sl.year_free ? "Разместить" : "", "pkYearOffer")
     + row(yr, "Гостевые пропуска на эфиры", yr ? `Осталось ${guestLeft} из ${g ? g.total : 2}: друг приходит бесплатно` : "2 в год: друг приходит на эфир бесплатно", guestLeft > 0 && nextEv ? "Позвать друга" : "", "pkGuest");
   const ambRows = row(amb, "Свой эфир внутри клуба", "Проведите эфир и опубликуйте его для участников", "Предложить", "pkStream")
-    + row(amb, "Постоянное место на витрине", amb ? (sl.amb_free ? "Ваше место свободно: разместите предложение" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине без приглашений", amb && sl.amb_free ? "Разместить" : "", "pkAmbOffer")
+    + row(amb, "Место на витрине на 1 месяц", amb ? (sl.amb_free ? "Ваше место свободно: разместите предложение на месяц" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине на 1 месяц", amb && sl.amb_free ? "Разместить" : "", "pkAmbOffer")
     + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "");
   const yearFoot = yr ? "" : `<p class="why">Открывается при годовом тарифе</p><button class="link" id="pkYearInfo">Подробнее</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
@@ -546,7 +546,7 @@ function renderPerks() {
   $("#perksOpen").onclick = () => openSheet(full, s => {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
-    on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet);
+    on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet); on("pkMentor", ownStream);
     on("pkYearInfo", levelsSheet); on("pkAmbInfo", levelsSheet);
   });
 }
@@ -575,10 +575,9 @@ function uploadPhoto(f) {
 }
 function fillProfile() {
   const m = S.me;
-  renderYear();
-  $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
+  $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + ""; $("#lvTag").classList.toggle("in", m.level === "inside");
   $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}"></div>
-    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div>
+    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div>
     <label class="btn ghost sm photo-btn">${m.photo ? "Сменить" : "Добавить"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>
     `;
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
@@ -614,19 +613,6 @@ function renderLevels() {
     <p class="sub">${amb ? "Вы проявляетесь в клубе и приводите друзей. Вам доступны свой эфир, витрина и 4 рекомендации знакомств в месяц." : "Станьте Амбассадором: приводите друзей и делитесь клубом. Тогда можно провести свой эфир, попасть на витрину и получать 4 рекомендации в месяц."}</p>
     <button class="btn ghost" id="toLevels">Возможности клуба</button>`;
   $("#toLevels").onclick = levelsSheet;
-}
-
-/* ---------- бонусы годового тарифа ---------- */
-function renderYear() {
-  const el = $("#yearCard"); if (!el) return; if (!S.year) { el.hidden = true; return; } el.hidden = false;
-  const g = S.events && S.events.guest, left = g ? g.left : 0, tot = g ? g.total : 2;
-  const list = `<ul class="bl"><li><b>Статус «Партнер»</b><span>Виден в вашей карточке в знакомствах и в шапке приложения.</span></li>
-    <li><b>Место на витрине без приглашений</b><span>Одно ваше предложение размещено весь год, пока вы на годовом тарифе.</span></li>
-    <li><b>Гостевые пропуски на эфиры</b><span>${S.year ? `Можно позвать друга на эфир бесплатно. Осталось ${left} из ${tot} за год.` : `${tot} в год: позовите друга на эфир бесплатно.`}</span></li></ul>`;
-  el.innerHTML = S.year
-    ? `<span class="eyebrow">Партнер клуба</span><h3>Ваши бонусы годового тарифа</h3>${list}<p class="sub">Эти бонусы есть только на годовом тарифе.</p>`
-    : `<span class="eyebrow">Годовой тариф</span><h3>Бонусы годового тарифа</h3>${list}<p class="sub">Статус Амбассадора открывается за вклад в клуб, а не за оплату. Годовой тариф добавляет эти бонусы.</p><button class="btn ghost" id="toYear">Узнать про годовой тариф</button>`;
-  const b = $("#toYear"); if (b) b.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); };
 }
 
 /* ---------- первая анкета ---------- */
@@ -776,11 +762,11 @@ function refreshHome() { renderWeekAction(); renderMonth(); renderRitual(); }
 function ownStream() {
   const E = S.events || {}, contact = E.stream_contact;
   if (S.year) {
-    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">На годовом тарифе вы можете провести свой эфир для участников клуба. Напишите нам, договоримся о теме и дате.</p><button class="btn" id="osGo">Написать</button>`,
+    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">На годовом тарифе вы можете стать ментором клуба и вести свою рубрику, а также проводить свои эфиры. Напишите нам, договоримся о формате и дате.</p><button class="btn" id="osGo">Написать</button>`,
       s => s.querySelector("#osGo").onclick = () => { closeSheet(); if (contact) openTg(contact); else toast("Контакт пока не указан"); });
   } else if (S.me && S.me.level === "inside") { streamSheet(); }
   else {
-    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">Свой эфир для участников клуба доступен на годовом тарифе.</p><button class="btn" id="osBuy">Перейти на годовой тариф</button>`,
+    openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">Стать ментором клуба и вести свою рубрику можно на годовом тарифе.</p><button class="btn" id="osBuy">Перейти на годовой тариф</button>`,
       s => s.querySelector("#osBuy").onclick = () => { closeSheet(); openPay(E.buy_url); });
   }
 }
