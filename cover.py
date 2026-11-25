@@ -119,6 +119,42 @@ def render(title, speaker="", label="ЭФИР", seed=0):
     return out.getvalue()
 
 
+def orb(seed=0, S=192):
+    """Круглая миниатюра для списков: своя планета и свой оттенок у каждого seed, в стиле обложек."""
+    Q = S * 2
+    rnd = random.Random(seed * 7919 + 13)
+    base, g1, g2, (pl, pd), gold = THEMES[seed % len(THEMES)]
+    img = Image.new("RGBA", (Q, Q), base + (255,))
+    _glow(img, int(Q * rnd.uniform(.55, .95)), int(Q * rnd.uniform(.05, .4)), int(Q * .55), g1, 230)
+    _glow(img, int(Q * rnd.uniform(.0, .4)), int(Q * rnd.uniform(.6, .95)), int(Q * .5), g2, 200)
+    R = int(Q * rnd.uniform(.2, .3))
+    _planet(img, int(Q * rnd.uniform(.3, .7)), int(Q * rnd.uniform(.3, .7)), R, pl, pd, gold)
+    ov = Image.new("RGBA", (Q, Q), (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    for _ in range(2):
+        cx, cy, r = rnd.randint(0, Q), rnd.randint(0, Q), rnd.randint(int(Q * .35), int(Q * .7))
+        od.ellipse([cx - r, cy - r, cx + r, cy + r], outline=gold + (90,), width=3)
+    for _ in range(26):
+        x, y, r = rnd.randint(0, Q), rnd.randint(0, Q), rnd.choice([1, 2, 3])
+        od.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(110, 230)))
+    img.alpha_composite(ov)
+    shift = (seed // len(THEMES)) % 3 * 10           # разный оттенок для соседних номеров
+    if shift:
+        h, s, v = img.convert("RGB").convert("HSV").split()
+        h = h.point(lambda x: (x + shift) % 256)
+        rgb = Image.merge("HSV", (h, s, v)).convert("RGB")
+    else:
+        rgb = img.convert("RGB")
+    m = Image.new("L", (Q, Q), 0)
+    ImageDraw.Draw(m).ellipse([2, 2, Q - 3, Q - 3], fill=255)
+    out = Image.new("RGBA", (Q, Q), (0, 0, 0, 0))
+    out.paste(rgb, (0, 0), m)
+    ImageDraw.Draw(out).ellipse([2, 2, Q - 3, Q - 3], outline=gold + (160,), width=3)
+    buf = io.BytesIO()
+    out.resize((S, S), Image.LANCZOS).save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
 if __name__ == "__main__":
     open("/tmp/cover_a.jpg", "wb").write(render("Окружение", "Влад Митьковский", seed=0))
     open("/tmp/cover_b.jpg", "wb").write(render("Как собрать событие с нуля", "Влад Митьковский", seed=2))
