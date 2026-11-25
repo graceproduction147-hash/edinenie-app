@@ -465,12 +465,12 @@ nav.tabs button{letter-spacing:.1em;font-size:9.5px}
 #monthCard .mlinks{display:flex;gap:14px}
 
 /* сравнение уровней */
-.mx{display:grid;flex-shrink:0;grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1fr));margin-top:14px;font-size:13px;border:1px solid var(--line);border-radius:18px;overflow:hidden}
-.mx>div{padding:10px 4px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;min-height:42px}
+.mx{display:grid;flex-shrink:0;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,.92fr));margin-top:14px;font-size:13px;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.mx>div{padding:10px 4px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;min-height:38px}
 .mx>.mh{border-top:0;flex-direction:column;gap:1px;padding:12px 4px 10px;position:relative}
-.mx .mh b{font:400 11.5px var(--font-display);letter-spacing:.02em;text-transform:uppercase}.mx .mh span{font-size:10px;color:var(--muted)}
+.mx .mh b{font:400 10.5px var(--font-display);letter-spacing:.01em;text-transform:uppercase}.mx .mh span{font-size:10px;color:var(--muted)}
 .mx .mh em{position:absolute;top:3px;font:600 8px var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-style:normal}
-.mx .ml{justify-content:flex-start;text-align:left;padding-left:12px;color:var(--fg);font-size:12.5px;line-height:1.25}
+.mx .ml{justify-content:flex-start;text-align:left;padding-left:10px;color:var(--fg);font-size:12.5px;line-height:1.25}
 .mx .mc{font-size:13px}.mx .mc.mine,.mx .mh.mine{background:var(--accent-soft)}
 .mx .c2{border-left:1px solid var(--line)}.mx .mh.c2 b{color:var(--accent)}
 .mx .ck{font-style:normal;color:var(--accent);font-size:15px}.mx .no{font-style:normal;color:var(--muted);opacity:.5}
