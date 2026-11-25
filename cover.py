@@ -21,6 +21,15 @@ THEMES = [
 ]
 
 
+DEEP_THEMES = [
+    ((9, 13, 38), (48, 84, 196), (120, 54, 160), ((150, 172, 244), (16, 22, 84)), (232, 196, 150)),     # сапфир
+    ((24, 8, 18), (176, 40, 74), (64, 52, 156), ((236, 142, 154), (62, 10, 30)), (240, 190, 150)),      # рубин
+    ((6, 20, 24), (22, 144, 122), (52, 92, 184), ((132, 222, 198), (8, 52, 52)), (236, 206, 150)),      # изумруд
+    ((18, 10, 36), (124, 62, 194), (194, 72, 112), ((204, 162, 242), (42, 16, 92)), (238, 198, 170)),   # аметист
+    ((22, 12, 10), (194, 104, 42), (122, 42, 62), ((242, 184, 112), (72, 28, 14)), (244, 212, 156)),    # бронза
+]
+
+
 def _glow(img, cx, cy, r, col, al):
     quotes._orb(img, cx, cy, r, col, al)
 
@@ -49,17 +58,15 @@ def _planet(img, cx, cy, R, light, dark, rim):
 
 def _bg(seed, W, H, muted=False):
     rnd = random.Random(seed)
-    if muted:   # благородная гамма приложения: приглушённые цвета, как у кружков-планет
-        base, g1, (pl, pd), gold = ORB_THEMES[seed % len(ORB_THEMES)]
-        g2 = ORB_THEMES[(seed + 1) % len(ORB_THEMES)][1]
-        g1 = tuple(min(255, int(c * 1.15)) for c in g1)
-        pl2, pd2, rim2 = (150, 158, 196), (18, 22, 52), (176, 184, 214)
+    if muted:   # глубокие насыщенные оттенки: сапфир, рубин, изумруд, аметист, бронза (без ухода в серый)
+        base, g1, g2, (pl, pd), gold = DEEP_THEMES[seed % len(DEEP_THEMES)]
+        pl2, pd2, rim2 = (g2[0] + 80, g2[1] + 80, g2[2] + 80), tuple(c // 4 for c in g2), tuple(min(255, c + 110) for c in g2)
     else:
         base, g1, g2, (pl, pd), gold = THEMES[seed % len(THEMES)]
         pl2, pd2, rim2 = (170, 190, 255), (18, 22, 70), (190, 205, 255)
     img = Image.new("RGBA", (W, H), base + (255,))
     k = H / 1350 * 1.0
-    ga = .62 if muted else 1.0
+    ga = .9 if muted else 1.0
     _glow(img, W * 0.88, H * 0.10, int(560 * k), g1, int(235 * ga))
     _glow(img, W * 0.04, H * 0.85, int(520 * k), g2, int(215 * ga))
     _glow(img, W * 0.55, H * 1.05, int(460 * k), g1, int(120 * ga))
@@ -78,7 +85,7 @@ def _bg(seed, W, H, muted=False):
         if 200 < x < W - 200 and H * .28 < y < H * .8 and rnd.random() < .85:
             continue
         r = rnd.choice([1, 1, 2, 2, 3, 4])
-        dd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(50, 130) if muted else rnd.randint(90, 230)))
+        dd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 246, 232, rnd.randint(70, 180) if muted else rnd.randint(90, 230)))
     img.alpha_composite(dust.filter(ImageFilter.GaussianBlur(0.7)))
     # лёгкая тёмная подложка снизу для читаемости текста
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
