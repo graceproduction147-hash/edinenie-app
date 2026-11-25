@@ -102,7 +102,7 @@ function go(v, seg) {
   track("v_" + v + (seg ? "_" + seg : ""));
   $$("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === v ? "true" : "false"));
   $$(".view").forEach(x => x.classList.toggle("on", x.id === "v-" + v));
-  $("#eyebrow").textContent = TITLES[v][0]; $("#title").textContent = TITLES[v][1]; $(".pagehead").style.display = v === "home" ? "none" : "";
+  $("#title").textContent = TITLES[v][1]; $(".pagehead").style.display = v === "home" ? "none" : "";
   if (v === "people") { peopleSeg("coffee"); }
   if (v === "events" && seg) evSeg(seg);
   if (v === "lib") loadLib();
@@ -470,10 +470,10 @@ async function loadCoffee() {
   const box = $("#p-coffee");
   try { const c = await api("/api/recs"); S.coffee = c;
     if (!c.items.length) {
-      box.innerHTML = `<div class="panel"><span class="eyebrow">Знакомства</span><h3>Рекомендации появятся позже</h3>
+      box.innerHTML = `<div class="panel"><h3>Рекомендации появятся позже</h3>
       <p class="sub">${!c.profile_done ? "Сначала заполните анкету в профиле: по ней подбираются люди." : !c.enabled ? "Вы выключили рекомендации в профиле." : "Пока нет подходящих людей. Загляните позже, когда в клубе станет больше участников."}</p></div>`;
       renderHomeCoffee(); return; }
-    box.innerHTML = `<div><span class="eyebrow">Ваши рекомендации</span><p class="sub" style="margin-top:6px">Люди из клуба, с которыми вам стоит познакомиться. Напишите им первым: это самый короткий путь.</p></div>` +
+    box.innerHTML = 
       c.items.map(p => {
         const msg = `${p.first_name || ""}, привет! Я ${S.me.first_name || ""}, ${(S.me.sphere || "").toLowerCase()}. Увидел(а) вас в Единении и хочу познакомиться. Давайте созвонимся на 20 минут?`;
         return `<div class="panel" data-rec="${p.id}">
@@ -531,7 +531,7 @@ function renderPerks() {
   const full = `<h3>Мои возможности</h3>` + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
     + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot);
   const sub = [yr ? "годовой тариф" : "", amb ? "амбассадор" : ""].filter(Boolean).join(", ");
-  el.innerHTML = `<button class="panel rowcard slim hot" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Что открывается с годовым тарифом и статусом Амбассадора"}</span></div><i>&#8250;</i></button>`;
+  el.innerHTML = `<button class="panel rowcard slim hot" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Годовой тариф и Амбассадор"}</span></div><i>&#8250;</i></button>`;
   $("#perksOpen").onclick = () => openSheet(full, s => {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
@@ -569,7 +569,7 @@ function fillProfile() {
   $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}">${m.photo ? "" : esc(initials(m))}</div>
     <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div>
     <label class="btn ghost sm photo-btn">${m.photo ? "Сменить" : "Добавить"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>
-    ${m.photo ? "" : '<p class="sub" style="margin:10px 0 0">Добавьте фото: людям легче знакомиться с теми, кого они видят.</p>'}`;
+    `;
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
   renderLevels();
   renderWants();
@@ -864,7 +864,7 @@ const _pb = $("#progBtn"); if (_pb) _pb.onclick = () => progressSheet(30);
 /* ---------- ритуал дня на главной: состояние, фокус, карта ---------- */
 const AREAS = {body: "Тело", sleep: "Сон", relations: "Отношения", family: "Семья", friends: "Друзья", rest: "Отдых", fun: "Веселье", money: "Деньги", work: "Работа", learn: "Учеба", create: "Творчество", nature: "Природа"};
 const MOODS = [["Тяжело", "#6C7AA8"], ["Устало", "#8E86B8"], ["Ровно", "#B99BC0"], ["Хорошо", "#E0A27E"], ["На подъеме", "#F2C27A"]];
-async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); const ps = $("#progSub"); if (ps && S.daily) ps.textContent = S.daily.streak ? `Серия: ${S.daily.streak} дн.` : "Состояние по дням, серия, график"; }
+async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); const ps = $("#progSub"); if (ps && S.daily) ps.textContent = S.daily.streak ? `Серия: ${S.daily.streak} дн.` : ""; }
 async function dailyStep(step, extra) { try { S.daily = await api("/api/daily", {method: "POST", json: Object.assign({step}, extra || {})}); renderRitual(); haptic(); } catch (e) { fail(e); } }
 function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
@@ -881,9 +881,8 @@ function renderRitual() {
   const areas = d.areas.length && !S.aEdit ? row(1, "Внимание: " + d.areas.map(k => AREAS[k].toLowerCase()).join(", "), "", '<button class="btn sm ghost" id="raEdit">Изменить</button>')
     : `<div class="rstep"><div class="rt"><i class="ck"></i><b>Чему уделите внимание сегодня?</b></div>
       <div class="chips" id="rAreas">${Object.keys(AREAS).map(k => `<button class="chip" data-a="${k}" aria-pressed="${d.areas.includes(k)}">${AREAS[k]}</button>`).join("")}</div>
-      ${d.areas.length ? '<div class="btns"><button class="btn sm solid" id="raDone">Готово</button></div>' : '<p class="sub">Можно несколько. Потом увидите, что влияет на состояние.</p>'}</div>`;
-  const focus = edit || !fp ? `<div class="rstep"><div class="rt"><i class="ck"></i><b>Ваш фокус на месяц</b></div><p class="sub">Одной-двумя фразами: что для вас главное в этом месяце.</p>
-        <textarea id="rfGoal" rows="2" placeholder="Например: запустить продажи и каждый день гулять">${esc(w.goal || "")}</textarea>
+      ${d.areas.length ? '<div class="btns"><button class="btn sm solid" id="raDone">Готово</button></div>' : ''}</div>`;
+  const focus = edit || !fp ? `<div class="rstep"><div class="rt"><i class="ck"></i><b>Ваш фокус на месяц</b></div><textarea id="rfGoal" rows="2" placeholder="Например: запустить продажи и каждый день гулять">${esc(w.goal || "")}</textarea>
         <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div></div>`
     : row(d.focus, "Фокус на месяц", esc(w.goal), `<span class="rbt">${d.focus ? "" : '<button class="btn sm" id="rFocus">Помню</button>'}<button class="btn sm ghost" id="rfEdit">Изменить</button></span>`);
   const card = row(d.card, "Карта дня", "", `<button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть" : "Вытянуть"}</button>`);
