@@ -532,7 +532,7 @@ function renderPerks() {
   const full = `<h3>Мои возможности</h3>` + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
     + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot);
   const sub = [yr ? "годовой тариф" : "", amb ? "амбассадор" : ""].filter(Boolean).join(", ");
-  el.innerHTML = `<button class="panel rowcard slim" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Что открывается с годовым тарифом и статусом Амбассадора"}</span></div><i>&#8250;</i></button>`;
+  el.innerHTML = `<button class="panel rowcard slim hot" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Что открывается с годовым тарифом и статусом Амбассадора"}</span></div><i>&#8250;</i></button>`;
   $("#perksOpen").onclick = () => openSheet(full, s => {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
@@ -569,7 +569,7 @@ function fillProfile() {
   $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
   $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}">${m.photo ? "" : esc(initials(m))}</div>
     <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div></div>
-    <div class="photo-nudge"><p class="sub">${m.photo ? "Фото на месте. Его видят люди, когда вы появляетесь у них в знакомствах." : "Добавьте фото: людям легче знакомиться с теми, кого они видят. Это займет минуту."}</p><label class="btn ghost sm" style="display:inline-block;cursor:pointer">${m.photo ? "Сменить фото" : "Добавить фото"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>`;
+    <div class="photo-nudge">${m.photo ? "" : '<p class="sub">Добавьте фото: людям легче знакомиться с теми, кого они видят. Это займет минуту.</p>'}<label class="btn ghost sm" style="display:inline-block;cursor:pointer">${m.photo ? "Сменить фото" : "Добавить фото"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>`;
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
   renderLevels();
   renderWants();
