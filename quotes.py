@@ -148,6 +148,16 @@ def render(idx, bg):
         if len(lines) <= 5 or size <= 36:
             break
         size -= 2
+    n, w = len(lines), 860
+    while n > 1 and w > 260:  # выравниваем строки: самая узкая ширина при том же числе строк, чтобы не оставалось одиноких слов
+        w -= 20
+        t = _wrap(text, _nf(size), w)
+        if len(t) > n:
+            break
+        lines = t
+    if len(lines) > 1 and len(lines[-1].split()) == 1 and len(lines[-2].split()) > 1:  # одинокое слово в конце: переносим слово с предыдущей строки
+        prev = lines[-2].split()
+        lines[-2:] = [" ".join(prev[:-1]), prev[-1] + " " + lines[-1]]
     lh = int(size * 1.35)
     y = 960 - (len(lines) - 1) * lh / 2
     for ln in lines:

@@ -4104,7 +4104,7 @@ async def send_card_bg(tg_id):
 
 def quote_file(idx, bg):
     """Готовая открытка лежит на диске: рисуем один раз, потом отдаем мгновенно."""
-    d = UPLOADS / "quotes"
+    d = UPLOADS / "quotes2"
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{idx}-{bg}.jpg"
     if not p.exists():
