@@ -504,6 +504,7 @@ function recAsk(c) {
 function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
   if (!el) return;
+  el.hidden = true; return;
   const it = (c && c.items) || [];
   el.innerHTML = it.length ? `<div class="avrow">${it.map(avaEl).join("")}</div><div class="t"><span class="eyebrow">Знакомства месяца</span><b>${esc(it.map(p => p.first_name || fullName(p)).slice(0, 3).join(", "))}</b></div><i>&#8250;</i>`
     : `<div class="t"><span class="eyebrow">Знакомства месяца</span><b>Заполните анкету, и мы подберем людей</b></div><i>&#8250;</i>`;
@@ -528,13 +529,16 @@ function renderPerks() {
     + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "");
   const yearFoot = yr ? "" : `<p class="why">Открывается при годовом тарифе</p><button class="link" id="pkYearInfo">Подробнее</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
-  el.innerHTML = `<span class="eyebrow" style="margin:4px 0 12px">Мои возможности</span>`
-    + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
+  const full = `<h3>Мои возможности</h3>` + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
     + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot);
-  const on = (id, f) => { const b = $("#" + id); if (b) b.onclick = f; };
-  on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
-  on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet);
-  on("pkYearInfo", levelsSheet); on("pkAmbInfo", levelsSheet);
+  const sub = [yr ? "годовой тариф" : "", amb ? "амбассадор" : ""].filter(Boolean).join(", ");
+  el.innerHTML = `<button class="panel rowcard slim" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Что открывается с годовым тарифом и статусом Амбассадора"}</span></div><i>&#8250;</i></button>`;
+  $("#perksOpen").onclick = () => openSheet(full, s => {
+    const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
+    on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
+    on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet);
+    on("pkYearInfo", levelsSheet); on("pkAmbInfo", levelsSheet);
+  });
 }
 
 /* ---------- профиль ---------- */
@@ -695,13 +699,13 @@ function routeSteps() {
   const c = S.coffee, m = S.me, ev = S.events || {soon: [], records: []}, s = [];
   if (S.meet && S.meet.length) s.push({h: `Как прошло знакомство с ${S.meet[0].name}?`, p: "Ответ попадет в итоги месяца", btn: "Ответить", tab: "people"});
   if (c && c.items && c.items.length && !c.items.some(i => i.written)) s.push({h: "Напишите людям из рекомендаций", p: `Мы подобрали знакомства на месяц: ${c.items.length}`, btn: "К людям", tab: "people"});
+  const unw = (ev.records || []).find(r => !r.locked && !r.watched);
+  if (unw) s.push({h: "Посмотрите эфир", p: unw.title + (unw.speaker ? ", " + unw.speaker : ""), btn: "Смотреть", rec: unw});
+  const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
+  if (nextEv) s.push({h: "Запишитесь на ближайший эфир", p: nextEv.title, btn: "Открыть", ev: nextEv});
   if (!m.profile_done || !m.seek || !m.give) s.push({h: "Заполните анкету", p: "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", btn: "Заполнить", tab: "profile"});
   if (!m.photo) s.push({h: "Добавьте фото", p: "Людям легче знакомиться с теми, кого они видят", btn: "Добавить", tab: "profile"});
   if (S.wants && wantsStale()) s.push({h: "Напишите фокус на месяц", p: "Одной-двумя фразами: что главное в этом месяце", btn: "Выбрать", tab: "profile"});
-  const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
-  if (nextEv) s.push({h: "Запишитесь на ближайший эфир", p: nextEv.title, btn: "Открыть", ev: nextEv});
-  const unw = (ev.records || []).find(r => !r.locked && !r.watched);
-  if (unw) s.push({h: "Посмотрите эфир, который еще не смотрели", p: unw.title, btn: "Смотреть", rec: unw});
   return s;
 }
 function runStep(st) { closeSheet(); if (st.tab) go(st.tab); else if (st.ev) eventSheet(st.ev); else if (st.rec) recSheet(st.rec); }
