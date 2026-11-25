@@ -33,7 +33,7 @@ function haptic(type) { try { TG.HapticFeedback.impactOccurred(type || "light");
 const ORBS = [["#F2B394","#B0583F","#2A1218"],["#DCE6FF","#7189CF","#1A2140"],["#E8C9A0","#A0704A","#24170F"],["#E9B6C6","#9A4C6A","#24111C"],["#BFE0D0","#4E8C78","#0F1F1C"]];
 const orb = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length];
   return `radial-gradient(70% 60% at 82% 0%,${o[0]} 0%,${o[1]} 28%,transparent 62%),radial-gradient(90% 70% at 10% 110%,${o[2]} 0%,transparent 70%),#0F1224`; };
-const stTag = p => `<em class="st">${p.level === "inside" ? "амбассадор" : "резидент"}</em>`;
+const stTag = p => p.level === "inside" ? `<em class="st">амбассадор</em>` : "";
 const avaEl = p => `<div class="ava" style="background:${p.photo ? `url(/botpic/${esc(p.photo)}) center/cover` : avaBg(p.tg_id)}">${p.photo ? "" : esc(initials(p))}</div>`;
 const avaBg = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length]; return `radial-gradient(circle at 50% 20%,${o[1]},${o[2]} 70%)`; };
 const initials = p => ((p.first_name || "?")[0] + ((p.last_name || "")[0] || "")).toUpperCase();
@@ -100,7 +100,7 @@ function go(v, seg) {
   track("v_" + v + (seg ? "_" + seg : ""));
   $$("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === v ? "true" : "false"));
   $$(".view").forEach(x => x.classList.toggle("on", x.id === "v-" + v));
-  $("#eyebrow").textContent = TITLES[v][0]; $("#title").textContent = TITLES[v][1];
+  $("#eyebrow").textContent = TITLES[v][0]; $("#title").textContent = TITLES[v][1]; $(".pagehead").style.display = v === "home" ? "none" : "";
   if (v === "people") { peopleSeg("coffee"); }
   if (v === "events" && seg) evSeg(seg);
   if (v === "lib") loadLib();
@@ -163,11 +163,9 @@ function feedItems() {
 }
 function renderFeed() {
   const c = S.cal, items = feedItems();
-  $("#evSoon").innerHTML = (c && c.intro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.intro)}</p>` : "")
-    + `<div class="seg sm" role="group" aria-label="Вид"><button data-cv="list" aria-pressed="${S.evView !== "cal"}">Список</button><button data-cv="cal" aria-pressed="${S.evView === "cal"}">Календарь</button></div>`
+  $("#evSoon").innerHTML = `<div class="seg sm" role="group" aria-label="Вид"><button data-cv="list" aria-pressed="${S.evView !== "cal"}">Список</button><button data-cv="cal" aria-pressed="${S.evView === "cal"}">Календарь</button></div>`
     + (S.evView === "cal" ? calView() : `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`)
-    + (S.events && S.events.soon.length ? '<p class="sub">Бот напомнит об эфирах клуба за день и за час до начала.</p>' : "")
-    + (c && c.outro ? `<p class="sub" style="white-space:pre-wrap;margin-top:16px">${esc(c.outro)}</p>` : "");
+    + ((c && (c.intro || c.outro)) || (S.events && S.events.soon.length) ? `<details class="more"><summary>О событиях</summary>${c && c.intro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.intro)}</p>` : ""}${S.events && S.events.soon.length ? '<p class="sub">Бот напомнит об эфирах клуба за день и за час до начала.</p>' : ""}${c && c.outro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.outro)}</p>` : ""}</details>` : "");
   if (!$("#homeCal")) return;
   $("#homeCal").innerHTML = items.length ? `<div class="row2"><span>Ближайшие события</span></div>
     <div class="list">${items.slice(0, 3).map(x => x.html).join("")}</div>
@@ -213,9 +211,7 @@ function renderHero() {
   const e = S.events.soon[0];
   if (!e) { $("#heroBox").innerHTML = ""; return; }
   const w = when(e.starts_at);
-  $("#heroBox").innerHTML = `<div class="hero"><span class="k">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t} МСК</span><h3>${esc(e.title)}</h3>
-    <p>${esc([e.rubric, e.speaker, e.place].filter(Boolean).join(" · "))}</p>
-    <div class="btns"><button class="btn sm" id="heroGo">${e.locked ? "Только для Амбассадоров" : e.going ? "Вы идете" : "Буду"}</button><button class="btn sm ghost" data-tab="events">Все эфиры</button></div></div>`;
+  $("#heroBox").innerHTML = `<div class="panel nx"><div class="t"><span class="eyebrow">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t}</span><b>${esc(e.title)}</b></div><button class="btn sm" id="heroGo">${e.locked ? "Для Амбассадоров" : e.going ? "Вы идете" : "Буду"}</button></div>`;
   $("#heroGo").onclick = () => eventSheet(e);
 }
 function eventSheet(e) { const w = when(e.starts_at);
@@ -473,6 +469,7 @@ function recAsk(c) {
 }
 function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
+  if (!el) return;
   if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
   el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
     ${c.items.map(p => `<div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))} ${stTag(p)}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
@@ -545,7 +542,7 @@ async function renderWants() {
 function renderLevels() {
   const el = $("#levelsCard"), amb = S.me && S.me.level === "inside"; if (!el) return;
   el.innerHTML = `<span class="eyebrow">Ваш статус</span><h3>${amb ? "Амбассадор" : "Резидент"}</h3>
-    <p class="sub">${amb ? "Вы проявляетесь в клубе и приводите друзей. Вам открыты закрытые эфиры и материалы." : "Станьте Амбассадором: приводите друзей и делитесь клубом. Тогда откроются закрытые эфиры и материалы."}</p>
+    <p class="sub">${amb ? "Вы проявляетесь в клубе и приводите друзей. Вам доступны свой эфир, витрина и 4 рекомендации знакомств в месяц." : "Станьте Амбассадором: приводите друзей и делитесь клубом. Тогда можно провести свой эфир, попасть на витрину и получать 4 рекомендации в месяц."}</p>
     <button class="btn ghost" id="toLevels">Как стать Амбассадором</button>`;
   $("#toLevels").onclick = levelsSheet;
 }
@@ -630,41 +627,53 @@ function wantsStale() {
   const u = new Date(w.updated_at), n = new Date();
   return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
 }
+function routeSteps() {
+  const c = S.coffee, m = S.me, ev = S.events || {soon: [], records: []}, s = [];
+  if (c && c.items && c.items.length && !c.items.some(i => i.written)) s.push({h: "Напишите людям из рекомендаций", p: `Мы подобрали знакомства на месяц: ${c.items.length}`, btn: "К людям", tab: "people"});
+  if (!m.profile_done || !m.seek || !m.give) s.push({h: "Заполните анкету", p: "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", btn: "Заполнить", tab: "profile"});
+  if (!m.photo) s.push({h: "Добавьте фото", p: "Людям легче знакомиться с теми, кого они видят", btn: "Добавить", tab: "profile"});
+  if (S.wants && wantsStale()) s.push({h: "Выберите фокус и цель месяца", p: "Одна сфера и один-два шага", btn: "Выбрать", tab: "profile"});
+  const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
+  if (nextEv) s.push({h: "Запишитесь на ближайший эфир", p: nextEv.title, btn: "Открыть", ev: nextEv});
+  const unw = (ev.records || []).find(r => !r.locked && !r.watched);
+  if (unw) s.push({h: "Посмотрите эфир, который еще не смотрели", p: unw.title, btn: "Смотреть", rec: unw});
+  return s;
+}
+function runStep(st) { closeSheet(); if (st.tab) go(st.tab); else if (st.ev) eventSheet(st.ev); else if (st.rec) recSheet(st.rec); }
 function renderWeekAction() {
   const w = $("#welcome"), el = $("#weekAction"); if (!el || !S.me) return;
-  const amb = S.me.level === "inside";
-  if (w) w.innerHTML = `<div class="hero"><span class="k">Клуб Единение</span><h3>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</h3>
-    <p>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}. Ниже ваш личный маршрут по клубу: куда заглянуть, чтобы взять из него больше.</p></div>`;
-  const c = S.coffee, n = S.norm;
-  const li = (ok, h, p, tab) => `<li class="${ok ? "ok" : ""}"${!ok && tab ? ` data-tab="${tab}" style="cursor:pointer"` : ""}><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
-  const res = [], m = S.me;
-  if (c && c.items && c.items.length && !c.items.some(i => i.written)) res.push(li(false, "Свяжитесь с людьми из рекомендаций", `Мы подобрали вам знакомства на месяц: ${c.items.length}`, "people"));
-  if (!m.profile_done || !m.seek || !m.give) res.push(li(false, "Заполните анкету", "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", "profile"));
-  if (!m.photo) res.push(li(false, "Добавьте фото", "Людям легче знакомиться с теми, кого они видят", "profile"));
-  if (S.wants && wantsStale()) res.push(li(false, "Выберите фокус и цель месяца", "Одна сфера и один-два шага", "profile"));
-  const ev = S.events || {soon: [], records: []};
-  const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
-  if (nextEv) res.push(li(false, "Запишитесь на ближайший эфир", nextEv.title, "events"));
-  const unw = (ev.records || []).find(r => !r.locked && !r.watched);
-  if (unw) res.push(`<li data-rec="${unw.id}" style="cursor:pointer"><i></i><div><b>Посмотрите эфир, который еще не смотрели</b><span>${esc(unw.title)}</span></div></li>`);
+  const amb = S.me.level === "inside", n = S.norm, done = n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0;
+  if (w) w.innerHTML = `<div class="hello">${avaEl(S.me)}<div class="t"><b>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</b><span>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</span></div></div>`;
+  const steps = routeSteps(), st = steps[0], C = 113.1;
+  el.hidden = false;
+  el.innerHTML = `<span class="eyebrow">Ваш маршрут</span>
+    ${st ? `<h3>${esc(st.h)}</h3><p class="sub">${esc(st.p)}</p><button class="btn solid" id="wkGo">${esc(st.btn)}</button>`
+         : `<h3>Все шаги пройдены</h3><p class="sub">Загляните в эфиры и библиотеку: там всегда есть что-то новое.</p><button class="btn solid" data-tab="events">К эфирам</button>`}
+    <div class="ringrow" id="wkAmb" role="button" tabindex="0"><svg viewBox="0 0 44 44" width="44" height="44"><circle cx="22" cy="22" r="18" class="rb"/><circle cx="22" cy="22" r="18" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${(C * (1 - done / 3)).toFixed(1)}" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle">${done}/3</text></svg>
+      <div class="t"><b>${amb ? "Вы Амбассадор" : "Путь Амбассадора"}</b><span>${amb ? (n && n.done ? `Статус действует еще ${n.days_left} дн.` : "Повторите три шага, чтобы сохранить статус") : "Свой эфир, витрина, 4 знакомства в месяц"}</span></div><i>&#8250;</i></div>
+    ${steps.length > 1 ? `<button class="link" id="wkAll">Весь маршрут: еще ${steps.length - 1}</button>` : ""}`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { const f = el.querySelector(".rf"); if (f) f.style.strokeDashoffset = f.dataset.off; }));
+  const g = $("#wkGo"); if (g) g.onclick = () => runStep(st);
+  const r = $("#wkAmb"); if (r) r.onclick = routeSheet;
+  const al = $("#wkAll"); if (al) al.onclick = routeSheet;
+}
+function routeSheet() {
+  const amb = S.me.level === "inside", n = S.norm, steps = routeSteps();
+  const li = (ok, h, p) => `<li class="${ok ? "ok" : ""}"><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
   const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
   const perks = ["Провести свой эфир внутри клуба и опубликовать его", "Разместиться на витрине предложений", "Получать 4 рекомендации знакомств в месяц вместо 2"];
-  el.hidden = false;
-  el.innerHTML = `<span class="eyebrow">Ваш маршрут</span><h3>Что можно сделать в клубе</h3>
-    <p class="sub">Подсказки на месяц. Берите то, что откликается.</p>
-    <div class="sub"><b>Для Резидентов</b></div>${res.length ? `<ul class="norm">${res.join("")}</ul>` : `<p class="sub">Всё, что мы предлагали, вы уже сделали. Загляните в эфиры и библиотеку.</p>`}
-    <div class="sub" style="margin-top:6px"><b>Для Амбассадоров</b></div>
-    <p class="sub">${amb ? "Вы Амбассадор. Чтобы сохранить статус, повторяйте три шага:" : "Амбассадорство открывается за вклад в клуб. Три шага:"}</p>
+  openSheet(`<h3>Ваш маршрут</h3>
+    ${steps.length ? `<p class="sub"><b>Что можно сделать</b></p><ul class="norm">${steps.map((s, i) => `<li data-i="${i}" style="cursor:pointer"><i></i><div><b>${esc(s.h)}</b><span>${esc(s.p)}</span></div></li>`).join("")}</ul>` : ""}
+    <p class="sub" style="margin-top:6px"><b>${amb ? "Чтобы сохранить статус Амбассадора" : "Путь Амбассадора"}</b></p>
     ${n ? `<ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>` : ""}
-    ${n && n.done ? `<p class="sub">Статус действует еще ${n.days_left} дн.</p>` : ""}
-    <div class="sub" style="margin-top:6px"><b>Что дает Амбассадорство</b></div>
-    <p class="sub">${perks.map(t => "· " + esc(t)).join("<br>")}</p>
+    <p class="sub"><b>Что дает Амбассадорство</b><br>${perks.map(t => "· " + esc(t)).join("<br>")}</p>
     <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkStream">Предложить свой эфир</button></div>
-    <button class="btn ghost" id="wkMore" style="margin-top:8px">Об уровнях</button>`;
-  $$("#weekAction [data-rec]").forEach(x => x.onclick = () => { const r = (S.events.records || []).find(q => String(q.id) === x.dataset.rec); if (r) recSheet(r); });
-  const sb = $("#wkStream"); if (sb) sb.onclick = streamSheet;
-  const mb = $("#wkMore"); if (mb) mb.onclick = levelsSheet;
-  const ib = $("#wkInv"); if (ib) ib.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
+    <button class="btn ghost" id="wkMore">Об уровнях</button>`, s => {
+    s.querySelectorAll("li[data-i]").forEach(x => x.onclick = () => runStep(steps[+x.dataset.i]));
+    s.querySelector("#wkStream").onclick = () => { closeSheet(); streamSheet(); };
+    s.querySelector("#wkMore").onclick = () => { closeSheet(); levelsSheet(); };
+    s.querySelector("#wkInv").onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); closeSheet(); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
+  });
 }
 function renderMonth() {
   const el = $("#monthCard"), w = S.wants; if (!el) return;
