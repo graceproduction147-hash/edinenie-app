@@ -85,13 +85,14 @@ function levelsSheet() {
   const amb = S.me && S.me.level === "inside", yr = !!S.year, n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
   const ok = '<i class="ck">&#10003;</i>', no = '<i class="no">&mdash;</i>';
-  const rows = [["Эфиры и библиотека", [ok, ok, ok]], ["События партнеров", [ok, ok, ok]],
-    ["Знакомства в месяц", ["2", "4", no]], ["Место на витрине", ["за друга", ok, ok]],
-    ["Свой эфир", [no, ok, ok]], ["Статус «Партнер»", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
+  const rows = [["Жизнь клуба и чат", [ok, ok, ok]], ["Приложение и Random Coffee", [ok, ok, ok]], ["Скидки до 50% на события", [ok, ok, ok]], ["Реферальная ссылка и кэшбэк", [ok, ok, ok]],
+    ["Знакомства в месяц", ["2", "4", no]], ["Персональные знакомства", [no, ok, no]], ["Закрытый пакет уроков и эфиров", [no, ok, no]],
+    ["Свой эфир, рубрика", [no, ok, ok]], ["Место на витрине", ["за друга", ok, ok]], ["Выступление на сцене", [no, no, ok]], ["Статус «Партнер»", [no, no, ok]], ["Гостевые пропуски", [no, no, "2"]]];
   const mine = [!amb, amb, yr], heads = [["Резидент", "по оплате"], ["Амбассадор", "за вклад"], ["Годовой", "+ к уровню"]];
   const grid = `<div class="mx"><div class="mh"></div>${heads.map((h, i) => `<div class="mh c${i}${mine[i] ? " mine" : ""}"><b>${h[0]}</b><span>${h[1]}</span>${mine[i] ? '<em>у вас</em>' : ""}</div>`).join("")}
     ${rows.map(r => `<div class="ml">${r[0]}</div>${r[1].map((v, i) => `<div class="mc c${i}${mine[i] ? " mine" : ""}">${v}</div>`).join("")}`).join("")}</div>`;
   openSheet(`<h3>Возможности клуба</h3><p class="sub">Годовой тариф добавляется к любому уровню. Амбассадором становятся за вклад, а не за оплату.</p>${grid}
+    <p class="sub" style="margin:10px 2px 0">За приглашенного по вашей ссылке участника: кэшбэк и статус Амбассадора на месяц.</p>
     <div class="amb-how"><h4>Как стать Амбассадором</h4>${n ? `<p class="sub" style="margin:6px 0">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
       <div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button>${amb || yr ? '<button class="btn sm ghost" id="lvStream">Свой эфир</button>' : ""}${yr ? "" : '<button class="btn sm ghost" id="lvYear">Годовой тариф</button>'}</div></div>`,
     s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
