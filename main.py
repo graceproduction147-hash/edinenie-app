@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import card, coffee, db, recs, tg
 from .config import (ADMIN_IDS, ADMIN_PASSWORD, BASE, DEV_MODE, INSIDE_MONTHS, JOIN_URL, PERIOD_MAP,
-                     PUBLIC_URL, RECS_COUNT, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
+                     PUBLIC_URL, RECS_COUNT, RECS_COUNT_AMB, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("club")
@@ -1241,18 +1241,22 @@ def matches(m=Depends(member), con=Depends(get_con)):
     return {"matches": out, "liked_you": hidden}
 
 
+def recs_n(m):
+    return RECS_COUNT_AMB if is_inside(m) else RECS_COUNT
+
+
 @app.get("/api/recs")
 def my_recs(m=Depends(member), con=Depends(get_con)):
     """Рекомендации знакомств на месяц. Подбор составляется при первом открытии."""
     if not m["profile_done"]:
-        return {"items": [], "profile_done": False, "enabled": bool(m["coffee"]), "count": RECS_COUNT}
+        return {"items": [], "profile_done": False, "enabled": bool(m["coffee"]), "count": recs_n(m)}
     if not m["coffee"]:
-        return {"items": [], "profile_done": True, "enabled": False, "count": RECS_COUNT}
-    r = recs.current(con, m, RECS_COUNT)
+        return {"items": [], "profile_done": True, "enabled": False, "count": recs_n(m)}
+    r = recs.current(con, m, recs_n(m))
     items = [{"id": i["id"], "reason": i["reason"], "written": i["written"],
               **public_card(i["other"]), "username": i["other"].get("username")} for i in r["items"]]
     return {"items": items, "month": r["month"], "batch": r["batch"], "profile_done": True, "enabled": True,
-            "can_refresh": any(i["written"] for i in items), "count": RECS_COUNT, "tag": "#знакомство"}
+            "can_refresh": any(i["written"] for i in items), "count": recs_n(m), "tag": "#знакомство"}
 
 
 @app.post("/api/recs/{rid}/written")
@@ -1266,7 +1270,7 @@ def recs_written(rid: int, m=Depends(member), con=Depends(get_con)):
 async def recs_refresh(req: Request, m=Depends(member), con=Depends(get_con)):
     data = await req.json()
     try:
-        fresh = recs.refresh(con, m, bool(data.get("met")), RECS_COUNT)
+        fresh = recs.refresh(con, m, bool(data.get("met")), recs_n(m))
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True, "fresh": fresh, "tag": "#знакомство"}
@@ -3922,12 +3926,15 @@ def offer_slots(con, m):
     if is_team(m):
         return {"invited": 0, "used": 0, "free": 99, "team": True, "year": False, "year_free": False}
     invited = con.execute("SELECT COUNT(*) FROM claims WHERE tg_id=? AND rule_code='invite' AND status!='rejected'", (m["tg_id"],)).fetchone()[0]
-    used = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND COALESCE(slot,'invite')!='year' AND (status='pending' OR approved_at IS NOT NULL)", (m["tg_id"],)).fetchone()[0]
+    used = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND COALESCE(slot,'invite') NOT IN ('year','amb') AND (status='pending' OR approved_at IS NOT NULL)", (m["tg_id"],)).fetchone()[0]
     year = is_year(m)
     busy = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND slot='year' AND status IN ('pending','active')", (m["tg_id"],)).fetchone()[0]
     year_free = bool(year and not busy)
-    return {"invited": invited, "used": used, "free": max(0, invited - used) + (1 if year_free else 0), "team": False,
-            "year": year, "year_free": year_free}
+    # Амбассадору положено одно постоянное место на витрине без приглашений
+    amb_busy = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND slot='amb' AND status IN ('pending','active')", (m["tg_id"],)).fetchone()[0]
+    amb_free = bool(is_inside(m) and not amb_busy)
+    return {"invited": invited, "used": used, "free": max(0, invited - used) + (1 if year_free else 0) + (1 if amb_free else 0), "team": False,
+            "year": year, "year_free": year_free, "amb_free": amb_free}
 
 
 def offer_until(approved_at):
@@ -3983,7 +3990,8 @@ async def offer_create(req: Request, m=Depends(member), con=Depends(get_con)):
         raise HTTPException(400, "Укажите специальную цену для клуба или отметьте, что открыты к бартеру")
     if offer_slots(con, m)["free"] < 1:
         raise HTTPException(400, "Нет свободного места на витрине. Пригласите в клуб друга: один оплативший участник дает месяц размещения одного предложения.")
-    slot = "year" if offer_slots(con, m)["year_free"] else "invite"
+    _sl = offer_slots(con, m)
+    slot = "year" if _sl["year_free"] else ("amb" if _sl["amb_free"] else "invite")
     oid = con.execute("INSERT INTO offers(tg_id,title,body,price,barter,barter_for,status,slot,created_at) VALUES(?,?,?,?,?,?,'pending',?,?)",
                       (m["tg_id"], title, body, price, barter, barter_for, slot, db.now())).lastrowid
     con.commit()

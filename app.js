@@ -33,6 +33,7 @@ function haptic(type) { try { TG.HapticFeedback.impactOccurred(type || "light");
 const ORBS = [["#F2B394","#B0583F","#2A1218"],["#DCE6FF","#7189CF","#1A2140"],["#E8C9A0","#A0704A","#24170F"],["#E9B6C6","#9A4C6A","#24111C"],["#BFE0D0","#4E8C78","#0F1F1C"]];
 const orb = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length];
   return `radial-gradient(70% 60% at 82% 0%,${o[0]} 0%,${o[1]} 28%,transparent 62%),radial-gradient(90% 70% at 10% 110%,${o[2]} 0%,transparent 70%),#0F1224`; };
+const avaEl = p => `<div class="ava" style="background:${p.photo ? `url(/botpic/${esc(p.photo)}) center/cover` : avaBg(p.tg_id)}">${p.photo ? "" : esc(initials(p))}</div>`;
 const avaBg = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length]; return `radial-gradient(circle at 50% 20%,${o[1]},${o[2]} 70%)`; };
 const initials = p => ((p.first_name || "?")[0] + ((p.last_name || "")[0] || "")).toUpperCase();
 const fullName = p => [p.first_name, p.last_name ? p.last_name[0] + "." : ""].filter(Boolean).join(" ") || "Участник клуба";
@@ -81,8 +82,8 @@ function levelsSheet() {
   const amb = S.me && S.me.level === "inside", n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
   openSheet(`<p class="sub">Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</p><h3>Резидент и Амбассадор</h3>
-    <p class="sub"><b>Резидент</b>: каждый участник клуба. Эфиры, конспекты, библиотека, события партнеров, витрина предложений и рекомендации знакомств.</p>
-    <p class="sub"><b>Амбассадор</b>: тот, кто проявляется в клубе и приводит друзей. Дополнительно открываются закрытые эфиры, их записи и закрытые материалы библиотеки. Статус дается не за оплату, а за вклад, и его подтверждает команда.</p>
+    <p class="sub"><b>Резидент</b>: каждый участник клуба. Эфиры, конспекты, библиотека, события партнеров, витрина предложений (по приглашениям) и 2 рекомендации знакомств в месяц.</p>
+    <p class="sub"><b>Амбассадор</b>: тот, кто проявляется в клубе и приводит друзей. Дополнительно: возможность провести свой эфир внутри клуба и опубликовать его, постоянное место на витрине предложений, 4 рекомендации знакомств в месяц вместо 2, закрытые эфиры и материалы. Статус дается не за оплату, а за вклад, и его подтверждает команда.</p>
     ${n ? `<p class="sub" style="margin-top:8px">${n.done ? `Вы Амбассадор. Статус действует еще ${n.days_left} дн. Чтобы сохранить его, повторите три шага за следующие ${n.days} дней.` : `Чтобы стать Амбассадором, за ${n.days} дней сделайте три шага:`}</p>
     <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
     <p class="sub" style="margin-top:8px">Годовой тариф добавляет бонусы: статус «Партнер», место на витрине без приглашений и гостевые пропуска на эфиры.</p>
@@ -208,7 +209,7 @@ function calView() {
     <p class="sub legend"><i class="own"></i>эфиры и события клуба <i class="par"></i>события партнеров</p>${det}</div>`; }
 function renderHero() {
   const e = S.events.soon[0];
-  if (!e) { $("#heroBox").innerHTML = `<div class="hero"><span class="k">Клуб Единение</span><h3>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</h3><p>Здесь появится ближайший эфир. Пока загляните в «Люди»: там уже ждут знакомства.</p><div class="btns"><button class="btn sm" data-tab="people">Найти своих</button></div></div>`; return; }
+  if (!e) { $("#heroBox").innerHTML = ""; return; }
   const w = when(e.starts_at);
   $("#heroBox").innerHTML = `<div class="hero"><span class="k">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t} МСК</span><h3>${esc(e.title)}</h3>
     <p>${esc([e.rubric, e.speaker, e.place].filter(Boolean).join(" · "))}</p>
@@ -439,7 +440,7 @@ async function loadCoffee() {
       c.items.map(p => {
         const msg = `${p.first_name || ""}, привет! Я ${S.me.first_name || ""}, ${(S.me.sphere || "").toLowerCase()}. Увидел(а) вас в Единении и хочу познакомиться. Давайте созвонимся на 20 минут?`;
         return `<div class="panel" data-rec="${p.id}">
-        <div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
+        <div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
         ${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
         <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek || "Не указано")}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give || "Не указано")}</p></div>
         <div class="why">${esc(p.reason)}</div>
@@ -466,7 +467,7 @@ function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
   if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
   el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
-    ${c.items.map(p => `<div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
+    ${c.items.map(p => `<div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
     <button class="btn ghost" data-tab="people">Открыть рекомендации</button>`;
 }
 
@@ -622,21 +623,28 @@ function wantsStale() {
   return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
 }
 function renderWeekAction() {
-  const el = $("#weekAction"); if (!el || !S.me) return;
-  const c = S.coffee, n = S.norm, amb = S.me.level === "inside";
+  const w = $("#welcome"), el = $("#weekAction"); if (!el || !S.me) return;
+  const amb = S.me.level === "inside";
+  if (w) w.innerHTML = `<div class="hero"><span class="k">Клуб Единение</span><h3>Добро пожаловать${S.me.first_name ? ", " + esc(S.me.first_name) : ""}</h3>
+    <p>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}. Ниже ваш личный маршрут по клубу: куда заглянуть, чтобы взять из него больше.</p></div>`;
+  const c = S.coffee, n = S.norm;
   const li = (ok, h, p, tab) => `<li class="${ok ? "ok" : ""}"${!ok && tab ? ` data-tab="${tab}" style="cursor:pointer"` : ""}><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
-  const recsOn = c && c.items && c.items.length;
-  const all = [];
-  if (recsOn) all.push(li(c.items.some(i => i.written), "Напишите людям из рекомендаций", "Мы подобрали вам знакомства, достаточно написать первым", "people"));
-  if (S.wants) all.push(li(!wantsStale(), "Задайте фокус и цель месяца", "Одна сфера и один-два конкретных шага", "profile"));
+  const res = [];
+  if (c && c.items && c.items.length) res.push(li(c.items.some(i => i.written), "Познакомьтесь с людьми из рекомендаций", `Мы подобрали вам знакомства на месяц: ${c.items.length}`, "people"));
+  if (S.wants) res.push(li(!wantsStale(), "Выберите фокус и цель месяца", "Одна сфера и один-два шага: по ним мы подбираем людей", "profile"));
   const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
-  const part2 = n ? `<div class="sub" style="margin-top:6px"><b>${amb ? "Чтобы сохранить статус Амбассадора" : "Чтобы стать Амбассадором"}</b></div>
-    <ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>
-    <p class="sub">${n.done ? `Статус действует еще ${n.days_left} дн. Повторите шаги за следующие ${n.days} дней, чтобы его сохранить.` : `Три шага за ${n.days} дней.`}</p>
-    <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkMore">Об уровнях</button></div>` : "";
-  el.hidden = !(all.length || n);
-  el.innerHTML = `<span class="eyebrow">На этой неделе</span><h3>Что нужно сделать</h3>
-    ${all.length ? `<div class="sub"><b>Для всех</b></div><ul class="norm">${all.join("")}</ul>` : ""}${part2}`;
+  const perks = ["Провести свой эфир внутри клуба и опубликовать его", "Разместиться на витрине предложений", "Получать 4 рекомендации знакомств в месяц вместо 2"];
+  el.hidden = false;
+  el.innerHTML = `<span class="eyebrow">Ваш маршрут</span><h3>Что можно сделать в клубе</h3>
+    <p class="sub">Подсказки на месяц. Берите то, что откликается.</p>
+    ${res.length ? `<div class="sub"><b>Для Резидентов</b></div><ul class="norm">${res.join("")}</ul>` : ""}
+    <div class="sub" style="margin-top:6px"><b>Для Амбассадоров</b></div>
+    <p class="sub">${amb ? "Вы Амбассадор. Чтобы сохранить статус, повторяйте три шага:" : "Амбассадорство открывается за вклад в клуб. Три шага:"}</p>
+    ${n ? `<ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>` : ""}
+    ${n && n.done ? `<p class="sub">Статус действует еще ${n.days_left} дн.</p>` : ""}
+    <div class="sub" style="margin-top:6px"><b>Что дает Амбассадорство</b></div>
+    <p class="sub">${perks.map(t => "· " + esc(t)).join("<br>")}</p>
+    <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkMore">Об уровнях</button></div>`;
   const mb = $("#wkMore"); if (mb) mb.onclick = levelsSheet;
   const ib = $("#wkInv"); if (ib) ib.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
 }
