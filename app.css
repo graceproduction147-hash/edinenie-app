@@ -373,3 +373,15 @@ nav.tabs button{letter-spacing:.1em;font-size:9.5px}
 .moods button span{width:18px;height:18px;border-radius:50%;background:var(--c);opacity:.55;transition:all .25s}
 .moods button[aria-pressed="true"]{border-color:var(--c);color:var(--fg);background:rgba(255,255,255,.05)}.moods button[aria-pressed="true"] span{opacity:1;transform:scale(1.25);box-shadow:0 0 14px var(--c)}
 .rdone{margin:2px 0 0;font-size:13px;color:var(--accent)}
+
+#s60v{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;justify-content:center;color:var(--fg);animation:qin .35s ease}
+#s60v .bars{position:absolute;top:max(12px,env(safe-area-inset-top));left:14px;right:70px;display:flex;gap:5px}
+#s60v .bars span{flex:1;height:3px;border-radius:9px;background:rgba(255,255,255,.2);overflow:hidden}#s60v .bars span.done{background:var(--accent)}
+#s60v .bars span i{display:block;height:100%;width:0;background:var(--accent)}#s60v .bars span.cur i{animation:s60 7s linear forwards}#s60v .bars span.cur:last-child i{width:100%;animation:none}
+@keyframes s60{to{width:100%}}
+#s60v .qx{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(11,13,24,.45);color:#fff;cursor:pointer;z-index:3}
+#s60v .zone{position:absolute;top:70px;bottom:0;width:40%;z-index:1}#s60v .zone.l{left:0}#s60v .zone.r{right:0;width:60%}
+#s60v .body{position:relative;z-index:2;padding:0 28px;text-align:center;display:flex;flex-direction:column;gap:22px;align-items:center;pointer-events:none}
+#s60v .body .end{pointer-events:auto;display:flex;flex-direction:column;gap:10px;width:100%;margin-top:18px}
+#s60v .body p{margin:0;font:400 34px/1.25 var(--font-display);letter-spacing:.02em}#s60v .body p.ttl{font-size:40px;text-transform:uppercase}
+#s60v .body .sp{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
