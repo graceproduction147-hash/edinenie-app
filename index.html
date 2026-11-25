@@ -110,10 +110,9 @@
     <!-- ПРОФИЛЬ -->
     <section class="view" id="v-profile">
       <div class="panel" id="meCard"></div>
-      <button class="panel rowcard" id="progBtn"><div class="t"><b>Мой прогресс</b><span class="sub" id="progSub"></span></div><i>&#8250;</i></button>
-      <div id="perksBox"></div>
       <div class="panel" id="anketa">
-        <h3>Моя анкета</h3>
+        <button class="atoggle" id="anketaToggle" aria-expanded="false"><b>Моя анкета</b><i>&#8250;</i></button>
+        <div id="anketaBody" hidden>
         <div class="g2">
           <label class="f" for="pName">ИМЯ<input type="text" id="pName" maxlength="40"></label>
           <label class="f" for="pCity">ГОРОД<input type="text" id="pCity" maxlength="40"></label>
@@ -129,7 +128,10 @@
         <div class="switch"><span>Показывать меня в рекомендациях</span><button class="toggle" id="pCoffee" aria-pressed="true" aria-label="Показывать меня в рекомендациях"></button></div>
         <div class="switch"><span>Готов(а) к офлайн-встречам</span><button class="toggle" id="pOff" aria-pressed="true" aria-label="Готов к офлайн-встречам"></button></div>
         <button class="btn" id="saveProfile">Сохранить</button>
+              </div>
       </div>
+      <button class="panel rowcard" id="progBtn"><div class="t"><b>Мой прогресс</b><span class="sub" id="progSub"></span></div><i>&#8250;</i></button>
+      <div id="perksBox"></div>
       <p class="sub" id="verStamp" style="text-align:center;margin-top:18px;opacity:.7"></p>
     </section>
   </div>
