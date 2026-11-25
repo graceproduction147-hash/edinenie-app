@@ -132,7 +132,7 @@ function setPoints(p) { S.points = p; }
 async function refreshPoints() { const d = await api("/api/points"); S.rules = d.rules; S.shop = d.shop; S.invite = d.invite_link; S.claims = d.claims;
   setPoints({balance: d.balance, pending: d.pending}); renderTasks(); }
 
-const HINTS = {insight: "Напишите в чате клуба с хештегом #инсайт или отправьте здесь", story: "Выложите сторис о клубе и напишите в чат с хештегом #делюсь", result: "Чего достигли благодаря клубу: напишите в чат с хештегом #замечаю", invite: "Баллы придут, когда друг оплатит участие: 50% от его первой оплаты"};
+const HINTS = {insight: "Напишите в чате клуба с хештегом #инсайт или отправьте здесь", story: "Выложите сторис о клубе и напишите в чат с хештегом #делюсь", result: "Чего достигли благодаря клубу: напишите в чат с хештегом #замечаю", invite: "Шаг засчитается, когда друг оплатит участие по вашей ссылке"};
 const hintOf = k => HINTS[k.code] || k.hint;
 function renderTasks() {
   const pendingCodes = new Set((S.claims || []).filter(c => c.status === "pending").map(c => c.rule_code));

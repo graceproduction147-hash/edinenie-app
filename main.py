@@ -769,7 +769,7 @@ async def decide_claim(con, cid, approve, points=None):
     con.execute("UPDATE claims SET status=?, points=?, decided_at=? WHERE id=?", (status, pts, db.now(), cid))
     con.commit()
     if approve:
-        await send_text(c["tg_id"], render(con, "points_ok", points=pts), tg.app_button("Мои баллы", "#profile"), key="points_ok", con=con)
+        await send_text(c["tg_id"], render(con, "points_ok", points=pts), tg.app_button("Мой прогресс", "#profile"), key="points_ok", con=con)
         await recalc_inside(con, c["tg_id"])
     return status, pts, c
 
@@ -1113,7 +1113,7 @@ async def handle_chat_insight(con, msg):
     clean = INSIGHT_TAG.sub("", text).strip()[:1000]
     cid, rule = add_claim(con, m["tg_id"], "insight", clean, ref=ref)
     con.commit()
-    await send_text(m["tg_id"], render(con, "insight_ok", points=rule["points"]), tg.app_button("Мои баллы", "#profile"), key="insight_ok", con=con)
+    await send_text(m["tg_id"], render(con, "insight_ok", points=rule["points"]), tg.app_button("Мой прогресс", "#profile"), key="insight_ok", con=con)
     who = (m.get("first_name") or "") + (f" @{m['username']}" if m.get("username") else "")
     kb = {"inline_keyboard": [[{"text": f"Подтвердить +{rule['points']}", "callback_data": f"c:{cid}:1"},
                                {"text": "Отклонить", "callback_data": f"c:{cid}:0"}]]}
@@ -1141,7 +1141,7 @@ async def handle_chat_share(con, msg, u, text):
     clean = MEET_TAG.sub("", SHARE_TAG.sub("", NOTICE_TAG.sub("", text))).strip()[:1000]
     cid, rule = add_claim(con, m["tg_id"], code, clean, ref=ref)
     con.commit()
-    await send_text(m["tg_id"], render(con, "share_ok", points=rule["points"], what=what), tg.app_button("Мои баллы", "#profile"), key="share_ok", con=con)
+    await send_text(m["tg_id"], render(con, "share_ok", points=rule["points"], what=what), tg.app_button("Мой прогресс", "#profile"), key="share_ok", con=con)
     who = (m.get("first_name") or "") + (f" @{m['username']}" if m.get("username") else "")
     kb = {"inline_keyboard": [[{"text": f"Подтвердить +{rule['points']}", "callback_data": f"c:{cid}:1"},
                                {"text": "Отклонить", "callback_data": f"c:{cid}:0"}]]}
