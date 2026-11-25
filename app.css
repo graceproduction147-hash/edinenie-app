@@ -57,9 +57,10 @@ h2.sec{margin:12px 0 0;font-family:var(--font-display);font-weight:400;font-size
 .btn:disabled{opacity:.4;cursor:default}
 .btns{display:flex;gap:10px;flex-wrap:wrap}
 .btns .btn{flex:1 1 140px}
-textarea,input[type=text],input[type=search]{width:100%;box-sizing:border-box;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--fg);
+textarea,input[type=text],input[type=search],input[type=date]{width:100%;box-sizing:border-box;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--fg);
   border-radius:16px;padding:12px 14px;font:15px var(--font-body);resize:vertical}
 input[type=search]{border-radius:999px;padding-left:18px}
+input[type=date]{min-height:48px;-webkit-appearance:none;appearance:none;color-scheme:dark;text-align:left}input[type=date]::-webkit-calendar-picker-indicator{opacity:.55}
 ::placeholder{color:var(--muted);opacity:.8}
 input[type=file]{color:var(--muted);font-size:13px}
 label.f{display:flex;flex-direction:column;gap:7px;font-size:10.5px;color:var(--accent);font-weight:500;letter-spacing:.2em}

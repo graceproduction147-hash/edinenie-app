@@ -580,14 +580,14 @@ function fillProfile() {
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
   renderLevels();
   renderWants();
-  $("#pName").value = m.first_name || ""; $("#pSphere").value = m.sphere || ""; $("#pProject").value = m.project || ""; $("#pCity").value = m.city || "";
+  $("#pName").value = m.first_name || ""; $("#pBirth").value = /^\d{4}-\d{2}-\d{2}$/.test(m.birthday || "") ? m.birthday : ""; $("#pSphere").value = m.sphere || ""; $("#pProject").value = m.project || ""; $("#pCity").value = m.city || "";
   $("#pSeek").value = m.seek || ""; $("#pGive").value = m.give || ""; bindPreview(); previewCard();
   $("#pCoffee").setAttribute("aria-pressed", m.coffee ? "true" : "false"); $("#pOff").setAttribute("aria-pressed", m.offline ? "true" : "false");
 }
 $("#supportBtn").onclick = () => { haptic(); openPay(S.support || "https://t.me/edinenie_support"); };
 $$(".toggle").forEach(t => t.onclick = () => t.setAttribute("aria-pressed", t.getAttribute("aria-pressed") === "true" ? "false" : "true"));
 $("#saveProfile").onclick = async () => {
-  const data = {first_name: $("#pName").value.trim(), sphere: $("#pSphere").value.trim(), project: $("#pProject").value.trim(), city: $("#pCity").value.trim(), seek: $("#pSeek").value.trim(), give: $("#pGive").value.trim(),
+  const data = {first_name: $("#pName").value.trim(), birthday: $("#pBirth").value || "", sphere: $("#pSphere").value.trim(), project: $("#pProject").value.trim(), city: $("#pCity").value.trim(), seek: $("#pSeek").value.trim(), give: $("#pGive").value.trim(),
     coffee: $("#pCoffee").getAttribute("aria-pressed") === "true", offline: $("#pOff").getAttribute("aria-pressed") === "true"};
   try {
     await api("/api/me", {method: "PUT", json: data}); Object.assign(S.me, data);

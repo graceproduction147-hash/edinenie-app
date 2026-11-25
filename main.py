@@ -1625,11 +1625,18 @@ async def wants_put(req: Request, m=Depends(member), con=Depends(get_con)):
 @app.put("/api/me")
 async def update_me(req: Request, m=Depends(current_user), con=Depends(get_con)):
     data = await req.json()
-    allowed = {"first_name", "last_name", "sphere", "project", "city", "seek", "give", "offline", "coffee", "tags", "income"}
+    allowed = {"first_name", "last_name", "sphere", "project", "city", "seek", "give", "offline", "coffee", "tags", "income", "birthday"}
     upd = {k: v for k, v in data.items() if k in allowed}
     for k, n in (("first_name", 40), ("last_name", 40), ("sphere", 40), ("city", 40), ("project", 90), ("seek", 140), ("give", 140), ("income", 40)):
         if k in upd:
             upd[k] = str(upd[k] or "").strip()[:n]
+    if "birthday" in upd:   # дата рождения: ГГГГ-ММ-ДД, видит только команда (в карточку знакомств не попадает)
+        bd = str(upd["birthday"] or "").strip()
+        try:
+            dt = datetime.strptime(bd, "%Y-%m-%d") if bd else None
+            upd["birthday"] = bd if dt and 1920 <= dt.year <= datetime.now().year - 10 else ""
+        except ValueError:
+            upd["birthday"] = ""
     if "tags" in upd:
         upd["tags"] = json.dumps(upd["tags"][:8], ensure_ascii=False)
     for k in ("offline", "coffee"):
