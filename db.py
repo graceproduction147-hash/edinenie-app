@@ -117,7 +117,7 @@ def guess_pillar(title):
     return ""
 
 
-PAY_LINK = "https://t.me/m/-3doU5bbMGYy"
+PAY_LINK = "https://t.me/tribute/app?startapp=s14lC"
 
 
 def _fix_pay_links(con):
@@ -129,8 +129,9 @@ def _fix_pay_links(con):
         for c in cols:
             if c not in have:
                 continue
-            for r in con.execute(f"SELECT {key}, {c} FROM {table} WHERE {c} LIKE '%edinenie-club.com%'").fetchall():
-                new = rx.sub(PAY_LINK, r[1] or "")
+            for r in con.execute(f"SELECT {key}, {c} FROM {table} WHERE {c} LIKE '%edinenie-club.com%' OR {c} LIKE '%t.me/m/-3doU5bbMGYy%'").fetchall():
+                new = (r[1] or "").replace("https://t.me/m/-3doU5bbMGYy", PAY_LINK)  # прошлая версия подставляла сюда другую ссылку
+                new = rx.sub(PAY_LINK, new)
                 if new != r[1]:
                     con.execute(f"UPDATE {table} SET {c}=? WHERE {key}=?", (new, r[0]))
     for table, key, cols in (("settings", "key", ["value"]), ("funnels", "id", ["offer_text", "offer_btn", "ask_text", "texts", "phone_text"]), ("funnel_steps", "id", ["text", "btn"])):

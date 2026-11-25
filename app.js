@@ -24,7 +24,7 @@ function openTg(username) {
   const url = "https://t.me/" + username.replace("@", "");
   if (TG && TG.openTelegramLink) TG.openTelegramLink(url); else window.open(url, "_blank");
 }
-function openPay(u) { u = u || "https://t.me/m/-3doU5bbMGYy"; if (TG && TG.openTelegramLink && /^https:\/\/t\.me\//.test(u)) TG.openTelegramLink(u); else if (TG && TG.openLink) TG.openLink(u); else window.open(u, "_blank"); }
+function openPay(u) { u = u || "https://t.me/tribute/app?startapp=s14lC"; if (TG && TG.openTelegramLink && /^https:\/\/t\.me\//.test(u)) TG.openTelegramLink(u); else if (TG && TG.openLink) TG.openLink(u); else window.open(u, "_blank"); }
 function haptic(type) { try { TG.HapticFeedback.impactOccurred(type || "light"); } catch (e) {} }
 
 /* ---------- внешний вид ---------- */
@@ -93,7 +93,7 @@ function levelsSheet() {
       + '<div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button><button class="btn sm ghost" id="lvStream">Свой эфир</button></div>')}`,
     s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
       const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); streamSheet(); };
-      const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { openPay(S.join); }; });
+      const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); }; });
 }
 let _trk = {};
 function track(k) {
@@ -621,7 +621,7 @@ function renderYear() {
   el.innerHTML = S.year
     ? `<span class="eyebrow">Партнер клуба</span><h3>Ваши бонусы годового тарифа</h3>${list}<p class="sub">Эти бонусы есть только на годовом тарифе.</p>`
     : `<span class="eyebrow">Годовой тариф</span><h3>Бонусы годового тарифа</h3>${list}<p class="sub">Статус Амбассадора открывается за вклад в клуб, а не за оплату. Годовой тариф добавляет эти бонусы.</p><button class="btn ghost" id="toYear">Узнать про годовой тариф</button>`;
-  const b = $("#toYear"); if (b) b.onclick = () => { openPay(S.join); };
+  const b = $("#toYear"); if (b) b.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); };
 }
 
 /* ---------- первая анкета ---------- */
