@@ -41,7 +41,7 @@ TEXTS = {
     "monthly": {"title": "Команда /monthly", "max": 3000, "hint": "",
                 "default": "**Итоги месяца**\n\nПара минут, чтобы увидеть, что сдвинулось, и выбрать, куда идти дальше. Нам очень важно знать, как у вас дела."},
     "btn_form": {"title": "Кнопка анкеты", "max": 60, "plain": True, "hint": "", "default": "Заполнить анкету"},
-    "btn_club": {"title": "Кнопка клуба", "max": 60, "plain": True, "hint": "", "default": "Открыть Клуб"},
+    "btn_club": {"title": "Кнопка клуба", "max": 60, "plain": True, "hint": "", "default": "Войти"},
     "btn_monthly": {"title": "Кнопка итогов месяца", "max": 60, "plain": True, "hint": "", "default": "Заполнить итоги"},
     "btn_support": {"title": "Кнопка поддержки", "max": 60, "plain": True, "hint": "Ведет в чат службы поддержки.", "default": "Служба поддержки"},
     "bot_about": {"title": "Описание бота (в пустом чате до Start)", "max": 512, "plain": True, "hint": "Только текст, без жирного. Обновляется в Telegram после сохранения.",
@@ -347,7 +347,9 @@ async def setup_bot(delay=3):
         con.close()
     for method, payload in (("setMyDescription", {"description": about}),
                             ("setMyShortDescription", {"short_description": short}),
-                            ("setMyCommands", {"commands": BOT_COMMANDS})):
+                            ("setMyCommands", {"commands": []}),
+                            ("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "ВОЙТИ",
+                                                                   "web_app": {"url": f"{PUBLIC_URL}/"}}})):
         try:
             await tg._call(tg.BOT_TOKEN, method, payload)
         except Exception:
