@@ -68,15 +68,15 @@ const LVL_NOTE = {
   events: ["эфиры, события партнеров, витрина предложений", "закрытые эфиры и их записи"],
   lib: ["открытые конспекты, подкасты, записи", "закрытые материалы"],
   people: ["рекомендации знакомств для всех участников", null],
-  profile: ["награды Club", "награды только для Inside"]
+  profile: ["награды Club", "награды только для Амбассадоров"]
 };
 function renderLvl(v) {
   const el = $("#lvl"), n = LVL_NOTE[v], inside = S.me && S.me.level === "inside";
   el.hidden = true; return; /* строка уровней под заголовком убрана: Inside отмечен замочками на самих карточках */
   if (!n) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<span class="c ${inside ? "" : "me"}">Club</span><span>${esc(n[0])}</span>` + (n[1] ? `<span class="c in ${inside ? "me" : ""}">Inside</span><span>${esc(n[1])}</span>` : "")
-    + `<button id="lvlMore">Что открывает Inside</button>`;
+  el.innerHTML = `<span class="c ${inside ? "" : "me"}">Club</span><span>${esc(n[0])}</span>` + (n[1] ? `<span class="c in ${inside ? "me" : ""}">Амбассадор</span><span>${esc(n[1])}</span>` : "")
+    + `<button id="lvlMore">Что открывает статус Амбассадора</button>`;
   $("#lvlMore").onclick = levelsSheet;
 }
 function levelsSheet() {
@@ -319,8 +319,11 @@ $("#libPills").innerHTML = LIBP.map(([k, v]) => `<button class="chip" data-lp="$
 $$("[data-lp]").forEach(c => c.onclick = () => { libPillar = c.dataset.lp; $$("[data-lp]").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false")); loadLib(); });
 $("#libSearch").oninput = () => { clearTimeout(libTimer); libTimer = setTimeout(loadLib, 300); };
 const orbImg = seed => `<img class="orb" src="/orb/${(seed % 2000 + 2000) % 2000}.png?v=2" alt="" loading="lazy">`;
+const fullSp = s => s === "Влад" ? "Влад Митьковский" : s;
+function recWhen(iso) { try { const p = new Intl.DateTimeFormat("ru-RU", {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow"}).format(new Date(iso)); return p.replace(" в ", ", "); } catch (e) { return ""; } }
+const recSub = r => [fullSp(r.speaker), recWhen(r.starts_at)].filter(Boolean).join(" · ");
 const libItem = x => `<button class="item" data-lib="${x.id}">${orbImg(x.event_id || x.id + 500)}
-  <div class="t"><b>${esc(x.title)}</b><span>${esc([TYPE[x.type], x.author, x.meta].filter(Boolean).join(" · "))}</span></div>
+  <div class="t"><b>${esc(x.title)}</b><span>${esc((() => { const ev = x.event_id && S.events && S.events.records.find(r => r.id == x.event_id); return ev ? recSub(ev) : [x.type === "rec" ? "" : TYPE[x.type], fullSp(x.author), x.meta].filter(Boolean).join(" · "); })())}</span></div>
   <div class="end">${x.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
 function bindLib(root, items) { root.querySelectorAll("[data-lib]").forEach(b => b.onclick = () => libSheet(items.find(x => x.id == b.dataset.lib))); }
 async function loadLib() {
@@ -328,7 +331,7 @@ async function loadLib() {
     const q = $("#libSearch").value.trim().toLowerCase();
     const recs = (S.events && (libType === "all" || libType === "rec")) ? S.events.records.filter(inPillar).filter(r => !items.some(x => x.event_id == r.id) && (!q || (r.title + " " + r.speaker).toLowerCase().includes(q))) : [];
     const recRow = r => `<button class="item" data-rec="${r.id}">${orbImg(r.id)}
-      <div class="t"><b>${esc(r.title)}</b><span>${esc(["Запись эфира", r.speaker === "Влад" ? "Влад Митьковский" : r.speaker].filter(Boolean).join(" · "))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
+      <div class="t"><b>${esc(r.title)}</b><span>${esc(recSub(r))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
     $("#libList").innerHTML = ((recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">В этом разделе пока пусто.</p>')
       + `<button class="btn ghost" id="libStream" style="margin-top:10px">Провести эфир в клубе</button>`;
     $("#libStream").onclick = ownStream;
@@ -752,9 +755,10 @@ function renderMonth() {
   const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit && !S.rOpen;
   if (!done || !w || !w.goal) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<span class="eyebrow">Фокус на месяц</span><p class="mgoal">${esc(w.goal)}</p>
+  el.innerHTML = `<div class="mdone"><i class="mck"></i><div><b>Ритуал на сегодня выполнен</b><span>${d.streak} ${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
+    <span class="eyebrow">Фокус на месяц</span><p class="mgoal">${esc(w.goal)}</p>
     <div class="mmood"><span class="sub">Состояние сегодня</span><div class="moods mini">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" aria-label="${m[0]}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
-    <div class="mfoot"><span class="sub">Ритуал выполнен · ${d.streak} дн. подряд</span><span class="rbt"><button class="btn sm ghost" id="mcOpen">Открыть ритуал</button><button class="btn sm ghost" id="mcEdit">Фокус</button></span></div>`;
+    <div class="mfoot"><span class="rbt"><button class="btn sm ghost" id="mcOpen">Открыть ритуал</button><button class="btn sm ghost" id="mcEdit">Фокус</button></span></div>`;
   $("#mcEdit").onclick = () => { S.rfEdit = true; renderRitual(); };
   $("#mcOpen").onclick = () => { S.rOpen = true; renderRitual(); };
   $$("#monthCard [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
