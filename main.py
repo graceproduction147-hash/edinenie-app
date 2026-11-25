@@ -2914,7 +2914,7 @@ async def admin_event(req: Request, _=Depends(admin), con=Depends(get_con)):
     if "speaker" in d and len(str(d.get("speaker") or "").split()) < 2:
         raise HTTPException(400, "Укажите спикера полностью: имя и фамилия")
     cols = ["title", "rubric", "speaker", "starts_at", "place", "inside_only", "join_url", "description",
-            "recording_url", "podcast_url", "summary", "timecodes", "clips"]
+            "recording_url", "podcast_url", "summary", "timecodes", "clips", "pillar"]
     vals = [json.dumps(d[k], ensure_ascii=False) if k in ("summary", "timecodes") and k in d else d.get(k) for k in cols]
     if d.get("id"):
         sets = ", ".join(f"{k}=COALESCE(?,{k})" for k in cols)
@@ -2972,7 +2972,7 @@ def admin_events_list(_=Depends(admin), con=Depends(get_con)):
 @app.post("/admin/api/library")
 async def admin_library(req: Request, _=Depends(admin), con=Depends(get_con)):
     d = await req.json()
-    cols = ["type", "title", "author", "meta", "url", "body", "inside_only", "event_id"]
+    cols = ["type", "title", "author", "meta", "url", "body", "inside_only", "event_id", "pillar"]
     vals = [d.get(k, 0 if k == "inside_only" else ("" if k != "event_id" else None)) for k in cols]
     lid = con.execute(f"INSERT INTO library({', '.join(cols)}, created_at) VALUES({', '.join('?' * len(cols))}, ?)", (*vals, db.now())).lastrowid
     con.commit()
@@ -2988,7 +2988,7 @@ def admin_library_list(_=Depends(admin), con=Depends(get_con)):
 @app.post("/admin/api/library/{lid}")
 async def admin_library_edit(lid: int, req: Request, _=Depends(admin), con=Depends(get_con)):
     d = await req.json()
-    cols = ["type", "title", "author", "meta", "url", "body", "inside_only"]
+    cols = ["type", "title", "author", "meta", "url", "body", "inside_only", "pillar"]
     sets = [c for c in cols if c in d]
     if sets:
         vals = [int(d[c] or 0) if c == "inside_only" else (d[c] or "") for c in sets]

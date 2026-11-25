@@ -312,7 +312,11 @@ function calSheet(e) {
 }
 
 /* ---------- библиотека ---------- */
-let libType = "all", libTimer;
+let libType = "all", libTimer, libPillar = "env";
+const LIBP = [["env", "Окружение"], ["game", "Большая игра"], ["state", "Состояние"]];
+const inPillar = x => !x.pillar || x.pillar === libPillar;
+$("#libPills").innerHTML = LIBP.map(([k, v]) => `<button class="chip" data-lp="${k}" aria-pressed="${k === libPillar}">${v}</button>`).join("");
+$$("[data-lp]").forEach(c => c.onclick = () => { libPillar = c.dataset.lp; $$("[data-lp]").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false")); loadLib(); });
 $("#libSearch").oninput = () => { clearTimeout(libTimer); libTimer = setTimeout(loadLib, 300); };
 const orbImg = seed => `<img class="orb" src="/orb/${(seed % 2000 + 2000) % 2000}.png" alt="" loading="lazy">`;
 const libItem = x => `<button class="item" data-lib="${x.id}">${orbImg(x.event_id || x.id + 500)}
@@ -320,12 +324,12 @@ const libItem = x => `<button class="item" data-lib="${x.id}">${orbImg(x.event_i
   <div class="end">${x.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
 function bindLib(root, items) { root.querySelectorAll("[data-lib]").forEach(b => b.onclick = () => libSheet(items.find(x => x.id == b.dataset.lib))); }
 async function loadLib() {
-  try { const items = await api(`/api/library?type=${libType}&q=${encodeURIComponent($("#libSearch").value)}`);
+  try { const items = (await api(`/api/library?type=${libType}&q=${encodeURIComponent($("#libSearch").value)}`)).filter(x => { const ev = x.event_id && S.events && S.events.records.find(r => r.id == x.event_id); return inPillar(ev && ev.pillar ? ev : x); });
     const q = $("#libSearch").value.trim().toLowerCase();
-    const recs = (S.events && (libType === "all" || libType === "rec")) ? S.events.records.filter(r => !items.some(x => x.event_id == r.id) && (!q || (r.title + " " + r.speaker).toLowerCase().includes(q))) : [];
+    const recs = (S.events && (libType === "all" || libType === "rec")) ? S.events.records.filter(inPillar).filter(r => !items.some(x => x.event_id == r.id) && (!q || (r.title + " " + r.speaker).toLowerCase().includes(q))) : [];
     const recRow = r => `<button class="item" data-rec="${r.id}">${orbImg(r.id)}
       <div class="t"><b>${esc(r.title)}</b><span>${esc(["Запись эфира", r.speaker === "Влад" ? "Влад Митьковский" : r.speaker].filter(Boolean).join(" · "))}</span></div><div class="end">${r.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : ""}</div></button>`;
-    $("#libList").innerHTML = (recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">Здесь пока пусто. Материалы появятся после первых эфиров.</p>';
+    $("#libList").innerHTML = (recs.length || items.length) ? recs.map(recRow).join("") + items.map(libItem).join("") : '<p class="empty-line">В этом разделе пока пусто.</p>';
     $$("#libList [data-rec]").forEach(b => b.onclick = () => recSheet(recs.find(r => r.id == b.dataset.rec)));
     bindLib($("#libList"), items); } catch (e) { fail(e); }
 }
