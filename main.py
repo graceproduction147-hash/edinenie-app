@@ -89,6 +89,9 @@ TEXTS = {
                   "default": "Добрый день! Завтра эфир Клуба: **{title}**{link}\n\nБудем рады вас видеть."},
     "event_hour": {"title": "Напоминание об эфире за час", "group": "members", "max": 1000, "vars": "{title}, {link}", "hint": "Записавшимся на эфир.",
                    "default": "Через час эфир Клуба: **{title}**{link}\n\nЖдем вас, будет живо."},
+    "daily_push": {"title": "Ежедневное напоминание про ритуал дня (10:00 МСК)", "group": "reminders", "max": 600, "vars": "{name}, {streak}",
+                   "hint": "Раз в день в 10:00 по Москве тем, кто еще не заходил. Отключается в профиле: «Мой прогресс».",
+                   "default": "{name}, доброе утро!\n\nВаш ритуал на сегодня: отметьте состояние, вспомните фокус месяца и вытяните карту дня. Это займет минуту.{streak}\n\nНапоминание можно отключить в профиле, раздел «Мой прогресс»."},
     "r_anketa_1": {"title": "Напоминание про анкету: 1-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Через сутки после оплаты, если карточка знакомств не заполнена.",
                    "default": "{name}, добрый день!\n\nРады, что вы в Клубе. Откройте приложение и заполните карточку знакомств: это одна минута, и мы сможем знакомить вас с нужными людьми."},
     "r_anketa_3": {"title": "Напоминание про анкету: 3-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На третий день, если анкета все еще не заполнена.",
@@ -1175,6 +1178,77 @@ async def daily_set(req: Request, m=Depends(member), con=Depends(get_con)):
     return _daily_state(con, m)
 
 
+@app.get("/api/progress")
+def progress(days: int = 30, m=Depends(member), con=Depends(get_con)):
+    """Трекинг ритуала дня для профиля: состояние по дням, серия, сравнение с прошлым периодом."""
+    _daily_ensure(con)
+    days = days if days in (7, 30, 90) else 30
+    today = datetime.now(MSK).date()
+    rows = {r["day"]: r for r in con.execute("SELECT * FROM daily WHERE tg_id=? AND day>=?", (m["tg_id"], (today - timedelta(days=400)).isoformat())).fetchall()}
+
+    def n(r):
+        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"]))
+
+    def avg(a, b):  # дни [today-b+1 .. today-a]
+        v = [rows[(today - timedelta(days=i)).isoformat()]["mood"] for i in range(a, b)
+             if rows.get((today - timedelta(days=i)).isoformat()) and rows[(today - timedelta(days=i)).isoformat()]["mood"] is not None]
+        return round(sum(v) / len(v), 1) if v else None
+    series = []
+    for i in range(days - 1, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        r = rows.get(d)
+        series.append({"d": d, "mood": r["mood"] if r else None, "n": n(r)})
+    best = cur = 0
+    for i in range(399, -1, -1):
+        if n(rows.get((today - timedelta(days=i)).isoformat())) >= 2:
+            cur += 1
+            best = max(best, cur)
+        else:
+            cur = 0
+    st = _daily_state(con, m)
+    best = max(best, st["streak"])
+    return {"days": days, "series": series, "streak": st["streak"], "best": best, "avg": avg(0, days), "prev": avg(days, days * 2),
+            "done": sum(1 for x in series if x["n"] >= 2), "push": db.get_setting(con, f"nodr:{m['tg_id']}") != "1"}
+
+
+@app.post("/api/daily/push")
+async def daily_push_set(req: Request, m=Depends(member), con=Depends(get_con)):
+    d = await req.json()
+    db.set_setting(con, f"nodr:{m['tg_id']}", "" if d.get("on") else "1")
+    con.commit()
+    return {"push": bool(d.get("on"))}
+
+
+async def _daily_push(con):
+    """10:00 по Москве: напоминание про ритуал дня тем, кто сегодня еще ничего не отметил и не отключил его."""
+    if not auto_on(con):
+        return
+    now = datetime.now(MSK)
+    if now.hour < 10 or now.hour >= 20:
+        return
+    day = now.date().isoformat()
+    if db.get_setting(con, f"dpush:{day}"):
+        return
+    db.set_setting(con, f"dpush:{day}", "1")
+    con.commit()
+    _daily_ensure(con)
+    for m in con.execute("SELECT * FROM members WHERE status='active' AND bot_started=1 AND role IS NOT 'team'").fetchall():
+        m = dict(m)
+        if db.get_setting(con, f"nodr:{m['tg_id']}") == "1":
+            continue
+        r = con.execute("SELECT mood, focus, card FROM daily WHERE tg_id=? AND day=?", (m["tg_id"], day)).fetchone()
+        if r and (r["mood"] is not None or r["focus"] or r["card"]):
+            continue
+        st = _daily_state(con, m)
+        streak = Raw(f"\n\nСерия: {st['streak']} дн. Не прерывайте ее." if st["streak"] >= 2 else "")
+        try:
+            await send_text(m["tg_id"], render(con, "daily_push", name=m.get("first_name") or "Добрый день", streak=streak),
+                            tg.app_button("Открыть ритуал", "#home"), key="daily_push", con=con)
+        except Exception:
+            log.exception("ежедневное напоминание")
+        await asyncio.sleep(0.06)
+
+
 @app.get("/api/monthly-status")
 def monthly_status(m=Depends(member), con=Depends(get_con)):
     """Кнопка «Подвести итоги месяца»: с 28 числа целевой месяц текущий, до 28 числа прошлый.
@@ -1643,7 +1717,12 @@ def _make_pairs(con, week=None):
 coffee.make_pairs = _make_pairs
 coffee.announce = _coffee_announce
 coffee.remind_feedback = _coffee_remind_feedback
-coffee.event_reminders = _event_reminders
+async def _reminders_tick(con):
+    await _event_reminders(con)
+    await _daily_push(con)
+
+
+coffee.event_reminders = _reminders_tick
 
 
 # ---------------- запись оплат в таблицу (Google Apps Script) ----------------
