@@ -139,6 +139,8 @@ TEXTS = {
                  "default": "Обмен баллов: **{item}** ({cost}) — {who}. Свяжитесь с участником."},
     "t_offer_new": {"title": "Новое предложение на проверку", "group": "team", "max": 1000, "vars": "{title}, {who}", "hint": "Команде.",
                     "default": "🛍 Новое предложение на проверку: «{title}» от {who}. Откройте кабинет, вкладка «Предложения»."},
+    "t_stream_req": {"title": "Заявка на свой эфир (Амбассадор)", "group": "team", "max": 1500, "vars": "{who}, {title}, {body}, {when}", "hint": "Команде, когда Амбассадор предлагает провести свой эфир внутри клуба.",
+                     "default": "🎙 Заявка на свой эфир от {who}.\n\nТема: {title}\n{body}\n\nКогда удобно: {when}\n\nСвяжитесь с участником и договоритесь о формате."},
     "t_offer_req": {"title": "Заявка на предложение", "group": "team", "max": 1000, "vars": "{title}, {who}, {kind} (покупка или бартер)", "hint": "Команде.",
                     "default": "🛍 Заявка на предложение «{title}»: {who}, {kind}."},
     "t_guest": {"title": "Гость на эфир", "group": "team", "max": 1000, "vars": "{who}, {guest}, {event}", "hint": "Команде.",
@@ -1360,6 +1362,25 @@ def events(m=Depends(member), con=Depends(get_con)):
         if e["locked"]:
             e["recording_url"] = e["podcast_url"] = ""
     return {"soon": soon, "records": recs, "guest": {"year": is_year(m), "left": guest_left(con, m), "total": GUEST_PASSES}}
+
+
+@app.post("/api/stream-request")
+async def stream_request(req: Request, m=Depends(member), con=Depends(get_con)):
+    """Амбассадор предлагает провести свой эфир внутри клуба: заявка уходит команде."""
+    if not is_inside(m):
+        raise HTTPException(403, "Свой эфир могут предложить Амбассадоры. Как стать Амбассадором, написано в профиле.")
+    d = await req.json()
+    title = str(d.get("title", "")).strip()[:120]
+    body = str(d.get("body", "")).strip()[:800]
+    when = str(d.get("when", "")).strip()[:120] or "не указано"
+    if not title or not body:
+        raise HTTPException(400, "Напишите тему и о чем будет эфир")
+    con.execute("""CREATE TABLE IF NOT EXISTS stream_requests(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, title TEXT, body TEXT, when_text TEXT, created_at TEXT)""")
+    con.execute("INSERT INTO stream_requests(tg_id,title,body,when_text,created_at) VALUES(?,?,?,?,?)", (m["tg_id"], title, body, when, db.now()))
+    con.commit()
+    spawn(team_notify(render(con, "t_stream_req", who=person_name(m), title=title, body=body, when=when), "t_stream_req"))
+    return {"ok": True}
 
 
 @app.post("/api/events/{eid}/watch")
