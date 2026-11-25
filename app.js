@@ -34,8 +34,9 @@ const ORBS = [["#F2B394","#B0583F","#2A1218"],["#DCE6FF","#7189CF","#1A2140"],["
 const orb = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length];
   return `radial-gradient(70% 60% at 82% 0%,${o[0]} 0%,${o[1]} 28%,transparent 62%),radial-gradient(90% 70% at 10% 110%,${o[2]} 0%,transparent 70%),#0F1224`; };
 const stTag = p => p.level === "inside" ? `<em class="st">амбассадор</em>` : "";
-const avaEl = p => `<div class="ava" style="background:${p.photo ? `url(/botpic/${esc(p.photo)}) center/cover` : avaBg(p.tg_id)}">${p.photo ? "" : esc(initials(p))}</div>`;
-const avaBg = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length]; return `radial-gradient(circle at 50% 20%,${o[1]},${o[2]} 70%)`; };
+const avaEl = p => `<div class="ava" style="background:${p.photo ? `url(/botpic/${esc(p.photo)}) center/cover` : avaBg(p.tg_id)}"></div>`;
+const orbUrl = (id, s) => `/orb/${1000 + Math.abs(Number(id) || 0) % 1000}.png?v=2${s ? "&s=" + s : ""}`;
+const avaBg = id => `#0b0d18 url(${orbUrl(id)}) center/cover`;
 const initials = p => ((p.first_name || "?")[0] + ((p.last_name || "")[0] || "")).toUpperCase();
 const fullName = p => [p.first_name, p.last_name ? p.last_name[0] + "." : ""].filter(Boolean).join(" ") || "Участник клуба";
 const lockSVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>';
@@ -416,7 +417,7 @@ $$("[data-ps]").forEach(b => b.onclick = () => peopleSeg(b.dataset.ps));
 $$("[data-f]").forEach(c => c.onclick = () => { $$("[data-f]").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false")); S.filter = c.dataset.f; loadFeed(); });
 async function loadFeed() { try { S.feed = await api("/api/feed?f=" + S.filter); renderDeck(); } catch (e) { fail(e); } }
 const cardHTML = (p, top) => `<article class="card${top ? "" : " back"}" data-id="${p.tg_id}">
-  <div class="cover" style="background:${p.photo ? `linear-gradient(180deg,rgba(0,0,0,.05) 40%,rgba(0,0,0,.6)),url(/botpic/${esc(p.photo)}) center/cover` : orb(p.tg_id)}">${p.photo ? "" : `<div class="ini">${esc(initials(p))}</div>`}<div class="who"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div>
+  <div class="cover" style="background:${p.photo ? `linear-gradient(180deg,rgba(0,0,0,.05) 40%,rgba(0,0,0,.6)),url(/botpic/${esc(p.photo)}) center/cover` : `#0b0d18 url(${orbUrl(p.tg_id, 480)}) center/cover`}"><div class="who"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div>
   ${top ? '<span class="stamp yes">Знакомимся</span><span class="stamp no">Дальше</span>' : ""}</div>
   <div class="body">${parseTags(p.tags).length ? `<div class="tags">${parseTags(p.tags).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
    <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek)}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give)}</p></div>
@@ -450,8 +451,8 @@ async function decide(like) {
 }
 function showMatch(p) {
   S.newMatches++; updBadge(); try { TG.HapticFeedback.notificationOccurred("success"); } catch (e) {}
-  $("#ovMe").textContent = initials(S.me); $("#ovMe").style.background = avaBg(S.me.tg_id);
-  $("#ovAva").textContent = initials(p); $("#ovAva").style.background = avaBg(p.tg_id);
+  $("#ovMe").textContent = ""; $("#ovMe").style.background = avaBg(S.me.tg_id);
+  $("#ovAva").textContent = ""; $("#ovAva").style.background = avaBg(p.tg_id);
   $("#ovText").textContent = `Вы и ${p.first_name || "участник"} отметили друг друга. Бот уже прислал вам обоим контакты.`;
   $("#ovWrite").onclick = () => { $("#matchOv").hidden = true;
     if (p.username) { copy(`${p.first_name || ""}, привет! Мы совпали в Знакомствах Единения. Увидел(а), что ты ищешь: ${(p.seek || "").toLowerCase()}. Созвонимся?`); toast("Первое сообщение скопировано"); openTg(p.username); }
@@ -462,7 +463,7 @@ $("#ovClose").onclick = () => $("#matchOv").hidden = true;
 function updBadge() { const b = $("#badge"); b.textContent = S.newMatches; b.hidden = !S.newMatches; $("#mBadge").textContent = S.newMatches ? ` · ${S.newMatches}` : ""; }
 async function loadMatches() {
   try { const d = await api("/api/matches");
-    $("#matchList").innerHTML = d.matches.length ? d.matches.map(m => `<div class="match"><div class="person"><div class="ava" style="background:${avaBg(m.tg_id)}">${esc(initials(m))}</div>
+    $("#matchList").innerHTML = d.matches.length ? d.matches.map(m => `<div class="match"><div class="person"><div class="ava" style="background:${avaBg(m.tg_id)}"></div>
       <div class="t"><b>${esc(fullName(m))}</b><span>${esc(m.sphere)}</span></div></div>${m.username ? `<button class="btn sm" data-u="${esc(m.username)}">Написать</button>` : ""}</div>`).join("")
       : '<p class="empty-line">Пока нет взаимных знакомств. Отмечайте людей в ленте «Найди своих».</p>';
     $$("#matchList [data-u]").forEach(b => b.onclick = () => openTg(b.dataset.u));
@@ -571,7 +572,7 @@ function fillProfile() {
   const m = S.me;
   renderYear();
   $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
-  $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}">${m.photo ? "" : esc(initials(m))}</div>
+  $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}"></div>
     <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div>
     <label class="btn ghost sm photo-btn">${m.photo ? "Сменить" : "Добавить"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>
     `;
