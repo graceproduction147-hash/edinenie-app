@@ -3710,6 +3710,19 @@ def quote_of_day(m=Depends(member)):
     return {"date": d.isoformat(), "text": quotes.phrase_for(d), "url": f"{PUBLIC_URL}/quotepic/{d.isoformat()}.png"}
 
 
+@app.post("/api/quote/send")
+async def quote_send(m=Depends(member)):
+    """Присылает открытку дня фотографией в чат с ботом: ее можно сохранить в галерею (нажать и выбрать «Сохранить»)."""
+    d = quotes.today()
+    png = quotes.render(d)
+    r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": m["tg_id"], "caption": "Послание дня"}, file=("photo", png))
+    if not (r and r.get("ok")):
+        r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": m["tg_id"], "photo": f"{PUBLIC_URL}/quotepic/{d.isoformat()}.png", "caption": "Послание дня"})
+    if not (r and r.get("ok")):
+        raise HTTPException(502, "Не получилось отправить картинку в чат. Попробуйте позже.")
+    return {"ok": True}
+
+
 @app.api_route("/quotepic/{name}", methods=["GET", "HEAD"])
 def quotepic(name: str):
     from datetime import date as _date
