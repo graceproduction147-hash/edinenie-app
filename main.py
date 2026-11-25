@@ -1114,6 +1114,32 @@ def ensure_wants(con):
     con.execute("CREATE TABLE IF NOT EXISTS wants(tg_id INTEGER PRIMARY KEY, focus TEXT DEFAULT '', goal TEXT DEFAULT '', updated_at TEXT)")
 
 
+@app.get("/api/monthly-status")
+def monthly_status(m=Depends(member), con=Depends(get_con)):
+    """Кнопка «Подвести итоги месяца»: с 28 числа целевой месяц текущий, до 28 числа прошлый.
+    Кнопка открыта, пока итоги за целевой месяц не заполнены (не закрывается сама с началом нового месяца)."""
+    ensure_forms(con)
+    now = datetime.now(MSK)
+    y, mo = (now.year, now.month) if now.day >= 28 else ((now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12))
+    key = f"{y:04d}-{mo:02d}"
+    # участник, пришедший уже после окончания целевого месяца, за него итоги не подводит
+    try:
+        joined = datetime.fromisoformat(m.get("created_at") or "").astimezone(MSK)
+        ny, nm = (y, mo + 1) if mo < 12 else (y + 1, 1)
+        eligible = joined < datetime(ny, nm, 1, tzinfo=MSK)
+    except (ValueError, TypeError):
+        eligible = True
+    done = False
+    for r in con.execute("SELECT data FROM forms WHERE tg_id=? AND kind='monthly' ORDER BY id DESC LIMIT 12", (m["tg_id"],)).fetchall():
+        try:
+            if str(json.loads(r["data"] or "{}").get("month") or "") == key:
+                done = True
+                break
+        except ValueError:
+            pass
+    return {"month": key, "open": bool(eligible and not done), "done": done, "hot": bool(now.day >= 28), "day": now.day}
+
+
 @app.get("/api/wants")
 def wants_get(m=Depends(member), con=Depends(get_con)):
     """Кого ищу и чем могу помочь живут в профиле (по ним строятся знакомства), сфера и цель месяца здесь.
