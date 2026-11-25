@@ -92,6 +92,9 @@ TEXTS = {
     "daily_push": {"title": "Ежедневное напоминание про ритуал дня (10:00 МСК)", "group": "reminders", "max": 600, "vars": "{name}, {streak}",
                    "hint": "Раз в день в 10:00 по Москве тем, кто еще не заходил. Отключается в профиле: «Мой прогресс».",
                    "default": "{name}, доброе утро!\n\nВаш ритуал на сегодня: отметьте состояние, вспомните фокус месяца и вытяните карту дня. Это займет минуту.{streak}\n\nНапоминание можно отключить в профиле, раздел «Мой прогресс»."},
+    "meet_nudge": {"title": "Подсказка «встретились?» через неделю после «Написать»", "group": "reminders", "max": 600, "vars": "{name}, {who}",
+                   "hint": "Раз в день в 12:00 по Москве, если неделю назад человек написал кому-то из рекомендаций и не ответил, как прошло.",
+                   "default": "{name}, неделю назад вы написали: {who}.\n\nПолучилось пообщаться? Ответьте в приложении в два тапа. Это попадет в ваши итоги месяца."},
     "r_anketa_1": {"title": "Напоминание про анкету: 1-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "Через сутки после оплаты, если карточка знакомств не заполнена.",
                    "default": "{name}, добрый день!\n\nРады, что вы в Клубе. Откройте приложение и заполните карточку знакомств: это одна минута, и мы сможем знакомить вас с нужными людьми."},
     "r_anketa_3": {"title": "Напоминание про анкету: 3-й день", "group": "reminders", "max": 1000, "vars": "{name}", "hint": "На третий день, если анкета все еще не заполнена.",
@@ -1249,6 +1252,67 @@ async def _daily_push(con):
         await asyncio.sleep(0.06)
 
 
+@app.get("/api/meet/pending")
+def meet_pending(m=Depends(member), con=Depends(get_con)):
+    return {"items": recs.pending_meet(con, m["tg_id"])}
+
+
+@app.post("/api/recs/{rid}/outcome")
+async def recs_outcome(rid: int, req: Request, m=Depends(member), con=Depends(get_con)):
+    d = await req.json()
+    if not recs.set_outcome(con, m["tg_id"], rid, str(d.get("outcome") or "")):
+        raise HTTPException(400, "Не получилось сохранить ответ")
+    return {"ok": True, "items": recs.pending_meet(con, m["tg_id"])}
+
+
+@app.get("/api/meet-summary")
+def meet_summary(month: str = "", m=Depends(member), con=Depends(get_con)):
+    """Для итогов месяца: с кем из рекомендаций получилось пообщаться."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month or ""):
+        month = datetime.now(MSK).strftime("%Y-%m")
+    return {"month": month, "items": recs.month_summary(con, m["tg_id"], month)}
+
+
+async def _meet_nudge(con):
+    """12:00 по Москве: спрашиваем, как прошло знакомство, тем, кому неделю назад предлагали написать."""
+    if not auto_on(con):
+        return
+    now = datetime.now(MSK)
+    if now.hour < 12 or now.hour >= 20:
+        return
+    day = now.date().isoformat()
+    if db.get_setting(con, f"mnudge:{day}"):
+        return
+    db.set_setting(con, f"mnudge:{day}", "1")
+    con.commit()
+    recs.ensure(con)
+    from datetime import timezone as _tz
+    lim = (datetime.now(_tz.utc) - timedelta(days=7)).isoformat()
+    by = {}
+    for r in con.execute("SELECT * FROM recs WHERE written_at IS NOT NULL AND written_at<=? AND outcome IS NULL AND asked_at IS NULL", (lim,)).fetchall():
+        by.setdefault(r["tg_id"], []).append(r)
+    for tg_id, rows in by.items():
+        m = con.execute("SELECT * FROM members WHERE tg_id=? AND status='active' AND bot_started=1 AND role IS NOT 'team'", (tg_id,)).fetchone()
+        if not m:
+            continue
+        names = []
+        for r in rows[:3]:
+            o = con.execute("SELECT first_name, last_name FROM members WHERE tg_id=?", (r["rec_id"],)).fetchone()
+            if o:
+                names.append(" ".join(x for x in (o["first_name"], o["last_name"]) if x) or "участнику клуба")
+        if not names:
+            continue
+        try:
+            await send_text(tg_id, render(con, "meet_nudge", name=m["first_name"] or "Добрый день", who=", ".join(names)),
+                            tg.app_button("Ответить", "#people"), key="meet_nudge", con=con)
+            for r in rows:
+                con.execute("UPDATE recs SET asked_at=? WHERE id=?", (db.now(), r["id"]))
+            con.commit()
+        except Exception:
+            log.exception("подсказка «встретились?»")
+        await asyncio.sleep(0.06)
+
+
 @app.get("/api/monthly-status")
 def monthly_status(m=Depends(member), con=Depends(get_con)):
     """Кнопка «Подвести итоги месяца»: с 28 числа целевой месяц текущий, до 28 числа прошлый.
@@ -1720,6 +1784,7 @@ coffee.remind_feedback = _coffee_remind_feedback
 async def _reminders_tick(con):
     await _event_reminders(con)
     await _daily_push(con)
+    await _meet_nudge(con)
 
 
 coffee.event_reminders = _reminders_tick

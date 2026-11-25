@@ -683,8 +683,20 @@ function wantsStale() {
   const u = new Date(w.updated_at), n = new Date();
   return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
 }
+async function loadMeet() { try { S.meet = (await api("/api/meet/pending")).items; } catch (e) { S.meet = []; } renderMeetAsk(); try { renderWeekAction(); } catch (e) {} }
+function renderMeetAsk() {
+  const el = $("#meetAsk"), it = S.meet || []; if (!el) return;
+  if (!it.length) { el.innerHTML = ""; return; }
+  const p = it[0];
+  el.innerHTML = `<div class="panel focus"><span class="eyebrow">Как прошло знакомство</span><h3>Получилось пообщаться с ${esc(p.name)}?</h3>
+    <p class="sub">Вы написали неделю назад. Ответ попадет в итоги месяца.</p>
+    <div class="btns"><button class="btn sm solid" data-o="met">Встретились или созвонились</button><button class="btn sm" data-o="chat">Переписались</button></div>
+    <button class="link" data-o="no">Пока не вышло</button></div>`;
+  $$("#meetAsk [data-o]").forEach(b => b.onclick = async () => { try { const r = await api(`/api/recs/${p.id}/outcome`, {json: {outcome: b.dataset.o}}); S.meet = r.items; toast(b.dataset.o === "no" ? "Записали" : "Отлично, записали в итоги"); haptic(); renderMeetAsk(); try { renderWeekAction(); } catch (e) {} } catch (e) { fail(e); } });
+}
 function routeSteps() {
   const c = S.coffee, m = S.me, ev = S.events || {soon: [], records: []}, s = [];
+  if (S.meet && S.meet.length) s.push({h: `Как прошло знакомство с ${S.meet[0].name}?`, p: "Ответ попадет в итоги месяца", btn: "Ответить", tab: "people"});
   if (c && c.items && c.items.length && !c.items.some(i => i.written)) s.push({h: "Напишите людям из рекомендаций", p: `Мы подобрали знакомства на месяц: ${c.items.length}`, btn: "К людям", tab: "people"});
   if (!m.profile_done || !m.seek || !m.give) s.push({h: "Заполните анкету", p: "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", btn: "Заполнить", tab: "profile"});
   if (!m.photo) s.push({h: "Добавьте фото", p: "Людям легче знакомиться с теми, кого они видят", btn: "Добавить", tab: "profile"});
@@ -888,7 +900,7 @@ function tgAvatar() {
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
-  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly(), loadDaily()]);
+  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly(), loadDaily(), loadMeet()]);
   refreshHome(); tgAvatar();
   route();
 }
