@@ -524,26 +524,29 @@ function renderPerks() {
   const el = $("#perksBox"); if (!el || !S.me) return;
   const yr = !!S.year, amb = S.me.level === "inside", sl = S.slots || {}, g = S.events && S.events.guest, n = S.norm;
   const row = (open, h, p, btn, id) => `<div class="pr ${open ? "" : "lk"}"><div class="t"><b>${h}</b><span>${p}</span></div>${open && btn ? `<button class="btn sm" id="${id}">${btn}</button>` : ""}</div>`;
-  const card = (open, name, sub, rows, foot) => `<div class="pcard ${open ? "open" : "closed"}"><div class="ph"><div><h3>${name}</h3><span class="sub">${sub}</span></div><span class="pst ${open ? "ok" : "no"}" aria-label="${open ? "Открыто" : "Закрыто"}">${open ? OK_SVG : NO_SVG}</span></div>${rows}${foot || ""}</div>`;
+  const card = (open, name, sub, rows, foot, desc) => `<div class="pcard ${open ? "open" : "closed"}"><div class="ph"><div><h3>${name}</h3><span class="sub">${sub}</span></div><span class="pst ${open ? "ok" : "no"}" aria-label="${open ? "Открыто" : "Закрыто"}">${open ? OK_SVG : NO_SVG}</span></div>${desc ? `<p class="pdesc">${desc}</p>` : ""}${rows}${foot || ""}</div>`;
   const nextEv = ((S.events && S.events.soon) || []).find(e => !e.locked);
   const guestLeft = g ? g.left : 0;
-  const yearRows = row(yr, "Ментор клуба и своя рубрика", "Станьте ментором клуба и ведите свою рубрику: договоритесь с командой", yr ? "Написать" : "", "pkMentor")
-    + row(yr, "Место на витрине", yr ? (sl.year_free ? "Ваше место на год свободно: разместите предложение" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине весь год", sl.year_free ? "Разместить" : "", "pkYearOffer")
-    + row(yr, "Гостевые пропуска на эфиры", yr ? `Осталось ${guestLeft} из ${g ? g.total : 2}: друг приходит бесплатно` : "2 в год: друг приходит на эфир бесплатно", guestLeft > 0 && nextEv ? "Позвать друга" : "", "pkGuest");
+  const yearRows = row(yr, "Ментор клуба и своя рубрика", "Договоритесь с командой о формате", yr ? "Написать" : "", "pkMentor")
+    + row(yr, "Место на витрине на год", yr ? (sl.year_free ? "Ваше место свободно: разместите предложение" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине весь год", sl.year_free ? "Разместить" : "", "pkYearOffer")
+    + row(yr, "Гостевые пропуска на эфиры", yr ? `Осталось ${guestLeft} из ${g ? g.total : 2}: друг приходит бесплатно` : "2 в год: друг приходит на эфир бесплатно", guestLeft > 0 && nextEv ? "Позвать друга" : "", "pkGuest")
+    + `<p class="psec">Для Амбассадоров на годовом</p>`
+    + row(yr && amb, "Выступление на сцене «Единения»", yr && amb ? "Договоритесь с командой о теме и дате" : "Открывается при годовом тарифе и статусе Амбассадора", yr && amb ? "Написать" : "", "pkScene");
   const ambRows = row(amb, "Свой эфир внутри клуба", "Проведите эфир и опубликуйте его для участников", "Предложить", "pkStream")
     + row(amb, "Место на витрине на 1 месяц", amb ? (sl.amb_free ? "Ваше место свободно: разместите предложение на месяц" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине на 1 месяц", amb && sl.amb_free ? "Разместить" : "", "pkAmbOffer")
-    + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "");
-  const yearFoot = yr ? "" : `<p class="why">Открывается при годовом тарифе</p><button class="link" id="pkYearInfo">Подробнее</button>`;
+    + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "")
+    + row(amb, "Персональные знакомства", "Подбор людей под ваш запрос", "", "");
+  const yearFoot = yr ? "" : `<button class="btn sm ghost" id="pkTeam">Написать команде</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
-  const full = `<h3>Мои возможности</h3>` + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
-    + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot);
+  const full = `<h3>Мои возможности</h3>` + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot, "Статус за активное участие в жизни клуба. Бонусы действуют на любом тарифе: годовом и ежемесячном.")
+    + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot, "Тариф на год со своими бонусами, плюс дополнительные для Амбассадоров.");
   const sub = [yr ? "годовой тариф" : "", amb ? "амбассадор" : ""].filter(Boolean).join(", ");
   el.innerHTML = `<button class="panel rowcard slim hot" id="perksOpen"><div class="t"><b>Мои возможности</b><span class="sub">${sub ? "Открыто: " + sub : "Годовой тариф и Амбассадор"}</span></div><i>&#8250;</i></button>`;
   $("#perksOpen").onclick = () => openSheet(full, s => {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
     on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet); on("pkMentor", ownStream);
-    on("pkYearInfo", levelsSheet); on("pkAmbInfo", levelsSheet);
+    on("pkScene", ownStream); on("pkTeam", () => openPay(S.support || S.join)); on("pkAmbInfo", levelsSheet);
   });
 }
 
