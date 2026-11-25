@@ -463,7 +463,7 @@ function recAsk(c) {
   });
 }
 function renderHomeCoffee() {
-  const c = S.coffee, el = $("#homeCoffee");
+  const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
   if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
   el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
     ${c.items.map(p => `<div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
@@ -622,12 +622,23 @@ function wantsStale() {
   return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
 }
 function renderWeekAction() {
-  const el = $("#weekAction"), c = S.coffee; if (!el) return;
-  let a = null;
-  if (c && c.items && c.items.length && !c.items.some(i => i.written)) a = {k: "Главное на этой неделе", h: "Напишите тем, кого мы подобрали", p: `${c.items.length} человека из клуба, которым вам стоит написать первым.`, b: "Открыть рекомендации", tab: "people"};
-  else if (S.wants && wantsStale()) a = {k: "Главное на этой неделе", h: "Выберите фокус и цель месяца", p: "Одна сфера и один-два конкретных шага. По ним мы подбираем знакомства и показываем, куда идти.", b: "Задать цель", tab: "profile"};
-  el.hidden = !a; if (!a) return;
-  el.innerHTML = `<span class="eyebrow">${a.k}</span><h3>${esc(a.h)}</h3><p class="sub">${esc(a.p)}</p><button class="btn" data-tab="${a.tab}"${a.seg ? ` data-seg="${a.seg}"` : ""}>${esc(a.b)}</button>`;
+  const el = $("#weekAction"); if (!el || !S.me) return;
+  const c = S.coffee, n = S.norm, amb = S.me.level === "inside";
+  const li = (ok, h, p, tab) => `<li class="${ok ? "ok" : ""}"${!ok && tab ? ` data-tab="${tab}" style="cursor:pointer"` : ""}><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
+  const recsOn = c && c.items && c.items.length;
+  const all = [];
+  if (recsOn) all.push(li(c.items.some(i => i.written), "Напишите людям из рекомендаций", "Мы подобрали вам знакомства, достаточно написать первым", "people"));
+  if (S.wants) all.push(li(!wantsStale(), "Задайте фокус и цель месяца", "Одна сфера и один-два конкретных шага", "profile"));
+  const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
+  const part2 = n ? `<div class="sub" style="margin-top:6px"><b>${amb ? "Чтобы сохранить статус Амбассадора" : "Чтобы стать Амбассадором"}</b></div>
+    <ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>
+    <p class="sub">${n.done ? `Статус действует еще ${n.days_left} дн. Повторите шаги за следующие ${n.days} дней, чтобы его сохранить.` : `Три шага за ${n.days} дней.`}</p>
+    <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkMore">Об уровнях</button></div>` : "";
+  el.hidden = !(all.length || n);
+  el.innerHTML = `<span class="eyebrow">На этой неделе</span><h3>Что нужно сделать</h3>
+    ${all.length ? `<div class="sub"><b>Для всех</b></div><ul class="norm">${all.join("")}</ul>` : ""}${part2}`;
+  const mb = $("#wkMore"); if (mb) mb.onclick = levelsSheet;
+  const ib = $("#wkInv"); if (ib) ib.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
 }
 function renderMonth() {
   const el = $("#monthCard"), w = S.wants; if (!el) return;
