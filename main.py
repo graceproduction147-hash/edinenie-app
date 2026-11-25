@@ -4568,7 +4568,7 @@ def offer_cutoff():
 
 def offer_slots(con, m):
     """Места на витрине: 1 приглашенный и оплативший участник = 1 предложение на месяц.
-    Годовой тариф дает еще одно место на весь год без приглашений, Амбассадор одно на 1 месяц. Команда не ограничена."""
+    Годовой тариф дает еще одно место на весь год, Амбассадор одно на 1 месяц. Команда не ограничена."""
     if is_team(m):
         return {"invited": 0, "used": 0, "free": 99, "team": True, "year": False, "year_free": False}
     invited = con.execute("SELECT COUNT(*) FROM claims WHERE tg_id=? AND rule_code='invite' AND status!='rejected'", (m["tg_id"],)).fetchone()[0]
@@ -4576,7 +4576,7 @@ def offer_slots(con, m):
     year = is_year(m)
     busy = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND slot='year' AND status IN ('pending','active')", (m["tg_id"],)).fetchone()[0]
     year_free = bool(year and not busy)
-    # Амбассадору положено одно место на витрине без приглашений: размещение на 1 месяц, потом место снова свободно, пока статус действует
+    # Амбассадору положено одно место на витрине: размещение на 1 месяц, потом место снова свободно, пока статус действует
     amb_busy = con.execute("SELECT COUNT(*) FROM offers WHERE tg_id=? AND slot='amb' AND (status='pending' OR (status='active' AND approved_at>=?))", (m["tg_id"], offer_cutoff())).fetchone()[0]
     amb_free = bool(is_inside(m) and not amb_busy)
     return {"invited": invited, "used": used, "free": max(0, invited - used) + (1 if year_free else 0) + (1 if amb_free else 0), "team": False,
