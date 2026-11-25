@@ -47,12 +47,11 @@ def _logo(img):
 
 
 def _nf(size):
-    """Тонкий округлый шрифт Nunito (начертание Light). Кладем в кеш шрифтов карточки, чтобы использовать card.text_c."""
+    """Тонкий шрифт Poiret One. Кладем в кеш шрифтов карточки, чтобы использовать card.text_c."""
     from PIL import ImageFont
-    key = ("NunitoLight", round(size, 1))
+    key = ("PoiretOne", round(size, 1))
     if key not in card._fonts:
         f = ImageFont.truetype(io.BytesIO(quote_font.font_bytes()), size)
-        f.set_variation_by_axes([300])
         card._fonts[key] = f
     return card._fonts[key]
 
@@ -83,18 +82,17 @@ def render(d):
     card.text_c(dr, 540, 520, "ПОСЛАНИЕ ДНЯ", "Manrope-Medium.ttf", 28, ACC, ls=7, max_w=900)
     dr.line([(480, 566), (600, 566)], fill=ACC, width=2)
     text = phrase_for(d)
-    size = 84
+    size = 52
     while True:
         f = _nf(size)
         lines = _wrap(text, f, 860)
-        if (len(lines) <= 6 and size >= 56) or size <= 56:
-            if len(lines) <= 7 or size <= 56:
-                break
-        size -= 4
-    lh = int(size * 1.18)
+        if len(lines) <= 5 or size <= 36:
+            break
+        size -= 2
+    lh = int(size * 1.35)
     y = 960 - (len(lines) - 1) * lh / 2
     for ln in lines:
-        _nf(size); card.text_c(dr, 540, y, ln, "NunitoLight", size, INK, ls=0.6)
+        _nf(size); card.text_c(dr, 540, y, ln, "PoiretOne", size, INK, ls=1.2)
         y += lh
     label = f"{d.day} {MONTHS_GEN[d.month - 1]}".upper()
     card.text_c(dr, 540, 1640, label, "Manrope-Medium.ttf", 26, MUTED, ls=6)
