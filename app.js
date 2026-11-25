@@ -775,7 +775,7 @@ function ownStream() {
   } else if (S.me && S.me.level === "inside") { streamSheet(); }
   else {
     openSheet(`<h3>Провести эфир в клубе</h3><p class="sub">Свой эфир для участников клуба доступен на годовом тарифе.</p><button class="btn" id="osBuy">Перейти на годовой тариф</button>`,
-      s => s.querySelector("#osBuy").onclick = () => { closeSheet(); const u = E.buy_url || "https://edinenie-club.com"; if (TG && TG.openLink) TG.openLink(u); else window.open(u, "_blank"); });
+      s => s.querySelector("#osBuy").onclick = () => { closeSheet(); const u = E.buy_url || "https://t.me/m/-3doU5bbMGYy"; if (TG && TG.openTelegramLink && /^https:\/\/t\.me\//.test(u)) TG.openTelegramLink(u); else if (TG && TG.openLink) TG.openLink(u); else window.open(u, "_blank"); });
   }
 }
 function streamSheet() {
