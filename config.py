@@ -37,8 +37,9 @@ TRIBUTE_API_KEY = env("TRIBUTE_API_KEY")
 PERIOD_MAP = json.loads(env("PERIOD_MAP", "{}") or "{}")
 # сколько месяцев оплаты дает Inside (на сайте Inside — годовой формат)
 INSIDE_MONTHS = int(env("INSIDE_MONTHS", "12"))
-# сколько людей рекомендуем за один подбор (от 1 до 6)
-RECS_COUNT = max(1, min(6, int(env("RECS_COUNT", "3") or 3)))
+# сколько людей рекомендуем за один подбор (от 1 до 8): Резидентам и Амбассадорам
+RECS_COUNT = max(1, min(8, int(env("RECS_COUNT", "2") or 2)))
+RECS_COUNT_AMB = max(1, min(8, int(env("RECS_COUNT_AMB", "4") or 4)))
 # старый Random Coffee: бот сам составлял пары и писал участникам. Сейчас выключен, знакомства предлагаются в приложении.
 COFFEE_BOT = env("COFFEE_BOT", "0") == "1"
 DB_PATH = Path(env("DB_PATH", str(BASE / "data" / "club.db")))
