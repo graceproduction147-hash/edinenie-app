@@ -292,3 +292,5 @@ a.link{color:var(--accent)}
 .panel.compact{padding:14px 18px;gap:8px}
 .panel.compact .sub{font-size:12px}
 .panel.focus{border-color:var(--accent)}
+
+.st{font-style:normal;font-size:11px;letter-spacing:.04em;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:999px;padding:1px 8px;margin-left:6px;font-weight:500;white-space:nowrap}

@@ -1348,15 +1348,34 @@ def events(m=Depends(member), con=Depends(get_con)):
     soon = db.rows(con.execute("SELECT * FROM events WHERE starts_at>=? ORDER BY starts_at", (now_iso,)))
     recs = db.rows(con.execute("SELECT * FROM events WHERE starts_at<? AND recording_url!='' ORDER BY starts_at DESC LIMIT 50", (now_iso,)))
     going = {r[0] for r in con.execute("SELECT event_id FROM rsvp WHERE tg_id=?", (m["tg_id"],))}
+    con.execute("CREATE TABLE IF NOT EXISTS event_watch(tg_id INTEGER, event_id INTEGER, created_at TEXT, PRIMARY KEY(tg_id, event_id))")
+    watched = {r[0] for r in con.execute("SELECT event_id FROM event_watch WHERE tg_id=?", (m["tg_id"],))}
     inside = is_inside(m)
     for e in soon + recs:
         e["going"] = e["id"] in going
+        e["watched"] = e["id"] in watched
         e["locked"] = bool(e["inside_only"]) and not inside
         if e["locked"] or not e["going"]:
             e["join_url"] = ""  # ссылку на Zoom видят только записавшиеся
         if e["locked"]:
             e["recording_url"] = e["podcast_url"] = ""
     return {"soon": soon, "records": recs, "guest": {"year": is_year(m), "left": guest_left(con, m), "total": GUEST_PASSES}}
+
+
+@app.post("/api/events/{eid}/watch")
+async def event_watch_mark(eid: int, req: Request, m=Depends(member), con=Depends(get_con)):
+    """Отметка «Смотрел(а)» у записи эфира: ставится автоматически, когда человек открыл запись, и снимается вручную."""
+    d = await req.json()
+    con.execute("CREATE TABLE IF NOT EXISTS event_watch(tg_id INTEGER, event_id INTEGER, created_at TEXT, PRIMARY KEY(tg_id, event_id))")
+    e = con.execute("SELECT inside_only FROM events WHERE id=?", (eid,)).fetchone()
+    if not e or (e["inside_only"] and not is_inside(m)):
+        raise HTTPException(404, "Эфир не найден")
+    if d.get("on"):
+        con.execute("INSERT OR IGNORE INTO event_watch(tg_id,event_id,created_at) VALUES(?,?,?)", (m["tg_id"], eid, db.now()))
+    else:
+        con.execute("DELETE FROM event_watch WHERE tg_id=? AND event_id=?", (m["tg_id"], eid))
+    con.commit()
+    return {"watched": bool(d.get("on"))}
 
 
 @app.post("/api/events/{eid}/rsvp")
