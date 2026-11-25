@@ -1,6 +1,7 @@
 """Послание дня: фраза на день (у всех одна) и картинка 1080x1920 на фирменном фоне.
 Фразы можно править прямо в этом списке. Выбор фразы зависит только от даты."""
 import io
+import random
 from datetime import date, datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
@@ -37,13 +38,65 @@ def _orb(img, cx, cy, r, col, alpha):
     img.alpha_composite(layer.filter(ImageFilter.GaussianBlur(r * 0.45)))
 
 
-def _logo(img):
-    """Солнце-спираль берем из фонового файла карточки (светлые лучи на темном) и кладем белым поверх нового фона."""
+def _logo(img, cx=540, cy=230):
+    """Солнце-спираль берем из фонового файла карточки (светлые лучи на темном), обрезаем по самому знаку и ставим точно по центру."""
     bg = Image.open(io.BytesIO(card_assets.bg_bytes())).convert("L").crop((430, 50, 650, 270))
     mask = bg.point(lambda v: 0 if v < 90 else min(255, int((v - 90) * 2.2)))
+    bbox = mask.getbbox()
+    mask = mask.crop(bbox)
     white = Image.new("RGBA", mask.size, (255, 255, 255, 255))
     white.putalpha(mask)
-    img.alpha_composite(white, (470, 150))
+    img.alpha_composite(white, (int(cx - mask.width / 2), int(cy - mask.height / 2)))
+
+
+# палитры: фон, цвета трех свечений (все из гаммы клуба: ночной синий, глина, синий, золото)
+PALETTES = [
+    ((22, 25, 40), (214, 120, 80), (96, 112, 196), (220, 166, 126)),
+    ((20, 22, 38), (190, 96, 96), (84, 100, 190), (226, 180, 140)),
+    ((18, 28, 40), (210, 150, 90), (70, 130, 170), (230, 200, 150)),
+    ((26, 22, 40), (200, 110, 120), (110, 90, 190), (224, 170, 150)),
+    ((16, 24, 36), (224, 140, 84), (60, 90, 160), (236, 190, 130)),
+    ((24, 24, 36), (180, 100, 70), (120, 130, 200), (214, 160, 120)),
+]
+
+
+def _background(d):
+    """Фон меняется от дня к дню: палитра и расположение свечений зависят от даты, поверх тонкие орбиты, звездная пыль и зерно."""
+    rnd = random.Random(d.toordinal() * 7919)
+    base, c1, c2, gold = PALETTES[d.toordinal() % len(PALETTES)]
+    img = Image.new("RGBA", (W, H), base + (255,))
+    # три больших свечения в случайных местах (но так, чтобы середина с текстом оставалась спокойной)
+    spots = [(rnd.choice([120, 900, 960, 60]), rnd.randint(40, 520), rnd.randint(300, 420), c1, rnd.randint(190, 240)),
+             (rnd.choice([40, 1040, 980]), rnd.randint(900, 1300), rnd.randint(240, 340), c2, rnd.randint(120, 170)),
+             (rnd.randint(200, 900), rnd.randint(1750, 1980), rnd.randint(320, 440), c2, rnd.randint(90, 130))]
+    for cx, cy, r, col, al in spots:
+        _orb(img, cx, cy, r, col, al)
+    # тонкие золотые орбиты вокруг логотипа
+    ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    for r, al in ((190, 70), (270, 45), (360, 28)):
+        od.ellipse([540 - r, 230 - r, 540 + r, 230 + r], outline=gold + (al,), width=2)
+    # длинные дуги по краям, у каждого дня свой наклон
+    for _ in range(3):
+        cx, cy, r = rnd.randint(-300, 1380), rnd.randint(700, 1700), rnd.randint(500, 900)
+        od.ellipse([cx - r, cy - r, cx + r, cy + r], outline=gold + (22,), width=2)
+    img.alpha_composite(ov)
+    # звездная пыль
+    dust = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    dd = ImageDraw.Draw(dust)
+    for _ in range(140):
+        x, y = rnd.randint(0, W), rnd.randint(0, H)
+        if 380 < y < 1540 and 160 < x < 920 and rnd.random() < 0.7:
+            continue
+        r = rnd.choice([1, 1, 2, 2, 3])
+        dd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 245, 230, rnd.randint(70, 200)))
+    img.alpha_composite(dust.filter(ImageFilter.GaussianBlur(0.6)))
+    # зерно
+    noise = Image.effect_noise((W, H), 28).convert("L").point(lambda v: v // 14)
+    grain = Image.new("RGBA", (W, H), (255, 255, 255, 0))
+    grain.putalpha(noise)
+    img.alpha_composite(grain)
+    return img
 
 
 def _nf(size):
@@ -73,11 +126,8 @@ def _wrap(text, f, max_w):
 @lru_cache(maxsize=8)
 def render(d):
     """d: date. Возвращает PNG (bytes)."""
-    img = Image.new("RGBA", (W, H), (22, 25, 40, 255))
-    _orb(img, 880, 160, 360, (214, 120, 80), 235)
-    _orb(img, 40, 1020, 300, (96, 112, 196), 150)
-    _orb(img, 700, 1900, 420, (60, 66, 120), 110)
-    _logo(img)
+    img = _background(d)
+    _logo(img, 540, 230)
     dr = ImageDraw.Draw(img, "RGBA")
     card.text_c(dr, 540, 520, "ПОСЛАНИЕ ДНЯ", "Manrope-Medium.ttf", 28, ACC, ls=7, max_w=900)
     dr.line([(480, 566), (600, 566)], fill=ACC, width=2)
@@ -94,8 +144,6 @@ def render(d):
     for ln in lines:
         _nf(size); card.text_c(dr, 540, y, ln, "PoiretOne", size, INK, ls=1.2)
         y += lh
-    label = f"{d.day} {MONTHS_GEN[d.month - 1]}".upper()
-    card.text_c(dr, 540, 1640, label, "Manrope-Medium.ttf", 26, MUTED, ls=6)
     card.text_c(dr, 540, 1740, "ЕДИНЕНИЕ", "Forum.ttf", 46, INK, ls=9)
     out = io.BytesIO()
     img.convert("RGB").save(out, "PNG", optimize=True)
