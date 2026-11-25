@@ -579,21 +579,18 @@ $("#saveProfile").onclick = async () => {
     coffee: $("#pCoffee").getAttribute("aria-pressed") === "true", offline: $("#pOff").getAttribute("aria-pressed") === "true"};
   try {
     await api("/api/me", {method: "PUT", json: data}); Object.assign(S.me, data);
-    if (S.wants) { const f = $("#wFocus .chip[aria-pressed=true]"), w = {focus: f ? f.dataset.sph : "", goal: $("#wGoal").value.trim(), seek: data.seek, give: data.give};
+    if (S.wants) { const w = {focus: S.wants.focus || "", goal: $("#wGoal").value.trim(), seek: data.seek, give: data.give};
       const r = await api("/api/wants", {method: "PUT", json: w}); S.wants = Object.assign({}, w, {updated_at: r.updated_at}); refreshHome(); }
     fillProfile(); toast("Анкета сохранена"); haptic();
   } catch (e) { fail(e); }
 };
 const SPH = ["Деньги", "Смыслы", "Знакомства", "Возможности", "Практики", "Впечатления", "Тело", "Отношения", "Семья", "Работа", "Творчество", "Отдых"];
 async function renderWants() {
-  const el = $("#wFocus"); if (!el) return;
+  if (!$("#wGoal")) return;
   if (!S.wants) { try { S.wants = await api("/api/wants"); } catch (e) { $("#wMonth").hidden = true; return; } }
   const w = S.wants;
-  el.innerHTML = SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("");
   $("#wGoal").value = w.goal || "";
-  const sum = () => { const f = $("#wFocus .chip[aria-pressed=true]"); $("#wSum").textContent = f ? "· " + f.dataset.sph : ""; };
-  $$("#wFocus .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#wFocus .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); sum(); });
-  sum();
+  $("#wSum").textContent = w.goal ? "· заполнено" : "";
 }
 function renderLevels() {
   const el = $("#levelsCard"), amb = S.me && S.me.level === "inside"; if (!el) return;
@@ -678,7 +675,7 @@ const PILLARS = [
 async function loadWants() { try { S.wants = await api("/api/wants"); } catch (e) { S.wants = null; } }
 function wantsStale() {
   const w = S.wants; if (!w) return false;
-  if (!w.focus || !w.goal) return true;
+  if (!w.goal) return true;
   if (!w.updated_at) return false;
   const u = new Date(w.updated_at), n = new Date();
   return u.getFullYear() !== n.getFullYear() || u.getMonth() !== n.getMonth();
@@ -700,7 +697,7 @@ function routeSteps() {
   if (c && c.items && c.items.length && !c.items.some(i => i.written)) s.push({h: "Напишите людям из рекомендаций", p: `Мы подобрали знакомства на месяц: ${c.items.length}`, btn: "К людям", tab: "people"});
   if (!m.profile_done || !m.seek || !m.give) s.push({h: "Заполните анкету", p: "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", btn: "Заполнить", tab: "profile"});
   if (!m.photo) s.push({h: "Добавьте фото", p: "Людям легче знакомиться с теми, кого они видят", btn: "Добавить", tab: "profile"});
-  if (S.wants && wantsStale()) s.push({h: "Выберите фокус и цель месяца", p: "Одна сфера и один-два шага", btn: "Выбрать", tab: "profile"});
+  if (S.wants && wantsStale()) s.push({h: "Напишите фокус на месяц", p: "Одной-двумя фразами: что главное в этом месяце", btn: "Выбрать", tab: "profile"});
   const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
   if (nextEv) s.push({h: "Запишитесь на ближайший эфир", p: nextEv.title, btn: "Открыть", ev: nextEv});
   const unw = (ev.records || []).find(r => !r.locked && !r.watched);
@@ -747,9 +744,9 @@ function renderMonth() {
   // когда ритуал выполнен, он скрывается, а на его месте остается фокус месяца: сфера и цель человека его словами
   const el = $("#monthCard"), w = S.wants, d = S.daily; if (!el) return;
   const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit;
-  if (!done || !w || !w.focus) { el.hidden = true; return; }
+  if (!done || !w || !w.goal) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<span class="eyebrow">Фокус на месяц</span><h3>${esc(w.focus)}</h3>${w.goal ? `<p class="mgoal">${esc(w.goal)}</p>` : ""}
+  el.innerHTML = `<span class="eyebrow">Фокус на месяц</span><p class="mgoal">${esc(w.goal)}</p>
     <div class="mfoot"><span class="sub">Ритуал на сегодня выполнен · ${d.streak} дн. подряд</span><button class="btn sm ghost" id="mcEdit">Изменить</button></div>`;
   $("#mcEdit").onclick = () => { S.rfEdit = true; renderRitual(); };
 }
@@ -866,9 +863,9 @@ function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
   if (!d) { el.hidden = true; return; }
   el.hidden = false; renderMonth();
-  const w = S.wants || {}, fp = w.focus, n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
+  const w = S.wants || {}, fp = w.goal, n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
   const done = n >= 4;
-  if (done && !edit && !S.mEdit && !S.aEdit && w.focus) { el.hidden = true; return; }
+  if (done && !edit && !S.mEdit && !S.aEdit && w.goal) { el.hidden = true; return; }
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
   const row = (ok, t, sub, btn) => `<div class="rstep rrow ${ok ? "ok" : ""}"><div class="rt"><i class="ck"></i><div class="rtx"><b>${t}</b>${sub ? `<span>${sub}</span>` : ""}</div>${btn || ""}</div></div>`;
   const mood = d.mood != null && !S.mEdit ? row(1, "Состояние: " + MOODS[d.mood - 1][0].toLowerCase(), "", '<button class="btn sm ghost" id="rmEdit">Изменить</button>')
@@ -878,11 +875,10 @@ function renderRitual() {
     : `<div class="rstep"><div class="rt"><i class="ck"></i><b>Чему уделите внимание сегодня?</b></div>
       <div class="chips" id="rAreas">${Object.keys(AREAS).map(k => `<button class="chip" data-a="${k}" aria-pressed="${d.areas.includes(k)}">${AREAS[k]}</button>`).join("")}</div>
       ${d.areas.length ? '<div class="btns"><button class="btn sm solid" id="raDone">Готово</button></div>' : '<p class="sub">Можно несколько. Потом увидите, что влияет на состояние.</p>'}</div>`;
-  const focus = edit || !fp ? `<div class="rstep"><div class="rt"><i class="ck"></i><b>Ваш фокус на месяц</b></div><p class="sub">${fp ? "Измените сферу или цель месяца." : "Выберите главную сферу и одну цель на месяц."}</p>
-        <div class="chips" id="rfChips">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
-        <textarea id="rfGoal" rows="2" placeholder="Что хочу сделать за месяц: один-два конкретных шага">${esc(w.goal || "")}</textarea>
+  const focus = edit || !fp ? `<div class="rstep"><div class="rt"><i class="ck"></i><b>Ваш фокус на месяц</b></div><p class="sub">Одной-двумя фразами: что для вас главное в этом месяце.</p>
+        <textarea id="rfGoal" rows="2" placeholder="Например: запустить продажи и каждый день гулять">${esc(w.goal || "")}</textarea>
         <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div></div>`
-    : row(d.focus, "Фокус месяца: " + esc(w.focus), w.goal ? esc(w.goal) : "", `<span class="rbt">${d.focus ? "" : '<button class="btn sm" id="rFocus">Помню</button>'}<button class="btn sm ghost" id="rfEdit">Изменить</button></span>`);
+    : row(d.focus, "Фокус на месяц", esc(w.goal), `<span class="rbt">${d.focus ? "" : '<button class="btn sm" id="rFocus">Помню</button>'}<button class="btn sm ghost" id="rfEdit">Изменить</button></span>`);
   const card = row(d.card, "Карта дня", "", `<button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть" : "Вытянуть"}</button>`);
   el.innerHTML = `<div class="rhead"><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
     <div class="rweek">${wk}</div>${mood}${areas}${focus}${card}`;
@@ -894,10 +890,9 @@ function renderRitual() {
   const f = $("#rFocus"); if (f) f.onclick = () => dailyStep("focus", {on: true});
   const re = $("#rfEdit"); if (re) re.onclick = () => { S.rfEdit = true; renderRitual(); };
   const rc = $("#rfCancel"); if (rc) rc.onclick = () => { S.rfEdit = false; renderRitual(); };
-  $$("#rfChips .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#rfChips .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); });
   const rs = $("#rfSave"); if (rs) rs.onclick = async () => {
-    const ch = $("#rfChips .chip[aria-pressed=true]"), data = {focus: ch ? ch.dataset.sph : "", goal: $("#rfGoal").value.trim(), seek: (S.wants && S.wants.seek) || S.me.seek || "", give: (S.wants && S.wants.give) || S.me.give || ""};
-    if (!data.focus) { toast("Выберите сферу"); return; }
+    const data = {focus: (S.wants && S.wants.focus) || "", goal: $("#rfGoal").value.trim(), seek: (S.wants && S.wants.seek) || S.me.seek || "", give: (S.wants && S.wants.give) || S.me.give || ""};
+    if (!data.goal) { toast("Напишите фокус"); return; }
     try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, S.wants, data, {updated_at: r.updated_at}); S.rfEdit = false; try { renderWants(); } catch (e) {} await dailyStep("focus", {on: true}); refreshHome(); toast("Фокус сохранен"); }
     catch (e) { fail(e); } };
   const c = $("#rCard"); if (c) c.onclick = openQuote;
