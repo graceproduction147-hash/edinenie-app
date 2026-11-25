@@ -53,6 +53,7 @@
 
     <!-- ГЛАВНАЯ -->
     <section class="view on" id="v-home">
+      <div id="mbHome"></div>
       <div id="welcome"></div>
       <div class="panel focus" id="weekAction" hidden></div>
       <div id="heroBox"></div>
@@ -109,23 +110,30 @@
 
     <!-- ПРОФИЛЬ -->
     <section class="view" id="v-profile">
+      <div id="mbProf"></div>
       <div class="panel" id="meCard"></div>
       <div id="perksBox"></div>
-      <div class="panel">
+      <div class="panel" id="anketa">
         <span class="eyebrow">Знакомства</span>
         <h3>Моя анкета</h3>
-        <p class="note-soft">Так вас видят другие участники в рекомендациях. Пишите коротко, по одному предложению: чем конкретнее, тем легче вас выбрать.</p>
-        <label class="f" for="pName">ИМЯ<input type="text" id="pName" maxlength="40"></label>
+        <p class="note-soft">Одна анкета на все: ее видят другие участники, и по ней мы подбираем вам людей.</p>
+        <div class="g2">
+          <label class="f" for="pName">ИМЯ<input type="text" id="pName" maxlength="40"></label>
+          <label class="f" for="pCity">ГОРОД<input type="text" id="pCity" maxlength="40"></label>
+        </div>
         <label class="f" for="pSphere">СФЕРА<span class="cnt" id="cSphere"></span><input type="text" id="pSphere" maxlength="40" placeholder="Например: психолог, маркетинг, архитектура"></label>
-        <label class="f" for="pCity">ГОРОД<input type="text" id="pCity" maxlength="40"></label>
         <label class="f" for="pProject">ЧЕМ ЗАНИМАЮСЬ СЕЙЧАС<span class="cnt" id="cProject"></span><input type="text" id="pProject" maxlength="90" placeholder="Один проект, одной фразой"></label>
         <label class="f" for="pSeek">ИЩУ<span class="cnt" id="cSeek"></span><textarea id="pSeek" rows="2" maxlength="140" placeholder="Кого или что ищете сейчас. Одно предложение"></textarea></label>
         <label class="f" for="pGive">МОГУ ПОМОЧЬ<span class="cnt" id="cGive"></span><textarea id="pGive" rows="2" maxlength="140" placeholder="В чем вы реально сильны. Одно предложение"></textarea></label>
+        <details class="more" id="wMonth"><summary>Фокус и цель месяца <span id="wSum"></span></summary>
+          <p class="sub">Это видите только вы: помогает подбирать эфиры и людей.</p>
+          <div class="chips" id="wFocus"></div>
+          <label class="f" for="wGoal">ЧТО ХОЧУ СДЕЛАТЬ ЗА МЕСЯЦ<textarea id="wGoal" rows="2" placeholder="Один-два конкретных шага"></textarea></label>
+        </details>
         <div class="switch"><span>Показывать меня в рекомендациях</span><button class="toggle" id="pCoffee" aria-pressed="true" aria-label="Показывать меня в рекомендациях"></button></div>
         <div class="switch"><span>Готов(а) к офлайн-встречам</span><button class="toggle" id="pOff" aria-pressed="true" aria-label="Готов к офлайн-встречам"></button></div>
-        <button class="btn" id="saveProfile">Сохранить анкету</button>
+        <button class="btn" id="saveProfile">Сохранить</button>
       </div>
-      <div class="panel" id="wantsCard"></div>
     </section>
   </div>
 </div>

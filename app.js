@@ -110,6 +110,7 @@ function go(v, seg) {
   renderLvl(v);
   window.scrollTo(0, 0);
 }
+$(".pagehead").style.display = "none"; /* главная открыта по умолчанию */
 $$("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.v));
 $("#ptsPill").onclick = () => go("profile");
 document.addEventListener("click", e => { const t = e.target.closest("[data-tab]"); if (t) go(t.dataset.tab, t.dataset.seg); });
@@ -546,28 +547,23 @@ $$(".toggle").forEach(t => t.onclick = () => t.setAttribute("aria-pressed", t.ge
 $("#saveProfile").onclick = async () => {
   const data = {first_name: $("#pName").value.trim(), sphere: $("#pSphere").value.trim(), project: $("#pProject").value.trim(), city: $("#pCity").value.trim(), seek: $("#pSeek").value.trim(), give: $("#pGive").value.trim(),
     coffee: $("#pCoffee").getAttribute("aria-pressed") === "true", offline: $("#pOff").getAttribute("aria-pressed") === "true"};
-  try { await api("/api/me", {method: "PUT", json: data}); Object.assign(S.me, data); fillProfile(); toast("Анкета сохранена"); } catch (e) { fail(e); }
+  try {
+    await api("/api/me", {method: "PUT", json: data}); Object.assign(S.me, data);
+    if (S.wants) { const f = $("#wFocus .chip[aria-pressed=true]"), w = {focus: f ? f.dataset.sph : "", goal: $("#wGoal").value.trim(), seek: data.seek, give: data.give};
+      const r = await api("/api/wants", {method: "PUT", json: w}); S.wants = Object.assign({}, w, {updated_at: r.updated_at}); refreshHome(); }
+    fillProfile(); toast("Анкета сохранена"); haptic();
+  } catch (e) { fail(e); }
 };
 const SPH = ["Деньги", "Смыслы", "Знакомства", "Возможности", "Практики", "Впечатления"];
 async function renderWants() {
-  const el = $("#wantsCard"); if (!el) return;
-  if (!S.wants) { try { S.wants = await api("/api/wants"); } catch (e) { el.hidden = true; return; } }
+  const el = $("#wFocus"); if (!el) return;
+  if (!S.wants) { try { S.wants = await api("/api/wants"); } catch (e) { $("#wMonth").hidden = true; return; } }
   const w = S.wants;
-  el.innerHTML = `<span class="eyebrow">Мои запросы</span><h3>Чего я хочу сейчас</h3>
-    <p class="sub">Обновляйте, когда меняются планы. По этим ответам мы подбираем рекомендации знакомств.${w.updated_at ? ` Обновлено ${new Date(w.updated_at).toLocaleDateString("ru-RU", {day: "numeric", month: "long"})}.` : ""}</p>
-    <label class="f">ГЛАВНАЯ СФЕРА НА МЕСЯЦ</label>
-    <div class="chips" id="wFocus">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
-    <label class="f" for="wGoal">ЧТО ХОЧУ СДЕЛАТЬ ЗА МЕСЯЦ<textarea id="wGoal" rows="2" placeholder="Один-два конкретных шага"></textarea></label>
-    <label class="f" for="wSeek">КОГО ИЛИ ЧТО ИЩУ<textarea id="wSeek" rows="2" placeholder="Кто или что вам сейчас нужно"></textarea></label>
-    <label class="f" for="wGive">ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН<textarea id="wGive" rows="2" placeholder="С чем вы можете помочь другим"></textarea></label>
-    <button class="btn" id="wSave">Сохранить запросы</button>
-    <a class="btn ghost" href="/static/monthly.html" style="text-align:center;text-decoration:none">Заполнить итоги месяца</a>`;
-  $("#wGoal").value = w.goal || ""; $("#wSeek").value = w.seek || ""; $("#wGive").value = w.give || "";
-  $$("#wFocus .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#wFocus .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); });
-  $("#wSave").onclick = async () => {
-    const f = $("#wFocus .chip[aria-pressed=true]"), data = {focus: f ? f.dataset.sph : "", goal: $("#wGoal").value.trim(), seek: $("#wSeek").value.trim(), give: $("#wGive").value.trim()};
-    try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, data, {updated_at: r.updated_at}); Object.assign(S.me, {seek: data.seek, give: data.give}); toast("Запросы сохранены"); haptic(); renderWants(); refreshHome(); } catch (e) { fail(e); }
-  };
+  el.innerHTML = SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("");
+  $("#wGoal").value = w.goal || "";
+  const sum = () => { const f = $("#wFocus .chip[aria-pressed=true]"); $("#wSum").textContent = f ? "· " + f.dataset.sph : ""; };
+  $$("#wFocus .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#wFocus .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); sum(); });
+  sum();
 }
 function renderLevels() {
   const el = $("#levelsCard"), amb = S.me && S.me.level === "inside"; if (!el) return;
@@ -731,6 +727,16 @@ function streamSheet() {
   });
 }
 
+/* ---------- итоги месяца: кнопка с 28 числа, пока не заполнены ---------- */
+const MON_G = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"], MON_N = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+async function loadMonthly() { try { S.monthly = await api("/api/monthly-status"); } catch (e) { S.monthly = null; } renderMonthly(); }
+function renderMonthly() {
+  const q = S.monthly, html = q && q.open ? `<a class="mbtn" href="/static/monthly.html?month=${q.month}"><div class="t"><span class="eyebrow">Итоги месяца</span><b>Подведите итоги: ${MON_N[+q.month.slice(5) - 1]}</b><span class="sub">5 минут. По ним мы подберем эфиры и людей на следующий месяц</span></div><i>&#8250;</i></a>` : "";
+  ["#mbHome", "#mbProf"].forEach(id => { const el = $(id); if (el) el.innerHTML = html; });
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.me) loadMonthly(); });
+window.addEventListener("pageshow", () => { if (S.me) loadMonthly(); });
+
 /* ---------- самообновление ---------- */
 // Мини-приложение в Telegram может неделями жить в фоне. Когда его открывают снова, сверяем версию и перезагружаем, если вышла новая.
 (function () {
@@ -792,7 +798,7 @@ function tgAvatar() {
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
-  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants()]);
+  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly()]);
   refreshHome(); tgAvatar();
   route();
 }
