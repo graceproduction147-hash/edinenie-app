@@ -390,13 +390,107 @@ h2{font-size:17px;letter-spacing:-.01em;margin:26px 0 12px}
 .prow .pnx small{color:#667085}
 .prow .pnx small.od{color:#b42318;font-weight:600}
 .jauto{opacity:.85}
-</style></head>
+</style><style id="apple">
+/* ===== Единая система кабинета: спокойно, светло, один акцент ===== */
+html,html[data-theme]{--ink:#1d1d1f;--mu:#6e6e73;--line:rgba(0,0,0,.08);--bg:#f5f5f7;--card:#fff;--acc:#a9733f;--acc-s:rgba(169,115,63,.12);--ok:#1f7a4d;--bad:#c4361f;
+ --fnt:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Manrope","Segoe UI",Roboto,sans-serif;background:var(--bg)}
+html[data-theme] body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--fnt);letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
+html[data-theme] body::before{display:none}
+html[data-theme] body *{font-family:var(--fnt)}
+/* меню */
+html[data-theme] body .side{background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);color:var(--ink);
+ border:0;border-right:1px solid var(--line);border-radius:0;left:0;top:0;bottom:0;width:236px;padding:22px 12px 14px;box-shadow:none}
+html[data-theme] body .side::after{display:none}
+html[data-theme] body .logo{color:var(--ink);padding:0 10px 18px}
+html[data-theme] body .logo small{color:var(--mu);letter-spacing:.02em;text-transform:none;font-size:12px;font-weight:500;margin-top:6px}
+html[data-theme] body .gl{display:none}
+html[data-theme] body #nav{margin-top:0}
+html[data-theme] body #nav>.gl+button,html[data-theme] body #nav>button:first-child{margin-top:0}
+html[data-theme] body .side button.nb{color:var(--ink);font-size:14.5px;font-weight:500;padding:9px 12px;border-radius:10px;margin:1px 0;letter-spacing:-.012em;background:none}
+html[data-theme] body .side button.nb:hover{background:rgba(0,0,0,.05)}
+html[data-theme] body .side button.nb.on{background:var(--acc-s);color:#6b4420;font-weight:600}
+html[data-theme] body .bd{background:var(--acc);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;margin-left:auto}
+html[data-theme] body .nb.on .bd{background:var(--acc);color:#fff}
+html[data-theme] body #nav button.nb:nth-child(4n+1){}
+html[data-theme] body .sf{border-top:1px solid var(--line);color:var(--mu);padding:10px 4px 0;font-size:13px}
+html[data-theme] body .sf .lnk{border:0;background:none;color:var(--mu);font-size:13px;cursor:pointer;padding:6px 8px;border-radius:8px}
+html[data-theme] body .sf .lnk:hover{background:rgba(0,0,0,.05);color:var(--ink)}
+/* разделители между группами меню без подписей */
+html[data-theme] body #nav button.nb[data-a="funnels"]{}
+/* верхняя панель */
+html[data-theme] body .main{margin-left:236px;padding:0 44px 110px;max-width:1240px}
+html[data-theme] body .top{padding:16px 0 10px;background:linear-gradient(var(--bg) 70%,transparent);z-index:20}
+html[data-theme] body .search input{background:rgba(0,0,0,.05);border:1px solid transparent;border-radius:12px;padding:10px 16px;font-size:14.5px;box-shadow:none;width:320px;max-width:100%}
+html[data-theme] body .search input:focus{background:#fff;border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-s);outline:0}
+html[data-theme] body .search{max-width:360px;flex:0 1 360px}
+.nw{position:relative}
+.nmenu{display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:210px;background:rgba(255,255,255,.96);backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:14px;padding:6px;box-shadow:0 18px 50px -12px rgba(0,0,0,.25);z-index:50}
+.nmenu.on{display:block}
+.nmenu button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-radius:9px;font-size:14.5px;cursor:pointer;color:var(--ink)}
+.nmenu button:hover{background:var(--acc-s)}
+/* заголовки */
+html[data-theme] body #page h1,html[data-theme] body h1{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1;margin:18px 0 18px;color:var(--ink)}
+html[data-theme] body h2{font-size:20px;font-weight:650;letter-spacing:-.02em;color:var(--ink);margin:30px 0 12px}
+html[data-theme] body h2 small{font-size:13px;font-weight:500;color:var(--mu);margin-left:10px}
+html[data-theme] body h3{letter-spacing:-.015em}
+html[data-theme] body .m,html[data-theme] body .muted,html[data-theme] body .sub{color:var(--mu)}
+/* карточки */
+html[data-theme] body .c,html[data-theme] body .card{background:var(--card);border:0;border-radius:18px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 0 0 1px var(--line);padding:20px 22px}
+html[data-theme] body .c.od{box-shadow:0 0 0 1px rgba(196,54,31,.35)}
+/* кнопки */
+html[data-theme] body .b,html[data-theme] body .btn{border:0;background:rgba(0,0,0,.06);color:var(--ink);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14px;letter-spacing:-.01em;box-shadow:none;transition:background .15s}
+html[data-theme] body .b:hover,html[data-theme] body .btn:hover{background:rgba(0,0,0,.1)}
+html[data-theme] body .b.bs{padding:7px 14px;font-size:13.5px}
+html[data-theme] body .bp,html[data-theme] body .btn.primary{background:var(--ink);color:#fff}
+html[data-theme] body .bp:hover,html[data-theme] body .btn.primary:hover{background:#000}
+/* сегменты как в macOS */
+html[data-theme] body .seg{display:inline-flex;gap:2px;background:rgba(0,0,0,.06);border:0;border-radius:11px;padding:3px;box-shadow:none}
+html[data-theme] body .seg button{border:0;background:none;border-radius:8px;padding:7px 14px;font-size:14px;font-weight:550;color:var(--mu);box-shadow:none}
+html[data-theme] body .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+html[data-theme] body .crmchips button{border:0;background:rgba(0,0,0,.05);border-radius:999px;padding:7px 14px;font-weight:550;color:var(--ink)}
+html[data-theme] body .crmchips button.on{background:var(--ink);color:#fff}
+/* поля */
+html[data-theme] body input,html[data-theme] body select,html[data-theme] body textarea{border:1px solid transparent;background:rgba(0,0,0,.045);border-radius:11px;padding:10px 13px;font-size:15px;box-shadow:none}
+html[data-theme] body input:focus,html[data-theme] body select:focus,html[data-theme] body textarea:focus{background:#fff;border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-s);outline:0}
+html[data-theme] body label{font-size:12.5px;font-weight:600;color:var(--mu);letter-spacing:.01em;text-transform:none}
+/* теги */
+html[data-theme] body .tag{border-radius:999px;background:rgba(0,0,0,.06);color:var(--ink);font-weight:600;font-size:12px;padding:3px 10px}
+html[data-theme] body .tag.g{background:rgba(31,122,77,.12);color:var(--ok)}
+html[data-theme] body .tag.r{background:rgba(196,54,31,.12);color:var(--bad)}
+html[data-theme] body .tag.a,html[data-theme] body .tag.n{background:var(--acc-s);color:#6b4420}
+/* доски задач */
+html[data-theme] body .kb{gap:14px}
+html[data-theme] body .kcol{background:rgba(0,0,0,.035);border:0;border-radius:18px;padding:12px}
+html[data-theme] body .kh{font-size:13px;font-weight:650;letter-spacing:0;text-transform:none;color:var(--mu);padding:4px 6px 10px}
+html[data-theme] body .kh i{font-style:normal;background:rgba(0,0,0,.07);color:var(--ink);border-radius:999px;padding:1px 8px;margin-left:6px;font-size:12px}
+html[data-theme] body .kh.r{color:var(--bad)}
+html[data-theme] body .kcard{background:#fff;border:0;border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px var(--line);padding:14px}
+html[data-theme] body .kempty{color:var(--mu);font-size:13.5px;padding:8px 6px}
+/* таблицы */
+html[data-theme] body table{border-collapse:collapse}
+html[data-theme] body th{font-size:12px;font-weight:600;color:var(--mu);text-transform:none;letter-spacing:0;border-bottom:1px solid var(--line);background:none}
+html[data-theme] body td{border-bottom:1px solid var(--line)}
+/* аналитика */
+html[data-theme] body .an .k{background:#fff;border:0;border-radius:18px;box-shadow:0 0 0 1px var(--line)}
+html[data-theme] body .an .k b{font-weight:700;letter-spacing:-.03em}
+html[data-theme] body .an .eb,html[data-theme] body .eb{color:var(--mu);letter-spacing:.04em;text-transform:none;font-size:13px;font-weight:600}
+html[data-theme] body .an .tabs button.on{color:var(--ink);border-color:var(--acc)}
+/* модальные окна */
+html[data-theme] body .mw{background:rgba(0,0,0,.28);backdrop-filter:blur(8px)}
+html[data-theme] body .mw .mb,html[data-theme] body .mw>div{border-radius:22px;box-shadow:0 30px 80px -20px rgba(0,0,0,.4)}
+html[data-theme] body a{color:#8a5a2b}
+html[data-theme] body .av,html[data-theme] body .prow .av{background:linear-gradient(135deg,#e2c3a0,#a9733f)!important;color:#fff!important;font-weight:650}
+html[data-theme] body .prow{border:0;border-radius:16px;box-shadow:0 0 0 1px var(--line);background:#fff;transition:box-shadow .15s}
+html[data-theme] body .prow:hover{box-shadow:0 0 0 1px rgba(169,115,63,.45),0 8px 24px -12px rgba(0,0,0,.2)}
+@media(max-width:980px){html[data-theme] body .search{flex:1 1 auto;min-width:0}html[data-theme] body .search input{width:100%}html[data-theme] body .main{margin-left:0;padding:0 16px 110px}html[data-theme] body .side{width:auto}}
+</style>
+</head>
 <body>
 <div id="loginWrap"><div class="c" id="login"><div class="eb">Единение</div><h1>Кабинет клуба</h1><p class="m" style="margin:0">Вход для команды клуба.</p>
 <form id="lForm" method="post" action="#" autocomplete="on" style="display:flex;flex-direction:column;gap:12px;margin:0"><label>Ваше имя<input id="lName" name="username" autocomplete="username" autocapitalize="off" spellcheck="false"></label><label>Пароль<input id="lPass" name="password" type="password" autocomplete="current-password"></label><button class="b bp" id="lGo" type="submit" style="justify-content:center;margin:4px 0 0">Войти</button></form></div></div>
 <div id="shell" hidden>
-<aside class="side"><div class="logo"><div class="lg"><span class="mk"></span><span class="wd" role="img" aria-label="Единение"></span></div><small>клуб · рабочий кабинет</small></div><div id="nav"></div><div class="sf">От потребления к участию. От участия к созиданию.<span>Общая база: изменения сразу видит вся команда.</span></div></aside>
-<main class="main"><div class="top"><div class="search"><input id="q" placeholder="Найти человека: имя, Telegram, город" autocomplete="off"><div class="sres" id="sres"></div></div><span class="sp"></span><span class="m" id="dbst" style="font-size:12px;margin-right:8px"></span><button class="b bs" data-act="addTodo">+ Задача</button><button class="b bs" data-act="quickLog">+ Записать</button><button class="b bp bs" data-act="addPerson">+ Человек</button></div><div id="page"></div></main>
+<aside class="side"><div class="logo"><div class="lg"><span class="mk"></span><span class="wd" role="img" aria-label="Единение"></span></div><small>клуб · рабочий кабинет</small></div><div id="nav"></div><div class="sf"></div></aside>
+<main class="main"><div class="top"><div class="search"><input id="q" placeholder="Найти человека" autocomplete="off"><div class="sres" id="sres"></div></div><span class="sp"></span><span id="dbst" hidden></span><div class="nw"><button class="b bp" data-act="newMenu">Новое</button><div class="nmenu" id="nm"><button data-act="addPerson">Человек</button><button data-act="addTodo">Задача</button><button data-act="quickLog">Запись о человеке</button></div></div></div><div id="page"></div></main>
 <div class="mw" id="modal"></div>
 </div>
 <div id="svcHost" hidden>
@@ -1786,7 +1880,7 @@ return todayBrief()+`<div class="bar">${B("+ Задача","addTodo","msg","","b
 
 /* --- Кабинет: что подтвердить, добавить, проверить --- */
 function cabItems(){const C=ADM.cab||{claims:[],offers:[],events:[]},out=[],now=Date.now();
-(C.claims||[]).forEach(c=>out.push({key:"cab:claim:"+c.id,col:"ok",title:[c.first_name,c.last_name].filter(Boolean).join(" ")||c.username||"Участник",body:c.title||c.text||"Заявка на баллы",chip:c.points+" баллов",o:c}));
+(C.claims||[]).forEach(c=>out.push({key:"cab:claim:"+c.id,col:"ok",title:[c.first_name,c.last_name].filter(Boolean).join(" ")||c.username||"Участник",body:c.title||c.text||"Заявка на вклад",chip:"вклад",o:c}));
 (C.offers||[]).forEach(x=>out.push({key:"cab:offer:"+x.id,col:"ok",title:x.title,body:"Предложение участника: "+(x.author||""),chip:"предложение",o:x}));
 (C.events||[]).forEach(e=>{const t=Date.parse(e.starts_at);if(t<now&&!e.recording_url)out.push({key:"cab:rec:"+e.id,col:"add",title:"Добавить запись: "+e.title,body:"Эфир прошел, а записи в библиотеке еще нет",chip:"запись",o:e});
 else if(t>now&&t<now+7*864e5&&!e.join_url)out.push({key:"cab:zoom:"+e.id,col:"add",title:"Добавить ссылку: "+e.title,body:"Эфир на этой неделе, ссылки на Zoom еще нет",chip:"ссылка",o:e})});
@@ -1886,9 +1980,10 @@ function moneyBlock(p){const m=lm(p);
 
 /* ===== склейка страниц во вкладки ===== */
 mkTabs("crm","Участники",[["crm","Участники","Все, кто в клубе: статус, оплата, история"],["intro","Знакомства","Идеи знакомств между участниками и что с ними стало"],["forms","Анкеты","Анкеты участников и подсказки, что с каждым делать"],["cases","Кейсы","Истории результатов участников"],["usage","Что смотрят","Какие разделы приложения открывают участники"]],t=>t=="crm"&&S.ui.pid);
-mkTabs("events","Эфиры и материалы",[["events","Эфиры","Расписание эфиров клуба и их записи"],["library","Материалы","Конспекты, подкасты и записи для участников"],["cal","События партнеров","Афиша чужих событий со скидками и промокодами"]]);
-mkTabs("pts","Баллы",[["pts","Баллы и заявки","Заявки на баллы и правила программы"],["shop","Подарки за баллы","Что можно получить за баллы и заявки на подарки"],["offers","Предложения участников","Что участники предложили клубу: проверка и баллы"]]);
+mkTabs("events","Эфиры",[["events","Эфиры","Расписание эфиров клуба и их записи"],["library","Материалы","Конспекты, подкасты и записи для участников"],["cal","События партнеров","Афиша чужих событий со скидками и промокодами"]]);
+mkTabs("pts","Вклад участников",[["pts","Баллы и заявки","Заявки на баллы и правила программы"],["shop","Подарки за баллы","Что можно получить за баллы и заявки на подарки"],["offers","Предложения участников","Что участники предложили клубу: проверка и баллы"]]);
 mkTabs("plan","Контент-план",[["plan","Публикации","Что и когда выходит"],["rub","Рубрикатор","Рубрики и правила для публикаций"]]);
+mkTabs("today","Сегодня",[["today","Кому написать","Люди, которым нужно написать сегодня"],["touch","Касания","План личных сообщений по тарифам"],["cab","Подготовка","Что подтвердить и добавить для эфиров"]]);
 mkTabs("start","Справка",[["start","Начать здесь","Двадцать минут, и вы знаете, что делать"],["onb","Онбординг","Что делать с новым участником по дням"],["rules","Правила","Правила клуба"],["arch","Устройство клуба","Как все устроено"]]);
 /* ===== переключатель темы ===== */
 ACT.theme=function(){const d=document.documentElement,n=d.getAttribute("data-theme")=="night"?"light":"night";d.setAttribute("data-theme",n);try{localStorage.setItem("edn-theme2",n)}catch(e){}themeBtn()};
@@ -1900,7 +1995,14 @@ ACT.pw=function(){modal("Сменить пароль",[{k:"old",label:"Теку�
  ADM.api("/admin/api/password",{method:"POST",json:{old:v.old,new:v.n1}}).then(()=>{$("#modal").classList.remove("on");toast("Пароль изменен. Другие устройства попросят войти заново")}).catch(e=>toast(e.message));
  return false},"Сменить пароль")};
 function themeBtn(){const e=document.querySelector(".sf");if(e)e.innerHTML='<button class="b bs themebtn" data-act="theme">'+(document.documentElement.getAttribute("data-theme")=="night"?"Светлая тема":"Темная тема")+'</button>'+'<button class="b bs" data-act="pw" style="margin-top:8px">Сменить пароль</button>'}
+themeBtn=function(){const e=document.querySelector(".sf");if(e)e.innerHTML='<button class="lnk" data-act="pw">Сменить пароль</button>'};
 themeBtn();
+document.documentElement.setAttribute("data-theme","light");
+NAV.length=0;
+NAV.push(["",[["today","Сегодня"],["crm","Участники"],["events","Эфиры"],["plan","Контент-план"]]],["",[["texts","Сообщения"],["funnels","Воронки"],["pts","Вклад"],["stats","Аналитика"]]],["",[["team","Команда"],["start","Справка"]]]);
+{const _bd=badge;badge=function(t){if(t!="today")return _bd(t);const n=(+(_bd("today").replace(/\D/g,"")||0))+(+(_bd("cab").replace(/\D/g,"")||0));return n?`<span class="bd">${n}</span>`:""}}
+ACT.newMenu=function(a,b,el){const m=$("#nm");m.classList.toggle("on")};
+document.addEventListener("click",e=>{const m=$("#nm");if(m&&!e.target.closest(".nw")||e.target.closest("#nm button"))m&&m.classList.remove("on")});
 
 window.CRM_START=function(){if(!S.ui.v2){S.ui.cw="this";S.ui.v2=1}
 const h=decodeURIComponent((location.hash||"").slice(1));
