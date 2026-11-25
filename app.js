@@ -65,7 +65,7 @@ const LVL_NOTE = {
   home: null,
   events: ["эфиры, события партнеров, витрина предложений", "закрытые эфиры и их записи"],
   lib: ["открытые конспекты, подкасты, записи", "закрытые материалы"],
-  people: ["знакомства и Random Coffee для всех участников", null],
+  people: ["рекомендации знакомств для всех участников", null],
   profile: ["награды Club", "награды только для Inside"]
 };
 function renderLvl(v) {
@@ -84,7 +84,7 @@ function levelsSheet() {
   openSheet(`<p class="sub">Ваш уровень: ${inside ? "Inside" : "Club"}</p><h3>Club и Inside</h3>
     <div class="cmp"><div class="h">Раздел</div><div class="h y">Club</div><div class="h y in">Inside</div>
     ${rows.map(r => `<div>${esc(r[0])}</div><div class="${r[1] ? "y" : "n"}">${r[1] ? "да" : "нет"}</div><div class="y in">да</div>`).join("")}</div>
-    <p class="sub">Club открывается оплатой участия. Inside не продается: он открывается за вклад в клуб. За месяц нужно привести друга, провести встречу Random Coffee и рассказать о клубе или о своих результатах. Каждый пункт подтверждает команда. Баллы за действия копятся отдельно и тратятся на награды.</p>
+    <p class="sub">Club открывается оплатой участия. Inside не продается: он открывается за вклад в клуб. За месяц нужно привести друга, написать людям из рекомендаций и рассказать о клубе или о своих результатах. Каждый пункт подтверждает команда. Баллы за действия копятся отдельно и тратятся на награды.</p>
     <p class="sub" style="margin-top:8px">Годовой тариф Inside не дает, но добавляет бонусы, которых нет за баллы: статус «Партнер», место на витрине без приглашений и гостевые пропуска на эфиры.</p>
     ${inside ? "" : '<button class="btn" id="lvToPts">Что нужно для Inside</button>'}`,
     s => { const b = s.querySelector("#lvToPts"); if (b) b.onclick = () => { closeSheet(); go("profile"); }; });
@@ -99,7 +99,7 @@ function go(v, seg) {
   $$("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x.dataset.v === v ? "true" : "false"));
   $$(".view").forEach(x => x.classList.toggle("on", x.id === "v-" + v));
   $("#eyebrow").textContent = TITLES[v][0]; $("#title").textContent = TITLES[v][1];
-  if (v === "people") { if (seg) peopleSeg(seg); }
+  if (v === "people") { peopleSeg("coffee"); }
   if (v === "events" && seg) evSeg(seg);
   if (v === "lib") loadLib();
   renderLvl(v);
@@ -446,39 +446,46 @@ async function loadMatches() {
   } catch (e) { fail(e); }
 }
 async function loadCoffee() {
+  // Рекомендации знакомств на месяц (раньше здесь был Random Coffee; имя функции оставлено, чтобы не трогать остальной код)
   const box = $("#p-coffee");
-  try { const c = await api("/api/coffee"); S.coffee = c;
-    if (!c.pair) { box.innerHTML = `<div class="panel"><span class="eyebrow">Random Coffee</span><h3>Пара появится в понедельник</h3>
-      <p class="sub">${!c.profile_done ? "Сначала заполните анкету в профиле: по ней подбирается пара." : !c.enabled ? "Вы выключили Random Coffee в анкете." : "Каждый понедельник в 10:00 бот подбирает вам человека по «ищу» и «могу помочь» и присылает его контакт."}</p></div>`;
+  try { const c = await api("/api/recs"); S.coffee = c;
+    if (!c.items.length) {
+      box.innerHTML = `<div class="panel"><span class="eyebrow">Знакомства</span><h3>Рекомендации появятся позже</h3>
+      <p class="sub">${!c.profile_done ? "Сначала заполните анкету в профиле: по ней подбираются люди." : !c.enabled ? "Вы выключили рекомендации в профиле." : "Пока нет подходящих людей. Загляните позже, когда в клубе станет больше участников."}</p></div>`;
       renderHomeCoffee(); return; }
-    const p = c.pair, first = p.first_name || "Ваша пара";
-    const msg = `${first}, привет! Нас свел Random Coffee в Единении. Я ${S.me.first_name || ""}, ${(S.me.sphere || "").toLowerCase()}. Давай созвонимся на 30 минут на этой неделе?`;
-    box.innerHTML = `<div class="panel"><div class="steps" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="${c.met != null ? "on" : ""}"></i></div>
-      <div><span class="eyebrow">Неделя ${esc(c.week.split("-W")[1])}</span><h3 style="margin-top:8px">Ваша пара на эту неделю</h3></div>
-      <div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
-      <div class="why">${esc(c.reason)}</div>
-      <div><p class="sub" style="margin-bottom:6px">Первое сообщение, можно поправить</p><textarea id="cMsg" rows="4">${esc(msg)}</textarea></div>
-      ${p.username ? `<button class="btn" id="cWrite">Скопировать и написать</button>` : '<p class="sub">У участника скрыт username, бот передал ему ваш контакт.</p>'}</div>
-      <div class="panel" id="fb">${c.met != null ? `<h3>Спасибо за отзыв</h3><p class="sub">${c.met ? "Баллы за встречу отправлены на подтверждение." : "Записали, что встреча не состоялась."}</p>`
-      : `<h3>Созвонились?</h3><p class="sub">За встречу с отзывом начисляются баллы после подтверждения клуба.</p>
-        <div class="btns" id="fbBtns"><button class="btn" id="fbYes">Да, созвонились</button><button class="btn ghost" id="fbNo">Не получилось</button></div>
-        <div id="fbForm" hidden style="display:flex;flex-direction:column;gap:10px"><label class="f" for="fbText">ЧТО ЦЕННОГО ВЫНЕСЛИ<textarea id="fbText" rows="3"></textarea></label><button class="btn" id="fbSend">Отправить</button></div>`}</div>`;
-    const w = $("#cWrite"); if (w) w.onclick = () => { copy($("#cMsg").value); toast("Сообщение скопировано"); openTg(p.username); };
-    const y = $("#fbYes"); if (y) {
-      y.onclick = () => { $("#fbBtns").hidden = true; $("#fbForm").hidden = false; $("#fbText").focus(); };
-      $("#fbNo").onclick = async () => { await api(`/api/coffee/${c.id}/feedback`, {json: {met: false}}); loadCoffee(); };
-      $("#fbSend").onclick = async () => { const t = $("#fbText").value.trim(); if (!t) { toast("Напишите пару слов о встрече"); return; }
-        try { await api(`/api/coffee/${c.id}/feedback`, {json: {met: true, text: t}}); toast("Спасибо! Баллы ждут подтверждения"); loadCoffee(); refreshPoints(); } catch (e) { fail(e); } };
-    }
+    box.innerHTML = `<div><span class="eyebrow">Ваши рекомендации</span><p class="sub" style="margin-top:6px">Люди из клуба, с которыми вам стоит познакомиться. Напишите им первым: это самый короткий путь.</p></div>` +
+      c.items.map(p => {
+        const msg = `${p.first_name || ""}, привет! Я ${S.me.first_name || ""}, ${(S.me.sphere || "").toLowerCase()}. Увидел(а) вас в Единении и хочу познакомиться. Давайте созвонимся на 20 минут?`;
+        return `<div class="panel" data-rec="${p.id}">
+        <div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
+        ${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
+        <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek || "Не указано")}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give || "Не указано")}</p></div>
+        <div class="why">${esc(p.reason)}</div>
+        <button class="btn${p.written ? " ghost" : ""}" data-w="${p.id}" data-u="${esc(p.username || "")}" data-m="${esc(msg)}">${p.written ? "Написать еще раз" : "Написать"}</button></div>`; }).join("") +
+      `<div class="panel"><h3>Написали людям?</h3><p class="sub">Нажмите «Обновить», когда напишете. Мы спросим, как прошло, и подберем новых людей.</p>
+        <button class="btn" id="recRefresh"${c.can_refresh ? "" : " disabled"}>Обновить</button>${c.can_refresh ? "" : '<p class="hint">Станет доступна после первого «Написать».</p>'}</div>`;
+    $$("#p-coffee [data-w]").forEach(b => b.onclick = async () => {
+      copy(b.dataset.m); toast("Сообщение скопировано"); openTg(b.dataset.u);
+      try { await api(`/api/recs/${b.dataset.w}/written`, {json: {}}); const r = $("#recRefresh"); if (r) r.disabled = false; b.textContent = "Написать еще раз"; b.classList.add("ghost"); } catch (e) { fail(e); } });
+    const r = $("#recRefresh"); if (r) r.onclick = () => recAsk(c);
     renderHomeCoffee();
   } catch (e) { fail(e); }
 }
+function recAsk(c) {
+  openSheet(`<h3>Списались ли вы с этими людьми?</h3><p class="sub">Ответ нужен только нам, чтобы подбор становился точнее.</p>
+    <div class="btns"><button class="btn" id="raYes">Да, списались</button><button class="btn ghost" id="raNo">Пока нет</button></div>`, s => {
+    s.querySelector("#raNo").onclick = async () => { try { await api("/api/recs/refresh", {json: {met: false}}); closeSheet(); toast("Хорошо, ждем вашего сообщения"); } catch (e) { fail(e); } };
+    s.querySelector("#raYes").onclick = async () => { try { const r = await api("/api/recs/refresh", {json: {met: true}}); 
+      s.innerHTML = `<h3>Спасибо!</h3><p class="sub">Оставьте короткий отзыв о знакомстве в чате клуба с хештегом <b>${esc(r.tag || "#знакомство")}</b>: после подтверждения командой придут баллы.</p>
+        <button class="btn" id="raDone">Хорошо</button>`; s.querySelector("#raDone").onclick = () => { closeSheet(); loadCoffee(); }; } catch (e) { fail(e); } };
+  });
+}
 function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee");
-  if (!c || !c.pair) { el.innerHTML = `<div class="row2"><span>Random Coffee</span></div><p class="sub">Новая пара каждый понедельник. Чтобы попасть в подбор, заполните «ищу» и «могу помочь».</p><button class="btn ghost" data-tab="people" data-seg="coffee">Подробнее</button>`; return; }
-  el.innerHTML = `<div class="row2"><span>Random Coffee на этой неделе</span></div>
-    <div class="person"><div class="ava" style="background:${avaBg(c.pair.tg_id)}">${esc(initials(c.pair))}</div><div class="t"><b>${esc(fullName(c.pair))}</b><span>${esc([c.pair.sphere, c.pair.city].filter(Boolean).join(" · "))}</span></div></div>
-    <button class="btn ghost" data-tab="people" data-seg="coffee">Открыть пару</button>`;
+  if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
+  el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
+    ${c.items.map(p => `<div class="person"><div class="ava" style="background:${avaBg(p.tg_id)}">${esc(initials(p))}</div><div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
+    <button class="btn ghost" data-tab="people">Открыть рекомендации</button>`;
 }
 
 /* ---------- профиль ---------- */
@@ -535,7 +542,7 @@ async function renderWants() {
   if (!S.wants) { try { S.wants = await api("/api/wants"); } catch (e) { el.hidden = true; return; } }
   const w = S.wants;
   el.innerHTML = `<span class="eyebrow">Мои запросы</span><h3>Чего я хочу сейчас</h3>
-    <p class="sub">Обновляйте, когда меняются планы. По этим ответам мы подбираем знакомства и пару для Random Coffee.${w.updated_at ? ` Обновлено ${new Date(w.updated_at).toLocaleDateString("ru-RU", {day: "numeric", month: "long"})}.` : ""}</p>
+    <p class="sub">Обновляйте, когда меняются планы. По этим ответам мы подбираем рекомендации знакомств.${w.updated_at ? ` Обновлено ${new Date(w.updated_at).toLocaleDateString("ru-RU", {day: "numeric", month: "long"})}.` : ""}</p>
     <label class="f">ГЛАВНАЯ СФЕРА НА МЕСЯЦ</label>
     <div class="chips" id="wFocus">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
     <label class="f" for="wGoal">ЧТО ХОЧУ СДЕЛАТЬ ЗА МЕСЯЦ<textarea id="wGoal" rows="2" placeholder="Один-два конкретных шага"></textarea></label>
@@ -625,7 +632,7 @@ function showOnboard() {
 function showOnboardOld() {
   const o = $("#onboard"); o.hidden = false;
   o.innerHTML = `<span class="eyebrow">Добро пожаловать</span><h2>Расскажите о себе</h2>
-    <p>Одна анкета, около 10 минут. По ней мы подбираем знакомства и пару Random Coffee, а ваш профиль в клубе заполнится сам. Полностью анкету видит только команда клуба. Остальным участникам показываются имя, сфера, проект, город, «ищу» и «могу помочь».</p>
+    <p>Одна анкета, около 10 минут. По ней мы подбираем рекомендации знакомств, а ваш профиль в клубе заполнится сам. Полностью анкету видит только команда клуба. Остальным участникам показываются имя, сфера, проект, город, «ищу» и «могу помочь».</p>
     <div class="panel"><button class="btn" id="oGo">Заполнить анкету</button></div>`;
   $("#oGo").onclick = () => { location.href = "/static/anketa.html" + location.hash; };
 }
@@ -633,7 +640,7 @@ function showOnboardOld() {
 /* ---------- главная: действие недели и «Ваш месяц» по трем столпам ---------- */
 // Шесть сфер анкеты сгруппированы в три столпа клуба.
 const PILLARS = [
-  {k: "env", t: "Окружение", sph: ["Знакомства", "Впечатления"], hint: "Знакомства и Random Coffee", btn: "К людям", tab: "people"},
+  {k: "env", t: "Окружение", sph: ["Знакомства", "Впечатления"], hint: "Рекомендации знакомств", btn: "К людям", tab: "people"},
   {k: "game", t: "Большая игра", sph: ["Возможности", "Деньги"], hint: "Материалы про сцену, события и репутацию", btn: "В библиотеку", tab: "lib"},
   {k: "state", t: "Состояние", sph: ["Смыслы", "Практики"], hint: "Практики и эфиры", btn: "В библиотеку", tab: "lib"}
 ];
@@ -648,7 +655,7 @@ function wantsStale() {
 function renderWeekAction() {
   const el = $("#weekAction"), c = S.coffee; if (!el) return;
   let a = null;
-  if (c && c.pair && c.met == null) a = {k: "Главное на этой неделе", h: "Назначьте встречу с парой Random Coffee", p: `${fullName(c.pair)}${c.pair.sphere ? ", " + c.pair.sphere : ""}. Полчаса разговора, который может дать нужное знакомство.`, b: "Открыть пару", tab: "people", seg: "coffee"};
+  if (c && c.items && c.items.length && !c.items.some(i => i.written)) a = {k: "Главное на этой неделе", h: "Напишите тем, кого мы подобрали", p: `${c.items.length} человека из клуба, которым вам стоит написать первым.`, b: "Открыть рекомендации", tab: "people"};
   else if (S.wants && wantsStale()) a = {k: "Главное на этой неделе", h: "Выберите фокус и цель месяца", p: "Одна сфера и один-два конкретных шага. По ним мы подбираем знакомства и показываем, куда идти.", b: "Задать цель", tab: "profile"};
   el.hidden = !a; if (!a) return;
   el.innerHTML = `<span class="eyebrow">${a.k}</span><h3>${esc(a.h)}</h3><p class="sub">${esc(a.p)}</p><button class="btn" data-tab="${a.tab}"${a.seg ? ` data-seg="${a.seg}"` : ""}>${esc(a.b)}</button>`;

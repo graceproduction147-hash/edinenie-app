@@ -112,6 +112,9 @@ def init():
         con.execute("ALTER TABLE members ADD COLUMN role TEXT DEFAULT ''")
     if not con.execute("SELECT 1 FROM point_rules LIMIT 1").fetchone():
         con.executemany("INSERT INTO point_rules(code,title,hint,points,kind,sort) VALUES(?,?,?,?,?,?)", RULES)
+    # Random Coffee заменен рекомендациями знакомств: правило баллов «coffee» теперь про отзыв с хештегом #знакомство
+    con.execute("UPDATE point_rules SET title='Знакомство из рекомендаций', hint='Напишите отзыв в чате клуба с хештегом #знакомство' "
+                "WHERE code='coffee' AND title='Встреча Random Coffee'")
     if not con.execute("SELECT 1 FROM shop LIMIT 1").fetchone():
         con.executemany("INSERT INTO shop(code,title,hint,cost,inside_only,icon) VALUES(?,?,?,?,?,?)", SHOP)
     con.commit()

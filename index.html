@@ -33,7 +33,7 @@
   <section id="onboard" class="gate" hidden>
     <span class="eyebrow">Добро пожаловать</span>
     <h2>Расскажите о себе</h2>
-    <p>По анкете мы подбираем знакомства и пару Random Coffee. Ее видят только участники клуба.</p>
+    <p>По анкете мы подбираем рекомендации знакомств. Ее видят только участники клуба.</p>
     <div class="panel">
       <label class="f" for="oName">ИМЯ<input type="text" id="oName" autocomplete="given-name"></label>
       <label class="f" for="oSphere">СФЕРА<input type="text" id="oSphere" placeholder="Например: психолог, продюсер, дизайнер"></label>
@@ -87,12 +87,12 @@
 
     <!-- ЛЮДИ -->
     <section class="view" id="v-people">
-      <div class="seg" role="group" aria-label="Люди">
+      <div class="seg" role="group" aria-label="Люди" hidden>
         <button aria-pressed="true" data-ps="feed">Найди своих</button>
         <button aria-pressed="false" data-ps="coffee">Кофе</button>
         <button aria-pressed="false" data-ps="matches">Взаимные<span id="mBadge"></span></button>
       </div>
-      <div id="p-feed" style="display:flex;flex-direction:column;gap:14px">
+      <div id="p-feed" hidden style="display:flex;flex-direction:column;gap:14px">
         <div class="chips" role="group" aria-label="Фильтр">
           <button class="chip" data-f="all" aria-pressed="true">Все</button>
           <button class="chip" data-f="city" aria-pressed="false">Мой город</button>
@@ -105,7 +105,7 @@
         </div>
         <p class="hint">Свайп вправо — хочу познакомиться. Контакт откроется, если интерес взаимный.</p>
       </div>
-      <div id="p-coffee" hidden style="display:flex;flex-direction:column;gap:14px"></div>
+      <div id="p-coffee" style="display:flex;flex-direction:column;gap:14px"></div>
       <div id="p-matches" hidden style="display:flex;flex-direction:column;gap:14px">
         <p class="sub">Здесь те, кому вы тоже понравились. Пишите первыми, бот уже предупредил их о вас.</p>
         <div class="list" id="matchList"></div>
@@ -122,9 +122,9 @@
       <div class="list" id="shop"></div>
       <div class="panel">
         <h3>Правила клуба</h3>
-        <details class="rule"><summary>Club-level</summary><p>Участие на 1, 3, 6 месяцев или на год. Открывает эфиры, библиотеку, знакомства и Random Coffee. Условия, купленные по специальной цене, сохраняются при продлении.</p></details>
-        <details class="rule"><summary>Inside-level</summary><p>Открывается за вклад в клуб, а не за оплату. Каждый месяц нужно привести друга, провести встречу Random Coffee и рассказать о клубе или о своих результатах. Дает все возможности Club и дополнительно закрытые эфиры с записями, закрытые материалы и награды только для Inside. Каждый пункт подтверждает команда клуба.</p></details>
-        <details class="rule"><summary>За что начисляются баллы</summary><p>Баллы копятся отдельно от Inside и тратятся на награды. Начисляются не за присутствие в Zoom, а за действия: отзыв и инсайт после эфира, благодарность участнику, результат, которым вы делитесь, сторис о клубе с хештегом, приглашенный участник, встреча по Random Coffee. Каждое начисление подтверждает команда клуба.</p></details>
+        <details class="rule"><summary>Club-level</summary><p>Участие на 1, 3, 6 месяцев или на год. Открывает эфиры, библиотеку, рекомендации знакомств. Условия, купленные по специальной цене, сохраняются при продлении.</p></details>
+        <details class="rule"><summary>Inside-level</summary><p>Открывается за вклад в клуб, а не за оплату. Каждый месяц нужно привести друга, написать людям из рекомендаций и рассказать о клубе или о своих результатах. Дает все возможности Club и дополнительно закрытые эфиры с записями, закрытые материалы и награды только для Inside. Каждый пункт подтверждает команда клуба.</p></details>
+        <details class="rule"><summary>За что начисляются баллы</summary><p>Баллы копятся отдельно от Inside и тратятся на награды. Начисляются не за присутствие в Zoom, а за действия: отзыв и инсайт после эфира, благодарность участнику, результат, которым вы делитесь, сторис о клубе с хештегом, приглашенный участник, отзыв о знакомстве с хештегом #знакомство. Каждое начисление подтверждает команда клуба.</p></details>
         <details class="rule"><summary>Как знакомиться</summary><p>Контакт человека открывается только при взаимном интересе. Пишите от себя, коротко и по делу: кто вы, что увидели в анкете, что предлагаете.</p></details>
       </div>
       <div class="panel">
@@ -139,7 +139,7 @@
         <label class="f" for="pProject">ЧЕМ ЗАНИМАЮСЬ СЕЙЧАС<span class="cnt" id="cProject"></span><input type="text" id="pProject" maxlength="90" placeholder="Один проект, одной фразой"></label>
         <label class="f" for="pSeek">ИЩУ<span class="cnt" id="cSeek"></span><textarea id="pSeek" rows="2" maxlength="140" placeholder="Кого или что ищете сейчас. Одно предложение"></textarea></label>
         <label class="f" for="pGive">МОГУ ПОМОЧЬ<span class="cnt" id="cGive"></span><textarea id="pGive" rows="2" maxlength="140" placeholder="В чем вы реально сильны. Одно предложение"></textarea></label>
-        <div class="switch"><span>Участвую в Random Coffee</span><button class="toggle" id="pCoffee" aria-pressed="true" aria-label="Участвую в Random Coffee"></button></div>
+        <div class="switch"><span>Показывать меня в рекомендациях</span><button class="toggle" id="pCoffee" aria-pressed="true" aria-label="Показывать меня в рекомендациях"></button></div>
         <div class="switch"><span>Готов(а) к офлайн-встречам</span><button class="toggle" id="pOff" aria-pressed="true" aria-label="Готов к офлайн-встречам"></button></div>
         <button class="btn" id="saveProfile">Сохранить анкету</button>
       </div>

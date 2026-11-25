@@ -19,9 +19,9 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, 
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import card, coffee, db, tg
+from . import card, coffee, db, recs, tg
 from .config import (ADMIN_IDS, ADMIN_PASSWORD, BASE, DEV_MODE, INSIDE_MONTHS, JOIN_URL, PERIOD_MAP,
-                     PUBLIC_URL, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
+                     PUBLIC_URL, RECS_COUNT, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("club")
@@ -599,6 +599,7 @@ async def recalc_inside(con, tg_id):
 INSIGHT_TAG = re.compile(r"#инсайт\w*", re.I)
 SHARE_TAG = re.compile(r"#делюсь\w*", re.I)      # сторис о клубе -> story
 NOTICE_TAG = re.compile(r"#замечаю\w*", re.I)    # результат от клуба -> result
+MEET_TAG = re.compile(r"#знакомств\w*", re.I)    # отзыв о знакомстве из рекомендаций -> coffee
 
 
 def ensure_recap():
@@ -967,7 +968,7 @@ async def handle_chat_insight(con, msg):
     u, text = msg.get("from") or {}, (msg.get("text") or msg.get("caption") or "")
     if not u or u.get("is_bot"):
         return
-    if SHARE_TAG.search(text) or NOTICE_TAG.search(text):
+    if SHARE_TAG.search(text) or NOTICE_TAG.search(text) or MEET_TAG.search(text):
         return await handle_chat_share(con, msg, u, text)
     if not INSIGHT_TAG.search(text):
         return
@@ -1000,7 +1001,8 @@ async def handle_chat_insight(con, msg):
 
 async def handle_chat_share(con, msg, u, text):
     """#делюсь (сторис о клубе) и #замечаю (результат): заявка на баллы, команда проверяет и подтверждает."""
-    code, what = ("story", "сторис о клубе") if SHARE_TAG.search(text) else ("result", "результат от клуба")
+    code, what = (("story", "сторис о клубе") if SHARE_TAG.search(text) else ("result", "результат от клуба") if NOTICE_TAG.search(text)
+                  else ("coffee", "отзыв о знакомстве"))
     row = con.execute("SELECT * FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
     if not row:
         return
@@ -1010,7 +1012,7 @@ async def handle_chat_share(con, msg, u, text):
     ref = f"tg:{msg['chat']['id']}:{msg['message_id']}"
     if con.execute("SELECT 1 FROM claims WHERE tg_id=? AND ref=?", (m["tg_id"], ref)).fetchone():
         return
-    clean = SHARE_TAG.sub("", NOTICE_TAG.sub("", text)).strip()[:1000]
+    clean = MEET_TAG.sub("", SHARE_TAG.sub("", NOTICE_TAG.sub("", text))).strip()[:1000]
     cid, rule = add_claim(con, m["tg_id"], code, clean, ref=ref)
     con.commit()
     await send_text(m["tg_id"], render(con, "share_ok", points=rule["points"], what=what), tg.app_button("Мои баллы", "#profile"), key="share_ok", con=con)
@@ -1237,6 +1239,37 @@ def matches(m=Depends(member), con=Depends(get_con)):
     hidden = con.execute("""SELECT COUNT(*) FROM likes WHERE to_id=? AND value=1
                             AND from_id NOT IN (SELECT to_id FROM likes WHERE from_id=?)""", (m["tg_id"], m["tg_id"])).fetchone()[0]
     return {"matches": out, "liked_you": hidden}
+
+
+@app.get("/api/recs")
+def my_recs(m=Depends(member), con=Depends(get_con)):
+    """Рекомендации знакомств на месяц. Подбор составляется при первом открытии."""
+    if not m["profile_done"]:
+        return {"items": [], "profile_done": False, "enabled": bool(m["coffee"]), "count": RECS_COUNT}
+    if not m["coffee"]:
+        return {"items": [], "profile_done": True, "enabled": False, "count": RECS_COUNT}
+    r = recs.current(con, m, RECS_COUNT)
+    items = [{"id": i["id"], "reason": i["reason"], "written": i["written"],
+              **public_card(i["other"]), "username": i["other"].get("username")} for i in r["items"]]
+    return {"items": items, "month": r["month"], "batch": r["batch"], "profile_done": True, "enabled": True,
+            "can_refresh": any(i["written"] for i in items), "count": RECS_COUNT, "tag": "#знакомство"}
+
+
+@app.post("/api/recs/{rid}/written")
+def recs_written(rid: int, m=Depends(member), con=Depends(get_con)):
+    if not recs.mark_written(con, m["tg_id"], rid):
+        raise HTTPException(404, "Не найдено")
+    return {"ok": True}
+
+
+@app.post("/api/recs/refresh")
+async def recs_refresh(req: Request, m=Depends(member), con=Depends(get_con)):
+    data = await req.json()
+    try:
+        fresh = recs.refresh(con, m, bool(data.get("met")), RECS_COUNT)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "fresh": fresh, "tag": "#знакомство"}
 
 
 @app.get("/api/coffee")

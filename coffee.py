@@ -6,7 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from . import db, tg
-from .config import TZ
+from .config import COFFEE_BOT, TZ
 
 log = logging.getLogger("coffee")
 STOP = set("для и в на с по от из к о об что как это или а но за под над при так же мне его ее их".split())
@@ -117,18 +117,19 @@ async def event_reminders(con):
 
 
 async def scheduler():
-    """Понедельник 10:00 — пары, пятница 12:00 — вопрос про встречу (по Москве)."""
+    """Понедельник 10:00 — пары, пятница 12:00 — вопрос про встречу (по Москве). Работает только при COFFEE_BOT=1.
+    Напоминания об эфирах идут всегда."""
     while True:
         try:
             t = datetime.now(ZoneInfo(TZ))
             con = db.connect()
             wk = week_key(t)
-            if t.weekday() == 0 and t.hour >= 10 and db.get_setting(con, "coffee_week") != wk:
+            if COFFEE_BOT and t.weekday() == 0 and t.hour >= 10 and db.get_setting(con, "coffee_week") != wk:
                 res = make_pairs(con, wk)
                 db.set_setting(con, "coffee_week", wk); con.commit()
                 if res:
                     await announce(*res)
-            if t.weekday() == 4 and t.hour >= 12 and db.get_setting(con, "coffee_remind") != wk:
+            if COFFEE_BOT and t.weekday() == 4 and t.hour >= 12 and db.get_setting(con, "coffee_remind") != wk:
                 db.set_setting(con, "coffee_remind", wk); con.commit()
                 await remind_feedback(con)
             await event_reminders(con)
