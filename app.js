@@ -167,8 +167,7 @@ function feedItems() {
 }
 function renderFeed() {
   const c = S.cal, items = feedItems();
-  $("#evSoon").innerHTML = `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`
-    + ((c && (c.intro || c.outro)) || (S.events && S.events.soon.length) ? `<details class="more"><summary>О событиях</summary>${c && c.intro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.intro)}</p>` : ""}${S.events && S.events.soon.length ? '<p class="sub">Бот напомнит об эфирах клуба за день и за час до начала.</p>' : ""}${c && c.outro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.outro)}</p>` : ""}</details>` : "");
+  $("#evSoon").innerHTML = `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`;
   if (!$("#homeCal")) return;
   $("#homeCal").innerHTML = items.length ? `<div class="row2"><span>Ближайшие события</span></div>
     <div class="list">${items.slice(0, 3).map(x => x.html).join("")}</div>
@@ -351,11 +350,10 @@ function offerRow(o) {
 function renderOffers() {
   const all = S.offers || [], mine = all.filter(o => o.mine), rest = all.filter(o => !o.mine && o.status === "active");
   const sl = S.slots || {free: 0, invited: 0}, can = (S.me && S.me.level === "inside") || !!S.year || sl.free > 0;
-  $("#evOff").innerHTML = `<p class="sub">Участники клуба предлагают свои услуги и продукты по специальной цене или в обмен. Выберите предложение и отправьте заявку: автор получит ее в Telegram.</p>
+  $("#evOff").innerHTML = `<p class="sub">Участники и партнеры клуба предлагают свои услуги и продукты по специальной цене или в обмен. Выберите предложение и отправьте заявку: автор получит ее в Telegram.</p>
     ${can ? `<button class="btn" id="offNew">${sl.free > 0 ? "Опубликовать свое предложение" : "Получить место: пригласить друга"}</button>` : ""}
     ${mine.length ? `<h2 class="sec">Мои предложения</h2><div class="list">${mine.map(offerRow).join("")}</div>` : ""}
-    <h2 class="sec">Витрина клуба</h2>
-    <div class="list">${rest.length ? rest.map(offerRow).join("") : '<p class="empty-line">Первые предложения появятся здесь после проверки командой.</p>'}</div>`;
+    ${rest.length ? `<div class="list">${rest.map(offerRow).join("")}</div>` : ""}`;
   const on_ = $("#offNew"); if (on_) on_.onclick = () => { if (sl.free > 0) newOfferSheet(); else taskSheet(S.rules.find(k => k.code === "invite")); };
   $$("[data-off]").forEach(b => b.onclick = () => offerSheet(all.find(o => o.id == b.dataset.off)));
 }
