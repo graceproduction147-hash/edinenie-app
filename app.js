@@ -805,9 +805,41 @@ async function openQuote() {
   } catch (e) { fail(e); }
 }
 const _hp = $("#homePerks"); if (_hp) _hp.onclick = levelsSheet;
+/* ---------- профиль: трекинг прогресса ---------- */
+function progChart(P) {
+  const W = 340, H = 170, L = 8, R = 8, T = 10, B = 24, n = P.series.length, X = i => L + (n === 1 ? 0 : i * (W - L - R) / (n - 1)), Y = v => T + (5 - v) * (H - T - B) / 4;
+  const pts = P.series.map((x, i) => x.mood ? [X(i), Y(x.mood), x] : null).filter(Boolean);
+  const grid = [1, 2, 3, 4, 5].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1" ${v % 2 ? 'stroke-dasharray="3 5"' : ""}/>`).join("");
+  const line = pts.length > 1 ? `<path d="${pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>` : "";
+  const dots = pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${n > 40 ? 2 : 4}" fill="${MOODS[p[2].mood - 1][1]}" stroke="var(--bg, #0f1120)" stroke-width="1.5"/>`).join("");
+  const bw = Math.max(2, (W - L - R) / n - 2), bars = P.series.map((x, i) => `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${H - B + 6 + (3 - x.n) * 3}" width="${bw.toFixed(1)}" height="${Math.max(1, x.n * 3)}" rx="1" fill="${x.n >= 2 ? "var(--accent)" : "var(--line-strong)"}" opacity="${x.n ? 1 : .35}"/>`).join("");
+  const lab = [0, Math.floor((n - 1) / 2), n - 1].map(i => { const d = P.series[i].d.split("-"); return `<text x="${X(i)}" y="${H + 8}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}" fill="var(--muted)" font-size="10">${+d[2]} ${MON_G[+d[1] - 1].slice(0, 3)}</text>`; }).join("");
+  const yl = [[5, "на подъеме"], [1, "тяжело"]].map(([v, t]) => `<text x="${L + 2}" y="${Y(v) + (v === 5 ? 12 : -4)}" fill="var(--muted)" font-size="9" opacity=".8">${t}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H + 12}" width="100%" role="img" aria-label="График состояния по дням">${grid}${yl}${line}${dots}${bars}${lab}</svg>`;
+}
+async function progressSheet(days) {
+  days = days || 30;
+  let P; try { P = await api("/api/progress?days=" + days); } catch (e) { fail(e); return; }
+  const delta = P.avg != null && P.prev != null ? Math.round((P.avg - P.prev) * 10) / 10 : null;
+  const few = P.series.filter(x => x.mood).length < 3;
+  openSheet(`<h3>Мой прогресс</h3>
+    <div class="chips" id="pgR">${[7, 30, 90].map(d => `<button class="chip" data-d="${d}" aria-pressed="${d === P.days}">${d} дней</button>`).join("")}</div>
+    <div class="pg-chart">${progChart(P)}<div class="pg-leg"><span><i style="background:var(--accent)"></i>состояние</span><span class="b"><i></i>шаги ритуала (внизу)</span></div></div>
+    ${few ? '<p class="sub">Пока мало данных. Отмечайте состояние на главной каждый день, и через неделю здесь появится ваша линия.</p>' : ""}
+    <div class="pg-stats">
+      <div><b>${P.streak}</b><span>серия сейчас</span></div><div><b>${P.best}</b><span>лучшая серия</span></div>
+      <div><b>${P.done}<small> из ${P.days}</small></b><span>дней с ритуалом</span></div>
+      <div><b>${P.avg != null ? P.avg : "—"}${delta != null && delta !== 0 ? `<small class="${delta > 0 ? "up" : "dn"}"> ${delta > 0 ? "+" : ""}${delta}</small>` : ""}</b><span>среднее состояние${delta != null ? " (к прошлому периоду)" : ""}</span></div></div>
+    <div class="switch"><span>Напоминание в 10:00 по Москве</span><button class="toggle" id="pgPush" aria-pressed="${P.push}" aria-label="Напоминание в 10:00"></button></div>`, s => {
+    s.querySelectorAll("#pgR .chip").forEach(b => b.onclick = () => progressSheet(+b.dataset.d));
+    const t = s.querySelector("#pgPush"); t.onclick = async () => { const on = t.getAttribute("aria-pressed") !== "true"; try { await api("/api/daily/push", {json: {on}}); t.setAttribute("aria-pressed", String(on)); toast(on ? "Напоминание включено" : "Напоминание выключено"); } catch (e) { fail(e); } };
+  });
+}
+const _pb = $("#progBtn"); if (_pb) _pb.onclick = () => progressSheet(30);
+
 /* ---------- ритуал дня на главной: состояние, фокус, карта ---------- */
 const MOODS = [["Тяжело", "#6C7AA8"], ["Устало", "#8E86B8"], ["Ровно", "#B99BC0"], ["Хорошо", "#E0A27E"], ["На подъеме", "#F2C27A"]];
-async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); }
+async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); const ps = $("#progSub"); if (ps && S.daily) ps.textContent = S.daily.streak ? `Серия: ${S.daily.streak} дн.` : "Состояние по дням, серия, график"; }
 async function dailyStep(step, extra) { try { S.daily = await api("/api/daily", {method: "POST", json: Object.assign({step}, extra || {})}); renderRitual(); haptic(); } catch (e) { fail(e); } }
 function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
