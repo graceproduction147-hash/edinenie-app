@@ -1099,6 +1099,109 @@ def public_card(m):
     return d
 
 
+# ---------------- аватарка из Telegram ----------------
+_AVA_HOSTS = ("t.me", "telesco.pe", "telegram-cdn.org", "telegram.org", "cdn-telegram.org")
+
+
+def _ava_jpeg(raw):
+    """Приводит картинку к JPEG до 640 px по большей стороне. None, если это не картинка."""
+    try:
+        from io import BytesIO
+        from PIL import Image
+        im = Image.open(BytesIO(raw)).convert("RGB")
+        im.thumbnail((640, 640))
+        out = BytesIO()
+        im.save(out, "JPEG", quality=85)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+async def _http_get(url, timeout=8):
+    import httpx
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as c:
+        r = await c.get(url)
+        return r.content if r.status_code == 200 else None
+
+
+def _ava_host_ok(url):
+    from urllib.parse import urlparse
+    h = (urlparse(url).hostname or "").lower()
+    return urlparse(url).scheme == "https" and any(h == x or h.endswith("." + x) for x in _AVA_HOSTS)
+
+
+async def fetch_tg_avatar(mem):
+    """Достает аватарку человека из Telegram: сначала публичная страница t.me/ник, потом бот. Возвращает JPEG или None."""
+    uname = (mem.get("username") or "").lstrip("@")
+    if uname:
+        try:
+            page = await _http_get(f"https://t.me/{uname}")
+            mt = re.search(rb'property="og:image" content="([^"]+)"', page or b"")
+            if mt:
+                url = html.unescape(mt.group(1).decode())
+                if _ava_host_ok(url) and "t_logo" not in url:
+                    img = _ava_jpeg(await _http_get(url) or b"")
+                    if img:
+                        return img
+        except Exception:
+            log.info("аватарка с t.me не получилась для %s", mem.get("tg_id"))
+    try:
+        r = await tg._call(tg.BOT_TOKEN, "getUserProfilePhotos", {"user_id": mem["tg_id"], "limit": 1})
+        ph = (((r or {}).get("result") or {}).get("photos") or [])
+        if ph:
+            f = await tg._call(tg.BOT_TOKEN, "getFile", {"file_id": ph[0][-1]["file_id"]})
+            path = ((f or {}).get("result") or {}).get("file_path")
+            if path:
+                return _ava_jpeg(await _http_get(f"https://api.telegram.org/file/bot{tg.BOT_TOKEN}/{path}", 10) or b"")
+    except Exception:
+        log.info("аватарка через бота не получилась для %s", mem.get("tg_id"))
+    return None
+
+
+def save_avatar(con, tg_id, jpeg):
+    BOTPICS.mkdir(parents=True, exist_ok=True)
+    name = f"u-{tg_id}-{secrets.token_hex(4)}.jpg"
+    (BOTPICS / name).write_bytes(jpeg)
+    con.execute("UPDATE members SET photo=?, updated_at=? WHERE tg_id=? AND (photo IS NULL OR photo='')", (name, db.now(), tg_id))
+    con.commit()
+    return name
+
+
+@app.post("/api/me/photo-tg")
+async def me_photo_tg(req: Request, m=Depends(member), con=Depends(get_con)):
+    """Приложение передает адрес аватарки из Telegram; если не вышло, берем ее сами. Фото, которое человек поставил сам, не трогаем."""
+    if m.get("photo"):
+        return {"ok": True, "photo": m["photo"]}
+    d = await req.json()
+    url = str((d or {}).get("url") or "")
+    img = None
+    if url and _ava_host_ok(url):
+        try:
+            img = _ava_jpeg(await _http_get(url) or b"")
+        except Exception:
+            img = None
+    if not img:
+        img = await fetch_tg_avatar(m)
+    if not img:
+        return {"ok": False}
+    return {"ok": True, "photo": save_avatar(con, m["tg_id"], img)}
+
+
+async def _avatars_tick(con):
+    """По несколько человек за проход подтягиваем аватарки тем, у кого нет фото. Пробуем раз в неделю."""
+    now = time.time()
+    rows = con.execute("SELECT tg_id, username FROM members WHERE (photo IS NULL OR photo='') AND status='active' "
+                       "AND tg_id NOT IN (SELECT CAST(substr(key,9) AS INTEGER) FROM settings WHERE key LIKE 'ava_try:%' AND CAST(value AS REAL) > ?) LIMIT 4",
+                       (now - 7 * 86400,)).fetchall()
+    for r in rows:
+        mem = {"tg_id": r["tg_id"], "username": r["username"]}
+        db.set_setting(con, f"ava_try:{r['tg_id']}", now)
+        con.commit()
+        img = await fetch_tg_avatar(mem)
+        if img:
+            save_avatar(con, r["tg_id"], img)
+
+
 @app.post("/api/me/photo")
 async def me_photo(req: Request, m=Depends(member), con=Depends(get_con)):
     """Фото профиля: приложение уменьшает его и присылает картинкой, мы кладем в общую папку картинок."""
@@ -1843,6 +1946,10 @@ async def _reminders_tick(con):
     await _event_reminders(con)
     await _daily_push(con)
     await _meet_nudge(con)
+    try:
+        await _avatars_tick(con)
+    except Exception:
+        log.exception("аватарки")
 
 
 coffee.event_reminders = _reminders_tick

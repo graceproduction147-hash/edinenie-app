@@ -922,21 +922,15 @@ function renderRitual() {
   const c = $("#rCard"); if (c) c.onclick = openQuote;
 }
 
+$("#anketaToggle").onclick = () => { const b = $("#anketaBody"), o = b.hidden; b.hidden = !o; $("#anketaToggle").setAttribute("aria-expanded", String(o)); };
 /* ---------- аватарка из Telegram ---------- */
 function tgAvatar() {
-  // Если у участника нет фото, один раз пробуем взять аватарку из Telegram и сохранить как фото профиля.
+  // Если у участника нет фото, просим сервер подтянуть аватарку из Telegram (адрес, который дал Telegram, или публичная страница).
   try {
     const u = TG && TG.initDataUnsafe && TG.initDataUnsafe.user, m = S.me;
-    if (!u || !u.photo_url || !m || m.photo) return;
-    const key = "tgava:" + m.tg_id; if (localStorage.getItem(key)) return; localStorage.setItem(key, "1");
-    const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = async () => { try {
-      const side = 640, k = Math.min(1, side / Math.max(img.width, img.height)), c = document.createElement("canvas");
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const r = await api("/api/me/photo", {method: "POST", json: {image: c.toDataURL("image/jpeg", 0.85)}}); S.me.photo = r.photo; fillProfile(); refreshHome();
-    } catch (e) {} };
-    img.src = u.photo_url;
+    if (!m || m.photo || sessionStorage.getItem("ava")) return;
+    sessionStorage.setItem("ava", "1");
+    api("/api/me/photo-tg", {json: {url: (u && u.photo_url) || ""}}).then(r => { if (r && r.photo) { S.me.photo = r.photo; fillProfile(); refreshHome(); } }).catch(() => {});
   } catch (e) {}
 }
 
