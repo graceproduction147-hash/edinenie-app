@@ -156,7 +156,7 @@ function renderShop() {}
 /* ---------- эфиры ---------- */
 async function loadEvents() { S.events = await api("/api/events"); renderEvents(); renderHero(); try { renderWeekAction(); } catch (e) {} }
 function evRow(e) { const w = when(e.starts_at);
-  return `<button class="item" data-ev="${e.id}"><div class="date"><b>${w.d}</b><span>${w.m}</span></div>
+  return `<button class="item ev" data-ev="${e.id}">${e.cover ? `<img class="cvr row" src="${esc(e.cover)}" alt="" loading="lazy">` : ""}<div class="date"><b>${w.d}</b><span>${w.m}</span></div>
     <div class="t"><b>${esc(e.title)}</b><span>${w.wd}, ${w.t} · ${esc(e.rubric || "Эфир")} · ${esc(e.place)}</span></div>
     <div class="end">${e.locked ? `<span class="lock">${lockSVG}Амбассадор</span>` : e.going ? '<span class="going">Иду</span>' : ""}</div></button>`; }
 function renderEvents() { renderFeed(); }
@@ -756,6 +756,9 @@ function streamSheet() {
       catch (e) { btn.disabled = false; fail(e); } };
   });
 }
+
+/* версия приложения внизу профиля: видно, дошло ли обновление */
+fetch("/api/version", {cache: "no-store"}).then(r => r.json()).then(j => { const el = $("#verStamp"); if (el && j.v) el.textContent = "Версия от " + new Date(j.v * 1000).toLocaleString("ru-RU", {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow"}); }).catch(() => {});
 
 /* ---------- итоги месяца: кнопка с 28 числа, пока не заполнены ---------- */
 const MON_G = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"], MON_N = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
