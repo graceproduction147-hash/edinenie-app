@@ -421,7 +421,7 @@ h2{font-size:17px;letter-spacing:-.01em;margin:26px 0 12px}
           <input type="hidden" id="eId">
           <label class="full">Название<input id="eTitle"></label>
           <label>Рубрика<input id="eRubric" placeholder="Кейс участника"></label>
-          <label>Спикер<input id="eSpeaker"></label>
+          <label>Спикер<input id="eSpeaker" placeholder="Имя Фамилия (обязательно)"></label>
           <label>Дата и время (МСК)<input id="eStart" type="datetime-local"></label>
           <label>Место<input id="ePlace" value="Zoom"></label>
           <label>Ссылка на Zoom<input id="eJoin"></label>
@@ -2101,7 +2101,7 @@ $$("[data-cs]").forEach(b=>b.onclick=()=>loadClaims(b.dataset.cs));
 
 let EVENTS=[];
 async function loadEvents(){const d=await (await fetch("/admin/api/events-list",{headers:{"Authorization":"Bearer "+TOKEN}})).json().catch(()=>[]);EVENTS=d||[];
-  $("#eventsList").innerHTML=EVENTS.map(e=>`<div class="card claim"><div><b>${esc(e.title)}</b><div class="meta">${dt(e.starts_at)} · ${esc(e.rubric)} · ${esc(e.speaker)} ${e.inside_only?"· Inside":""}</div>
+  $("#eventsList").innerHTML=EVENTS.map(e=>`<div class="card claim"><div><img src="/eventcover/${e.id}.png" style="width:160px;border-radius:8px;display:block;margin-bottom:6px" alt=""><b>${esc(e.title)}</b><div class="meta">${dt(e.starts_at)} · ${esc(e.rubric)} · ${esc(e.speaker)} ${e.inside_only?"· Inside":""}</div>
     <div class="meta">Записались: ${e.going} ${e.recording_url?"· есть запись":""}</div></div><div class="actions"><button class="btn" data-edit="${e.id}">Изменить</button></div></div>`).join("")||'<p class="muted">Эфиров пока нет.</p>';
   $$("[data-edit]").forEach(b=>b.onclick=()=>editEvent(EVENTS.find(e=>e.id==b.dataset.edit)))}
 function toLocal(iso){if(!iso)return"";const d=new Date(iso);const m=new Date(d.toLocaleString("en-US",{timeZone:"Europe/Moscow"}));const p=n=>String(n).padStart(2,"0");return `${m.getFullYear()}-${p(m.getMonth()+1)}-${p(m.getDate())}T${p(m.getHours())}:${p(m.getMinutes())}`}

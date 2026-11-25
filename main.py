@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, 
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import card, coffee, db, quotes, recs, tg
+from . import card, coffee, cover, db, quotes, recs, tg
 from .config import (ADMIN_IDS, ADMIN_PASSWORD, BASE, DEV_MODE, INSIDE_MONTHS, JOIN_URL, PERIOD_MAP,
                      PUBLIC_URL, RECS_COUNT, RECS_COUNT_AMB, TRIBUTE_API_KEY, UPLOADS, WEBHOOK_SECRET)
 
@@ -1383,6 +1383,7 @@ def events(m=Depends(member), con=Depends(get_con)):
         e["going"] = e["id"] in going
         e["watched"] = e["id"] in watched
         e["locked"] = bool(e["inside_only"]) and not inside
+        e["cover"] = cover_url(e)
         if e["locked"] or not e["going"]:
             e["join_url"] = ""  # ссылку на Zoom видят только записавшиеся
         if e["locked"]:
@@ -1566,7 +1567,7 @@ async def _event_reminders(con):
             link = Raw(f"\n\nПодключиться: {html.escape(e['join_url'])}") if e["join_url"] else ""
             text = render(con, key, title=e["title"], link=link)
             for (tg_id,) in con.execute("SELECT tg_id FROM rsvp WHERE event_id=?", (e["id"],)).fetchall():
-                await send_text(tg_id, text, key=key, con=con)
+                await send_event_photo(tg_id, e, text, key, con)
 
 
 _orig_make_pairs = coffee.make_pairs
@@ -2680,6 +2681,8 @@ def admin_upload(name: str, _=Depends(admin)):
 @app.post("/admin/api/events")
 async def admin_event(req: Request, _=Depends(admin), con=Depends(get_con)):
     d = await req.json()
+    if "speaker" in d and len(str(d.get("speaker") or "").split()) < 2:
+        raise HTTPException(400, "Укажите спикера полностью: имя и фамилия")
     cols = ["title", "rubric", "speaker", "starts_at", "place", "inside_only", "join_url", "description",
             "recording_url", "podcast_url", "summary", "timecodes", "clips"]
     vals = [json.dumps(d[k], ensure_ascii=False) if k in ("summary", "timecodes") and k in d else d.get(k) for k in cols]
@@ -3747,6 +3750,57 @@ async def quote_send(m=Depends(member)):
     if not (r and r.get("ok")):
         raise HTTPException(502, "Не получилось отправить картинку в чат. Попробуйте позже.")
     return {"ok": True}
+
+
+def _full_speaker(name):
+    """На обложке спикер подписан именем и фамилией; короткое «Влад» из старых записей дополняем."""
+    n = (name or "").strip()
+    return "Влад Митьковский" if n.lower() == "влад" else n
+
+
+def event_cover_png(e):
+    """Обложка эфира по единому шаблону. Кладем на диск, ключ зависит от названия и спикера."""
+    speaker = _full_speaker(e["speaker"])
+    key = hashlib.md5(f"{e['id']}|{e['title']}|{speaker}".encode()).hexdigest()[:12]
+    d = UPLOADS / "covers"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{e['id']}-{key}.jpg"
+    if not p.exists():
+        for old in d.glob(f"{e['id']}-*.jpg"):
+            old.unlink(missing_ok=True)
+        p.write_bytes(cover.render(e["title"] or "", speaker, seed=int(e["id"])))
+    return p
+
+
+def cover_url(e):
+    k = hashlib.md5(f"{e['title']}|{_full_speaker(e['speaker'])}".encode()).hexdigest()[:8]
+    return f"/eventcover/{e['id']}.png?v={k}"
+
+
+@app.api_route("/eventcover/{name}", methods=["GET", "HEAD"])
+def eventcover(name: str, con=Depends(get_con)):
+    try:
+        eid = int(name.removesuffix(".png"))
+    except ValueError:
+        raise HTTPException(404)
+    e = con.execute("SELECT id, title, speaker FROM events WHERE id=?", (eid,)).fetchone()
+    if not e:
+        raise HTTPException(404)
+    return FileResponse(event_cover_png(e), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+async def send_event_photo(tg_id, e, text, key, con):
+    """Напоминание об эфире с обложкой. Не вышло с картинкой, шлем обычным текстом."""
+    try:
+        if len(text) <= 1024:
+            r = await tg._call(tg.BOT_TOKEN, "sendPhoto", {"chat_id": tg_id, "caption": text, "parse_mode": "HTML"},
+                               file=("photo", event_cover_png(e).read_bytes()))
+            if r and r.get("ok"):
+                _msg_log(tg_id, "[обложка] " + text, key, True, "main")
+                return
+    except Exception:
+        log.exception("обложка эфира в напоминании")
+    await send_text(tg_id, text, key=key, con=con)
 
 
 @app.api_route("/quotepic/{name}", methods=["GET", "HEAD"])
