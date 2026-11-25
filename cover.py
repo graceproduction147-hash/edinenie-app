@@ -3,7 +3,7 @@
 import io
 import random
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 try:
     from . import card, quotes
@@ -185,32 +185,46 @@ _GOLD_STOPS = [(0, (250, 236, 206)), (.45, (226, 184, 124)), (.75, (246, 222, 17
 
 
 def _gold_img(size):
-    import numpy as np
     w, h = size
-    t = np.clip(np.linspace(0, 1, h)[:, None] * .8 + np.linspace(0, 1, w)[None, :] * .2, 0, 1)
-    arr = np.zeros((h, w, 3), float)
+    g = Image.linear_gradient("L").resize((w, h), Image.BILINEAR)   # сверху вниз: 0..255
+    chans = []
     for i in range(3):
-        arr[..., i] = np.interp(t, [s[0] for s in _GOLD_STOPS], [s[1][i] for s in _GOLD_STOPS])
-    return Image.fromarray(arr.astype("uint8"))
+        lut = []
+        for v in range(256):
+            t = v / 255
+            for (t0, c0), (t1, c1) in zip(_GOLD_STOPS, _GOLD_STOPS[1:]):
+                if t <= t1:
+                    k = (t - t0) / (t1 - t0) if t1 > t0 else 0
+                    lut.append(int(c0[i] + (c1[i] - c0[i]) * max(0, min(1, k))))
+                    break
+            else:
+                lut.append(_GOLD_STOPS[-1][1][i])
+        chans.append(g.point(lut))
+    return Image.merge("RGB", chans)
 
 
 def msg_card(title, label="", seed=0):
     """Сдержанная карточка 1280×720 для сообщений бота: тёмный фон, знак клуба золотом, тонкая рамка, подпись и заголовок.
     Слово «Единение» на картинке не повторяется: надписи клуба нет, остаётся только знак."""
-    import numpy as np
     try:
         from . import logo_asset
     except ImportError:
         import logo_asset
     W, H = 1280, 720
     base, glow = _MSG_THEMES[seed % len(_MSG_THEMES)]
-    rnd = random.Random(seed * 31 + 7)
-    y, x = np.mgrid[0:H, 0:W]
-    d = np.hypot((x - W / 2) / W, (y - H * .36) / H)
-    bg = np.array(base, float) + (np.array(glow, float) - np.array(base, float)) * np.clip(1 - d / .62, 0, 1)[..., None] ** 2.2 * .85
-    vg = np.clip(np.hypot((x - W / 2) / W, (y - H / 2) / H) / .75, 0, 1)[..., None] ** 2
-    bg = bg * (1 - .45 * vg) + np.random.default_rng(seed).normal(0, 1.4, (H, W, 1))
-    img = Image.fromarray(np.clip(bg, 0, 255).astype("uint8")).convert("RGBA")
+    img = Image.new("RGB", (W, H), base)
+    # мягкое свечение за знаком
+    gm = Image.radial_gradient("L").point(lambda v: int(255 - v)).resize((int(W * 1.1), int(H * 1.5)), Image.BILINEAR)
+    gm = gm.point(lambda v: int((v / 255) ** 2.2 * 215))
+    gl = Image.new("L", (W, H), 0)
+    gl.paste(gm, (int(W / 2 - gm.width / 2), int(H * .36 - gm.height / 2)))
+    img.paste(Image.new("RGB", (W, H), glow), (0, 0), gl)
+    # виньетка по краям
+    vm = Image.radial_gradient("L").resize((int(W * 1.5), int(H * 1.5)), Image.BILINEAR).point(lambda v: int((v / 255) ** 2.4 * 140))
+    vl = Image.new("L", (W, H), 0)
+    vl.paste(vm, (int(W / 2 - vm.width / 2), int(H / 2 - vm.height / 2)))
+    img.paste(Image.new("RGB", (W, H), (0, 0, 0)), (0, 0), vl)
+    img = img.convert("RGBA")
     ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
     gold = (226, 184, 132)
