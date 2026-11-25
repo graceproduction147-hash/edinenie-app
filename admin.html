@@ -2057,8 +2057,8 @@ async function loadTexts(){loadAuto();TEXTS_DATA=await api("/admin/api/texts");
         ${ppl.map(p=>`<label style="margin-left:18px"><input type="checkbox" data-rp="${t.key}" value="${p.tg_id}" ${t.route===null||t.route.includes(p.tg_id)?"checked":""} ${t.route===null?"disabled":""}> ${esc((p.first_name||"")+" "+(p.last_name||""))} ${p.username?"@"+esc(p.username):""}</label>`).join("")||'<span class="muted">В команде пока никого, кроме вас. Добавьте людей по ссылке в блоке «Команда клуба» на вкладке «Сегодня».</span>'}
       </div></details>`:""}
     ${t.can_pic?`<div class="actions" style="margin-top:8px;align-items:center;gap:10px;flex-wrap:wrap">
-      ${t.pic?`<img src="${t.pic}" alt="" style="height:64px;border-radius:10px;border:1px solid var(--line)">`:`<span class="muted" style="font-size:12.5px">Картинки нет</span>`}
-      <label class="btn" style="cursor:pointer">${t.pic?"Заменить картинку":"Прикрепить картинку"}<input type="file" accept="image/*" data-pic="${t.key}" hidden></label>
+      ${t.pic?`<img src="${t.pic}" alt="" style="height:64px;border-radius:10px;border:1px solid var(--line)">`:t.auto_pic?`<a href="${t.auto_pic}" target="_blank"><img src="${t.auto_pic}" alt="" style="height:64px;border-radius:10px;border:1px solid var(--line)"></a><span class="muted" style="font-size:12.5px">Картинка автоматически</span>`:`<span class="muted" style="font-size:12.5px">Картинки нет</span>`}
+      <label class="btn" style="cursor:pointer">${t.pic?"Заменить картинку":t.auto_pic?"Загрузить свою":"Прикрепить картинку"}<input type="file" accept="image/*" data-pic="${t.key}" hidden></label>
       ${t.pic?`<button class="btn" data-picdel="${t.key}">Убрать картинку</button>`:""}
       <span class="muted" style="font-size:12px">С картинкой текст должен быть не длиннее 1024 знаков: он уходит одним сообщением. Знаки из фигурных скобок ({name}) заменятся на слова, оставьте запас.</span></div>`:""}
     <div class="actions" style="margin-top:8px;justify-content:space-between"><span class="muted cnt" style="font-size:12.5px"></span>
