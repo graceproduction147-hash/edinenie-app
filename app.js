@@ -747,12 +747,15 @@ function routeSheet() {
 function renderMonth() {
   // когда ритуал выполнен, он скрывается, а на его месте остается фокус месяца: сфера и цель человека его словами
   const el = $("#monthCard"), w = S.wants, d = S.daily; if (!el) return;
-  const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit;
+  const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit && !S.rOpen;
   if (!done || !w || !w.goal) { el.hidden = true; return; }
   el.hidden = false;
   el.innerHTML = `<span class="eyebrow">Фокус на месяц</span><p class="mgoal">${esc(w.goal)}</p>
-    <div class="mfoot"><span class="sub">Ритуал на сегодня выполнен · ${d.streak} дн. подряд</span><button class="btn sm ghost" id="mcEdit">Изменить</button></div>`;
+    <div class="mmood"><span class="sub">Состояние сегодня</span><div class="moods mini">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" aria-label="${m[0]}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
+    <div class="mfoot"><span class="sub">Ритуал выполнен · ${d.streak} дн. подряд</span><span class="rbt"><button class="btn sm ghost" id="mcOpen">Открыть ритуал</button><button class="btn sm ghost" id="mcEdit">Фокус</button></span></div>`;
   $("#mcEdit").onclick = () => { S.rfEdit = true; renderRitual(); };
+  $("#mcOpen").onclick = () => { S.rOpen = true; renderRitual(); };
+  $$("#monthCard [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
 }
 function refreshHome() { renderWeekAction(); renderMonth(); renderRitual(); }
 
@@ -869,7 +872,7 @@ function renderRitual() {
   el.hidden = false; renderMonth();
   const w = S.wants || {}, fp = w.goal, n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
   const done = n >= 4;
-  if (done && !edit && !S.mEdit && !S.aEdit && w.goal) { el.hidden = true; return; }
+  if (done && !edit && !S.mEdit && !S.aEdit && !S.rOpen && w.goal) { el.hidden = true; return; }
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
   const row = (ok, t, sub, btn) => `<div class="rstep rrow ${ok ? "ok" : ""}"><div class="rt"><i class="ck"></i><div class="rtx"><b>${t}</b>${sub ? `<span>${sub}</span>` : ""}</div>${btn || ""}</div></div>`;
   const mood = d.mood != null && !S.mEdit ? row(1, "Состояние: " + MOODS[d.mood - 1][0].toLowerCase(), "", '<button class="btn sm ghost" id="rmEdit">Изменить</button>')
@@ -884,8 +887,9 @@ function renderRitual() {
         <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div></div>`
     : row(d.focus, "Фокус на месяц", esc(w.goal), `<span class="rbt">${d.focus ? "" : '<button class="btn sm" id="rFocus">Помню</button>'}<button class="btn sm ghost" id="rfEdit">Изменить</button></span>`);
   const card = row(d.card, "Карта дня", "", `<button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть" : "Вытянуть"}</button>`);
-  el.innerHTML = `<div class="rhead"><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
+  el.innerHTML = `<div class="rhead"><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3>${done && S.rOpen ? '<button class="btn sm ghost" id="rClose">Свернуть</button>' : ""}<div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
     <div class="rweek">${wk}</div>${mood}${areas}${focus}${card}`;
+  const rcl = $("#rClose"); if (rcl) rcl.onclick = () => { S.rOpen = false; S.mEdit = S.aEdit = S.rfEdit = false; renderRitual(); };
   const em = $("#rmEdit"); if (em) em.onclick = () => { S.mEdit = true; renderRitual(); };
   const ea = $("#raEdit"); if (ea) ea.onclick = () => { S.aEdit = true; renderRitual(); };
   const ad = $("#raDone"); if (ad) ad.onclick = () => { S.aEdit = false; renderRitual(); };
