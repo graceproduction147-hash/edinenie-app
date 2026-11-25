@@ -172,3 +172,96 @@ if __name__ == "__main__":
     open("/tmp/cover_a.jpg", "wb").write(render("Окружение", "Влад Митьковский", seed=0))
     open("/tmp/cover_b.jpg", "wb").write(render("Как собрать событие с нуля", "Влад Митьковский", seed=2))
     open("/tmp/cover_c.jpg", "wb").write(render("Большая игра", "Влад Митьковский", seed=3))
+
+
+# ---------------- сдержанные карточки для сообщений бота ----------------
+_MSG_THEMES = [
+    ((10, 12, 24), (44, 52, 96)),     # полночь
+    ((13, 13, 17), (62, 58, 70)),     # графит
+    ((18, 11, 17), (84, 44, 56)),     # бордо
+    ((8, 17, 22), (34, 74, 84)),      # глубокая бирюза
+]
+_GOLD_STOPS = [(0, (250, 236, 206)), (.45, (226, 184, 124)), (.75, (246, 222, 172)), (1, (196, 150, 92))]
+
+
+def _gold_img(size):
+    import numpy as np
+    w, h = size
+    t = np.clip(np.linspace(0, 1, h)[:, None] * .8 + np.linspace(0, 1, w)[None, :] * .2, 0, 1)
+    arr = np.zeros((h, w, 3), float)
+    for i in range(3):
+        arr[..., i] = np.interp(t, [s[0] for s in _GOLD_STOPS], [s[1][i] for s in _GOLD_STOPS])
+    return Image.fromarray(arr.astype("uint8"))
+
+
+def msg_card(title, label="", seed=0):
+    """Сдержанная карточка 1280×720 для сообщений бота: тёмный фон, знак клуба золотом, тонкая рамка, подпись и заголовок.
+    Слово «Единение» на картинке не повторяется: надписи клуба нет, остаётся только знак."""
+    import numpy as np
+    try:
+        from . import logo_asset
+    except ImportError:
+        import logo_asset
+    W, H = 1280, 720
+    base, glow = _MSG_THEMES[seed % len(_MSG_THEMES)]
+    rnd = random.Random(seed * 31 + 7)
+    y, x = np.mgrid[0:H, 0:W]
+    d = np.hypot((x - W / 2) / W, (y - H * .36) / H)
+    bg = np.array(base, float) + (np.array(glow, float) - np.array(base, float)) * np.clip(1 - d / .62, 0, 1)[..., None] ** 2.2 * .85
+    vg = np.clip(np.hypot((x - W / 2) / W, (y - H / 2) / H) / .75, 0, 1)[..., None] ** 2
+    bg = bg * (1 - .45 * vg) + np.random.default_rng(seed).normal(0, 1.4, (H, W, 1))
+    img = Image.fromarray(np.clip(bg, 0, 255).astype("uint8")).convert("RGBA")
+    ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    gold = (226, 184, 132)
+    # едва заметные большие кольца
+    for cx, cy, r in ((W * .5, H * 1.05, H * .95), (W * .5, H * 1.05, H * 1.25)):
+        od.ellipse([cx - r, cy - r, cx + r, cy + r], outline=gold + (22,), width=2)
+    # двойная тонкая рамка
+    od.rectangle([34, 34, W - 35, H - 35], outline=gold + (120,), width=2)
+    od.rectangle([44, 44, W - 45, H - 45], outline=gold + (42,), width=1)
+    # ромбики по центру верхней и нижней линии рамки
+    for cy in (34, H - 35):
+        dd = 7
+        od.polygon([(W / 2, cy - dd), (W / 2 + dd, cy), (W / 2, cy + dd), (W / 2 - dd, cy)], fill=(14, 14, 24, 255), outline=gold + (230,))
+    img.alpha_composite(ov)
+    # знак клуба
+    sun = logo_asset.sun_mask()
+    S = 150
+    sun = sun.resize((S, int(S * sun.height / sun.width)), Image.LANCZOS)
+    pos = ((W - sun.width) // 2, 92)
+    big = Image.new("L", (W, H), 0); big.paste(sun, pos)
+    halo = big.filter(ImageFilter.GaussianBlur(14)).point(lambda v: int(v * .5))
+    img.paste(Image.new("RGB", (W, H), (150, 104, 70)), (0, 0), halo)
+    img.paste(_gold_img(sun.size), pos, sun)
+    dr = ImageDraw.Draw(img, "RGBA")
+    # заголовок: до двух строк, строки выровнены по длине
+    size = 88
+    while True:
+        f = card.font("Forum.ttf", size)
+        lines = quotes._wrap(title, f, 980)
+        if len(lines) <= 2 or size <= 52:
+            break
+        size -= 4
+    n, w = len(lines), 980
+    while n > 1 and w > 300:
+        w -= 20
+        t = quotes._wrap(title, f, w)
+        if len(t) > n:
+            break
+        lines = t
+    lh = int(size * 1.18)
+    top_block = 304
+    # подпись с тонкими линиями по бокам
+    if label:
+        lw = card.text_c(dr, W // 2, top_block, label, "Manrope-Medium.ttf", 21, ACC, ls=8, max_w=640)
+        for sgn in (-1, 1):
+            x0 = W // 2 + sgn * (lw / 2 + 26)
+            dr.line([(x0, top_block), (x0 + sgn * 70, top_block)], fill=ACC + (150,), width=1)
+    mid = top_block + (118 if len(lines) == 1 else 142)
+    y0 = mid - (len(lines) - 1) * lh / 2
+    for i, ln in enumerate(lines):
+        card.text_c(dr, W // 2, y0 + i * lh, ln, "Forum.ttf", size, INK, ls=1.2)
+    out = io.BytesIO()
+    img.convert("RGB").save(out, "JPEG", quality=92, optimize=True)
+    return out.getvalue()
