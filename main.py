@@ -4160,19 +4160,20 @@ def cover_url(e):
 
 
 @app.api_route("/orb/{name}", methods=["GET", "HEAD"])
-def orb_pic(name: str):
-    """Круглая миниатюра материала: у каждого номера своя планета."""
+def orb_pic(name: str, s: int = 192):
+    """Круглая миниатюра или аватарка по умолчанию: у каждого номера своя планета."""
     try:
         seed = int(name.removesuffix(".png"))
     except ValueError:
         raise HTTPException(404)
     if not 0 <= seed < 2000:
         raise HTTPException(404)
+    s = 192 if s < 192 else 480 if s > 192 else 192
     d = UPLOADS / "orbs2"
     d.mkdir(parents=True, exist_ok=True)
-    p = d / f"{seed}.png"
+    p = d / (f"{seed}.png" if s == 192 else f"{seed}-{s}.png")
     if not p.exists():
-        p.write_bytes(cover.orb(seed))
+        p.write_bytes(cover.orb(seed, s))
     return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
 
 
