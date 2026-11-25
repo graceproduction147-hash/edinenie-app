@@ -1114,6 +1114,7 @@ def me(m=Depends(current_user), con=Depends(get_con)):
 
 # ---------------- мои запросы: что человек хочет сейчас ----------------
 SPHERES = ("Деньги", "Смыслы", "Знакомства", "Возможности", "Практики", "Впечатления")
+FOCUS_OPTS = SPHERES + ("Тело", "Отношения", "Семья", "Работа", "Творчество", "Отдых")
 
 
 def ensure_wants(con):
@@ -1130,7 +1131,7 @@ def _daily_ensure(con):
         pass
 
 
-AREAS = ("body", "relations", "rest", "fun", "money")  # тело, отношения, отдых, веселье, деньги
+AREAS = ("body", "sleep", "relations", "family", "friends", "rest", "fun", "money", "work", "learn", "create", "nature")  # тело, отношения, отдых, веселье, деньги
 
 
 def _areas(r):
@@ -1379,7 +1380,7 @@ def wants_get(m=Depends(member), con=Depends(get_con)):
                 goal = d.get("next_goal") if isinstance(d.get("next_goal"), str) else ""
             except ValueError:
                 pass
-    return {"focus": focus if focus in SPHERES else "", "goal": goal or "", "seek": m.get("seek") or "",
+    return {"focus": focus if focus in FOCUS_OPTS else "", "goal": goal or "", "seek": m.get("seek") or "",
             "give": m.get("give") or "", "updated_at": upd}
 
 
@@ -1388,7 +1389,7 @@ async def wants_put(req: Request, m=Depends(member), con=Depends(get_con)):
     ensure_wants(con)
     d = await req.json()
     focus = str(d.get("focus") or "")
-    if focus and focus not in SPHERES:
+    if focus and focus not in FOCUS_OPTS:
         raise HTTPException(400, "Выберите сферу из списка")
     goal, seek, give = (str(d.get(k) or "").strip()[:1000] for k in ("goal", "seek", "give"))
     now = db.now()
