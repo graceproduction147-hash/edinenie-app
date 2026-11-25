@@ -238,14 +238,14 @@ def pic_url(con, key):
 # ключ сообщения: (подпись, заголовок). Свою картинку из кабинета бот берет в первую очередь.
 AUTO_PICS = {
     "welcome": ("ДОБРО ПОЖАЛОВАТЬ", "Вы в Единении"),
-    "member_start": ("ЕДИНЕНИЕ", "Рады вас видеть"),
-    "guest_start": ("ЕДИНЕНИЕ", "Окружение, которое двигает вперед"),
+    "member_start": ("КЛУБ", "Рады вас видеть"),
+    "guest_start": ("КЛУБ", "Окружение, которое двигает вперед"),
     "r_anketa_1": ("АНКЕТА", "Расскажите о себе"),
     "r_anketa_3": ("АНКЕТА", "Одна минута для знакомств"),
     "r_anketa_7": ("АНКЕТА", "Пусть вас найдут"),
     "r_renew_7": ("УЧАСТИЕ", "Скоро продление"),
     "r_renew_1": ("УЧАСТИЕ", "Завтра продление"),
-    "r_quiet": ("ЕДИНЕНИЕ", "Вас давно не было"),
+    "r_quiet": ("КЛУБ", "Вас давно не было"),
     "inside_on": ("СТАТУС", "Вы Амбассадор"),
     "inside_off": ("СТАТУС", "Пауза Амбассадора"),
     "recap_record": ("ЭФИР", "Запись готова"),
@@ -258,7 +258,7 @@ AUTO_PICS = {
     "offer_live": ("ВИТРИНА", "Предложение опубликовано"),
     "birthday_wish": ("С ДНЕМ РОЖДЕНИЯ", "Единение с вами"),
 }
-AUTO_VER = 1
+AUTO_VER = 2
 
 
 def auto_on_pics(con):
@@ -274,7 +274,7 @@ def auto_pic_file(key):
         label, title = AUTO_PICS[key]
         BOTPICS.mkdir(parents=True, exist_ok=True)
         seed = list(AUTO_PICS).index(key)
-        f.write_bytes(cover.render(title, "", label, seed))
+        f.write_bytes(cover.msg_card(title, label, seed))
     return f
 
 
