@@ -61,7 +61,7 @@ $("#sheetWrap").onclick = e => { if (e.target.id === "sheetWrap") closeSheet(); 
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSheet(); $("#matchOv").hidden = true; } });
 
 /* ---------- навигация ---------- */
-const TITLES = {home:["Клуб","Главная"], events:["Встречи и предложения","События"], lib:["Знания клуба","Библиотека"], people:["Круг","Люди"], profile:["Ваше участие","Профиль"], perks:["Годовой тариф и Амбассадор","Бонусы"]};
+const TITLES = {home:["Клуб","Главная"], events:["Встречи и предложения","События"], lib:["Знания клуба","Библиотека"], people:["Круг","Люди"], profile:["Ваше участие","Профиль"]};
 /* ---------- уровни Резидент и Амбассадор (внутри кода уровень Амбассадора по-прежнему называется inside) ---------- */
 const LVL_NOTE = {
   home: null,
@@ -106,7 +106,7 @@ function go(v, seg) {
   if (v === "people") { peopleSeg("coffee"); }
   if (v === "events" && seg) evSeg(seg);
   if (v === "lib") loadLib();
-  if (v === "perks") loadPerks();
+  if (v === "profile") loadPerks();
   renderLvl(v);
   window.scrollTo(0, 0);
 }
@@ -497,7 +497,7 @@ function renderPerks() {
     + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "");
   const yearFoot = yr ? "" : `<p class="why">Открывается при годовом тарифе</p><button class="link" id="pkYearInfo">Подробнее</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
-  el.innerHTML = `<p class="sub" style="margin-bottom:12px">Здесь то, что открыто на годовом тарифе и для Амбассадоров. Забирайте.</p>`
+  el.innerHTML = `<span class="eyebrow" style="margin:4px 0 12px">Мои возможности</span>`
     + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot)
     + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot);
   const on = (id, f) => { const b = $("#" + id); if (b) b.onclick = f; };
