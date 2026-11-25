@@ -95,6 +95,14 @@ function levelsSheet() {
       const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); ownStream(); };
       const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); }; });
 }
+function ambHowSheet() {
+  const n = S.norm || {};
+  const items = [["invite", "Привести друга в клуб", "Он оплачивает участие по вашей ссылке"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
+  openSheet(`<h3>Как стать Амбассадором</h3><p class="sub">Всего три простых шага за ${n.days || 30} дней.</p>
+    <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>
+    <button class="btn solid" id="ahInv" style="margin-top:14px">Пригласить друга</button>`,
+    s => { s.querySelector("#ahInv").onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); }; });
+}
 let _trk = {};
 function track(k) {
   const t = Date.now(); if (_trk[k] && t - _trk[k] < 4000) return; _trk[k] = t;
@@ -536,7 +544,7 @@ function renderPerks() {
     + row(amb, "Место на витрине на 1 месяц", amb ? (sl.amb_free ? "Ваше место свободно: разместите предложение на месяц" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине на 1 месяц", amb && sl.amb_free ? "Разместить" : "", "pkAmbOffer")
     + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "")
     + row(amb, "Персональные знакомства", "Подбор людей под ваш запрос", "", "");
-  const yearFoot = yr ? "" : `<button class="btn solid" id="pkTeam">Написать команде</button>`;
+  const yearFoot = yr ? "" : `<button class="btn solid" id="pkTeam">Сделать апгрейд</button>`;
   const ambFoot = amb ? (n ? `<p class="why ok">${n.done ? `Статус действует еще ${n.days_left} дн.` : "Статус подтверждается шагами"}</p>` : "") : `<p class="why">Открывается за вклад в клуб: ${n ? [n.invite, n.story, n.insight].filter(Boolean).length : 0} из 3 шагов</p><button class="link" id="pkAmbInfo">Как открыть</button>`;
   const full = `<h3>Мои возможности</h3>` + card(amb, "Амбассадор", amb ? "Открыто для вас" : "Пока закрыто", ambRows, ambFoot, "Статус за активное участие в жизни клуба. Бонусы действуют на любом тарифе: годовом и ежемесячном.")
     + card(yr, "Годовой тариф", yr ? "Открыто для вас" : "Пока закрыто", yearRows, yearFoot, "Тариф на год со своими бонусами, плюс дополнительные для Амбассадоров.");
@@ -546,7 +554,7 @@ function renderPerks() {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
     on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet); on("pkMentor", ownStream);
-    on("pkScene", ownStream); on("pkTeam", () => openPay(S.support || S.join)); on("pkAmbInfo", levelsSheet);
+    on("pkScene", ownStream); on("pkTeam", () => openPay(S.support || S.join)); on("pkAmbInfo", ambHowSheet);
   });
 }
 
