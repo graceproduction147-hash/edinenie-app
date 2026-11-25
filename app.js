@@ -87,7 +87,7 @@ function levelsSheet() {
   const blk = (t, sub, items, mine, plus) => `<div class="lv${mine ? " mine" : ""}"><div class="lh"><b>${t}</b><span>${sub}</span>${mine ? "<em>у вас</em>" : ""}</div><ul>${items.map(i => `<li>${plus ? "+ " : ""}${i}</li>`).join("")}</ul></div>`;
   const grid = blk("Резидент", "по оплате", ["Жизнь клуба и чат", "Приложение и Random Coffee", "2 знакомства в месяц", "Скидки до 50% на события", "Место на витрине за приглашенного друга"], !amb && !yr)
     + blk("Амбассадор", "за вклад", ["4 знакомства в месяц", "Персональные знакомства", "Свой эфир в клубе", "Место на витрине на 1 месяц"], amb, true)
-    + blk("Годовой тариф", "к любому уровню", ["Место на витрине на весь год", "Ментор клуба и своя рубрика", "2 гостевых пропуска на эфиры", "Выступление на сцене (вместе с Амбассадором)"], yr, true);
+    + blk("Годовой тариф", "к любому уровню", ["Место на витрине на весь год", "Ментор клуба и своя рубрика", "2 гостевых пропуска на эфиры", "Для Амбассадоров на годовом: выступление на сцене и кэшбек за приглашение друзей"], yr, true);
   openSheet(`<h3>Возможности клуба</h3>${grid}
     <div class="amb-how"><h4>Как стать Амбассадором</h4>${n ? `<p class="sub" style="margin:6px 0">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
       <div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button>${amb || yr ? '<button class="btn sm ghost" id="lvStream">Свой эфир</button>' : ""}${yr ? "" : '<button class="btn sm ghost" id="lvYear">Годовой тариф</button>'}</div></div>`,
@@ -539,7 +539,8 @@ function renderPerks() {
     + row(yr, "Место на витрине на год", yr ? (sl.year_free ? "Ваше место свободно: разместите предложение" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине весь год", sl.year_free ? "Разместить" : "", "pkYearOffer")
     + row(yr, "Гостевые пропуска на эфиры", yr ? `Осталось ${guestLeft} из ${g ? g.total : 2}: друг приходит бесплатно` : "2 в год: друг приходит на эфир бесплатно", guestLeft > 0 && nextEv ? "Позвать друга" : "", "pkGuest")
     + `<p class="psec">Для Амбассадоров на годовом</p>`
-    + row(yr && amb, "Выступление на сцене «Единения»", yr && amb ? "Договоритесь с командой о теме и дате" : "Открывается при годовом тарифе и статусе Амбассадора", yr && amb ? "Написать" : "", "pkScene");
+    + row(yr && amb, "Выступление на сцене «Единения»", yr && amb ? "Договоритесь с командой о теме и дате" : "Открывается при годовом тарифе и статусе Амбассадора", yr && amb ? "Написать" : "", "pkScene")
+    + row(yr && amb, "Кэшбек за приглашение друзей", yr && amb ? "Зарабатывайте вместе с клубом: условия обсудите с командой" : "Зарабатывайте вместе с клубом на приглашении друзей", yr && amb ? "Написать" : "", "pkCash");
   const ambRows = row(amb, "Свой эфир внутри клуба", "Проведите эфир и опубликуйте его для участников", "Предложить", "pkStream")
     + row(amb, "Место на витрине на 1 месяц", amb ? (sl.amb_free ? "Ваше место свободно: разместите предложение на месяц" : "Ваше место занято, предложение на витрине") : "Одно предложение на витрине на 1 месяц", amb && sl.amb_free ? "Разместить" : "", "pkAmbOffer")
     + row(amb, "4 рекомендации знакомств", amb ? "Уже действует: 4 людей в месяц вместо 2" : "Вместо 2 в месяц", "", "")
@@ -554,7 +555,7 @@ function renderPerks() {
     const on = (id, f) => { const b = s.querySelector("#" + id); if (b) b.onclick = () => { closeSheet(); f(); }; };
     on("pkYearOffer", newOfferSheet); on("pkAmbOffer", newOfferSheet);
     on("pkGuest", () => guestSheet(nextEv)); on("pkStream", streamSheet); on("pkMentor", ownStream);
-    on("pkScene", ownStream); on("pkTeam", () => openPay(S.support || S.join)); on("pkAmbInfo", ambHowSheet);
+    on("pkScene", ownStream); on("pkCash", () => openPay(S.support || S.join)); on("pkTeam", () => openPay(S.support || S.join)); on("pkAmbInfo", ambHowSheet);
   });
 }
 
