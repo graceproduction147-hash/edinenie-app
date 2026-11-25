@@ -223,6 +223,46 @@ def migrate_texts_v3():
         con.close()
 
 
+# Баллов в сообщениях участникам больше нет: сохраненные в кабинете тексты со словом «балл» возвращаются к стандартным,
+# а шаг воронки «Баллы и вклад» заменяется на рассказ о статусах.
+_FUNNEL_POINTS_OLD = "Баллы и вклад 🔥\n\nВ Клубе ценят тех, кто отдает: инсайты после эфиров, благодарности, приглашения друзей и встречи Random Coffee копят баллы. Их можно потратить на награды и офлайн-события."
+_FUNNEL_POINTS_NEW = "Статусы в Клубе\n\nВ Клубе два статуса: Резидент и Амбассадор. Амбассадором становятся за активное участие: можно провести свой эфир внутри Клуба и разместить предложение на витрине."
+
+
+def migrate_texts_v4():
+    con = db.connect()
+    try:
+        if db.get_setting(con, "texts_v4_done"):
+            return
+        cleared = []
+        for k, meta in TEXTS.items():
+            if meta.get("group") == "team":
+                continue
+            cur = db.get_setting(con, "text:" + k, None)
+            if cur and re.search(r"балл", cur, re.I):
+                db.set_setting(con, "text:" + k, "")
+                cleared.append(k)
+        left = []
+        try:
+            ensure_funnels(con)
+            for r in con.execute("SELECT id, text FROM funnel_steps").fetchall():
+                t = r["text"] or ""
+                if t.strip() == _FUNNEL_POINTS_OLD.strip():
+                    con.execute("UPDATE funnel_steps SET text=? WHERE id=?", (_FUNNEL_POINTS_NEW, r["id"]))
+                elif re.search(r"балл", t, re.I):
+                    left.append(r["id"])
+        except Exception:
+            log.exception("не удалось проверить шаги воронок на слово «балл»")
+        db.set_setting(con, "texts_v4_done", "1")
+        con.commit()
+        if cleared:
+            log.warning("Тексты бота со словом «балл» возвращены к стандартным: %s", ", ".join(cleared))
+        if left:
+            log.warning("В шагах воронок осталось слово «балл» (поправьте в кабинете): %s", left)
+    finally:
+        con.close()
+
+
 def get_text(con, key, name="", link=""):
     """Текст сообщения из настроек (или стандартный): имя и ссылка подставлены, **жирный** превращен в HTML."""
     raw = text_raw(con, key)
@@ -512,6 +552,7 @@ async def lifespan(app):
     try:
         migrate_texts_v2()
         migrate_texts_v3()
+        migrate_texts_v4()
     except Exception:
         log.exception("миграция текстов бота")
     ensure_points()

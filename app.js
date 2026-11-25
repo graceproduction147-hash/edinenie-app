@@ -251,7 +251,7 @@ function eventSheet(e) { const w = when(e.starts_at);
     <div class="tags">${e.rubric ? `<span class="tag">${esc(e.rubric)}</span>` : ""}${e.speaker ? `<span class="tag">${esc(e.speaker)}</span>` : ""}${e.inside_only ? `<span class="lock">${lockSVG}Амбассадор-level</span>` : ""}</div>
     ${e.description ? `<p style="margin:0">${esc(e.description)}</p>` : ""}
     ${e.locked ? '<p class="sub">Закрытое событие для Амбассадоров. Как им стать, написано в разделе «Профиль».</p>'
-      : `<p class="sub">${e.going ? "Вы записаны. Бот напомнит за день и за час." : "Отметьтесь, и бот пришлет ссылку и напомнит о начале. После эфира оставьте инсайт: он засчитает участие и даст баллы."}</p>
+      : `<p class="sub">${e.going ? "Вы записаны. Напомним за день и за час." : "Отметьтесь, и мы пришлем ссылку и напомним о начале."}</p>
         ${e.going && e.join_url ? `<a class="btn" href="${esc(e.join_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Подключиться</a>` : ""}
         <button class="btn ${e.going ? "ghost" : ""}" id="eg">${e.going ? "Не смогу прийти" : "Буду"}</button>
         ${S.year && e.going ? `<button class="btn ghost" id="gst" ${S.events.guest.left < 1 ? "disabled" : ""}>${S.events.guest.left < 1 ? "Гостевые пропуска закончились" : `Позвать друга гостем (осталось ${S.events.guest.left})`}</button>` : ""}`}`,
