@@ -1,5 +1,6 @@
 """Послание дня: фраза на день (у всех одна) и картинка 1080x1920 на фирменном фоне.
 Фразы можно править прямо в этом списке. Выбор фразы зависит только от даты."""
+import hashlib
 import io
 import random
 from datetime import date, datetime
@@ -30,6 +31,12 @@ def today():
 
 def phrase_for(d):
     return PHRASES[d.toordinal() % len(PHRASES)]
+
+
+def pick(tg_id, d):
+    """Своя фраза и свой фон для каждого участника на каждый день: (номер фразы, номер фона)."""
+    h = int(hashlib.md5(f"{tg_id}|{d.isoformat()}".encode()).hexdigest()[:12], 16)
+    return h % len(PHRASES), (h // len(PHRASES)) % 60
 
 
 def _orb(img, cx, cy, r, col, alpha):
@@ -125,15 +132,15 @@ def _wrap(text, f, max_w):
     return lines
 
 
-@lru_cache(maxsize=8)
-def render(d):
-    """d: date. Возвращает PNG (bytes)."""
+def render(idx, bg):
+    """Возвращает JPEG (bytes): фраза номер idx на фоне номер bg."""
+    d = date.fromordinal(730000 + bg)
     img = _background(d)
     _logo(img, 540, 230)
     dr = ImageDraw.Draw(img, "RGBA")
     card.text_c(dr, 540, 520, "ПОСЛАНИЕ ДНЯ", "Manrope-Medium.ttf", 28, ACC, ls=7, max_w=900)
     dr.line([(480, 566), (600, 566)], fill=ACC, width=2)
-    text = phrase_for(d)
+    text = PHRASES[idx]
     size = 52
     while True:
         f = _nf(size)
@@ -148,11 +155,10 @@ def render(d):
         y += lh
     card.text_c(dr, 540, 1600, "ЕДИНЕНИЕ", "Forum.ttf", 46, INK, ls=9)
     out = io.BytesIO()
-    img.convert("RGB").save(out, "PNG", optimize=True)
+    img.convert("RGB").save(out, "JPEG", quality=90)
     return out.getvalue()
 
 
 if __name__ == "__main__":
     for i in (0, 2, 9, 17):
-        d = date.fromordinal(date(2026, 11, 25).toordinal() + i)
-        open(f"/tmp/quote_{i}.png", "wb").write(render(d))
+        open(f"/tmp/quote_{i}.jpg", "wb").write(render(i, i * 7))
