@@ -22,6 +22,11 @@ def ensure(con):
       id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, rec_id INTEGER, month TEXT, batch INTEGER DEFAULT 1,
       reason TEXT DEFAULT '', written_at TEXT, created_at TEXT)""")
     con.execute("CREATE INDEX IF NOT EXISTS recs_by_user ON recs(tg_id, month)")
+    for col in ("outcome TEXT", "outcome_at TEXT", "asked_at TEXT"):  # ответ на «встретились?»
+        try:
+            con.execute(f"ALTER TABLE recs ADD COLUMN {col}")
+        except Exception:
+            pass
     con.execute("""CREATE TABLE IF NOT EXISTS recs_feedback(
       id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER, month TEXT, batch INTEGER, met INTEGER, created_at TEXT)""")
 
@@ -142,3 +147,46 @@ def refresh(con, me, met, n):
         return False
     make_batch(con, me, month, batch + 1, n)
     return True
+
+
+OUTCOMES = ("met", "chat", "no")
+
+
+def pending_meet(con, me_id, days=7):
+    """Люди, которым участник написал неделю назад и еще не ответил, как прошло знакомство."""
+    ensure(con)
+    from datetime import timedelta, timezone
+    lim = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    out = []
+    for r in con.execute("SELECT * FROM recs WHERE tg_id=? AND written_at IS NOT NULL AND written_at<=? AND outcome IS NULL "
+                         "ORDER BY written_at DESC LIMIT 6", (me_id, lim)).fetchall():
+        o = con.execute("SELECT first_name, last_name, username FROM members WHERE tg_id=?", (r["rec_id"],)).fetchone()
+        if o:
+            name = " ".join(x for x in (o["first_name"], o["last_name"]) if x) or ("@" + (o["username"] or ""))
+            out.append({"id": r["id"], "name": name, "username": o["username"] or "", "written_at": r["written_at"]})
+    return out
+
+
+def set_outcome(con, me_id, rid, outcome):
+    ensure(con)
+    if outcome not in OUTCOMES:
+        return False
+    r = con.execute("SELECT id FROM recs WHERE id=? AND tg_id=? AND written_at IS NOT NULL", (rid, me_id)).fetchone()
+    if not r:
+        return False
+    con.execute("UPDATE recs SET outcome=?, outcome_at=? WHERE id=?", (outcome, db.now(), rid))
+    con.commit()
+    return True
+
+
+def month_summary(con, me_id, month):
+    """Знакомства, из которых что-то вышло (встретились или переписались) за месяц: для итогов месяца."""
+    ensure(con)
+    out = []
+    for r in con.execute("SELECT * FROM recs WHERE tg_id=? AND outcome IN ('met','chat') AND substr(outcome_at,1,7)=? ORDER BY outcome_at",
+                         (me_id, month)).fetchall():
+        o = con.execute("SELECT first_name, last_name, username FROM members WHERE tg_id=?", (r["rec_id"],)).fetchone()
+        if o:
+            name = " ".join(x for x in (o["first_name"], o["last_name"]) if x)
+            out.append({"name": name, "username": o["username"] or "", "outcome": r["outcome"]})
+    return out

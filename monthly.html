@@ -472,5 +472,13 @@ nextBtn.onclick=()=>{if(cur>LAST_Q){try{Telegram.WebApp.close()}catch(e){locatio
 backBtn.onclick=()=>{if(cur>0)show(cur-1)};
 show(0);
 </script>
+<script>
+(async function(){try{const idata=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||'';if(!idata)return;
+  const r=await fetch('/api/meet-summary?month='+encodeURIComponent(month),{headers:{'X-Init-Data':idata}});if(!r.ok)return;const j=await r.json();
+  const ta=document.getElementById('new_contacts');if(!ta||ta.value.trim()||!j.items.length)return;
+  ta.value=j.items.map(i=>(i.username?'@'+i.username:i.name)+' — '+(i.outcome==='met'?'встретились или созвонились':'переписались')).join('; ');
+  const hint=ta.previousElementSibling;if(hint)hint.textContent='Мы подставили знакомства, о которых вы отвечали в приложении. Допишите, что из них выросло';
+}catch(e){}})();
+</script>
 </body>
 </html>
