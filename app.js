@@ -107,13 +107,21 @@ function levelsSheet() {
       const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); ownStream(); };
       const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { openPay((S.events && S.events.buy_url) || S.join); }; });
 }
+function ambInfoSheet() {
+  const amb = S.me && S.me.level === "inside";
+  openSheet(`<h3>Амбассадор</h3><p class="sub">Статус за активное участие в жизни клуба. Действует на любом тарифе: годовом и ежемесячном.</p>
+    <ul class="norm perks">${["Свой эфир внутри клуба", "Место на витрине на 1 месяц", "4 знакомства в месяц вместо 2", "Персональные знакомства"].map(t => `<li class="ok"><i></i><div><b>${t}</b></div></li>`).join("")}</ul>
+    <p class="sub">С годовым тарифом: выступление на сцене «Единения» и кэшбек 50% за приглашение друзей.</p>
+    <button class="btn solid" id="aiHow">${amb ? "Как сохранить статус" : "Как стать Амбассадором"}</button>`, s => { s.querySelector("#aiHow").onclick = () => { closeSheet(); ambHowSheet(); }; });
+}
 function ambHowSheet() {
   const n = S.norm || {};
   const items = [["invite", "Привести друга в клуб", "Он оплачивает участие по вашей ссылке"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
   openSheet(`<h3>Как стать Амбассадором</h3><p class="sub">Всего три простых шага за ${n.days || 30} дней.</p>
     <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>
-    <button class="btn solid" id="ahInv" style="margin-top:14px">Пригласить друга</button>`,
-    s => { s.querySelector("#ahInv").onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); }; });
+    <button class="btn solid" id="ahInv" style="margin-top:14px">Пригласить друга</button><button class="link" id="ahInfo">Что это и какие выгоды</button>`,
+    s => { s.querySelector("#ahInfo").onclick = () => { closeSheet(); ambInfoSheet(); };
+      s.querySelector("#ahInv").onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); }; });
 }
 let _trk = {};
 function track(k) {
@@ -508,7 +516,7 @@ async function loadCoffee() {
         ${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
         <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek || "Не указано")}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give || "Не указано")}</p></div>
         <div class="why">${esc(p.reason)}</div>
-        <button class="btn${p.written ? " ghost" : ""}" data-w="${p.id}" data-u="${esc(p.username || "")}" data-m="${esc(msg)}">${p.written ? "Написать еще раз" : "Написать"}</button></div>`; }).join("") +
+        <button class="btn${p.written ? " ghost" : " solid"}" data-w="${p.id}" data-u="${esc(p.username || "")}" data-m="${esc(msg)}">${p.written ? "Написать еще раз" : "Написать"}</button></div>`; }).join("") +
       `<div class="panel"><h3>Написали людям?</h3><p class="sub">Нажмите «Обновить», когда напишете. Мы спросим, как прошло, и подберем новых людей.</p>
         <button class="btn" id="recRefresh"${c.can_refresh ? "" : " disabled"}>Обновить</button>${c.can_refresh ? "" : '<p class="hint">Станет доступна после первого «Написать».</p>'}</div>`;
     $$("#p-coffee [data-w]").forEach(b => b.onclick = async () => {
@@ -738,11 +746,13 @@ function renderWeekAction() {
          : `<h3>Все шаги пройдены</h3><p class="sub">Загляните в эфиры и библиотеку: там всегда есть что-то новое.</p><button class="btn solid" data-tab="lib">К эфирам</button>`}
     <div class="ringrow" id="wkAmb" role="button" tabindex="0"><svg viewBox="0 0 44 44" width="44" height="44"><circle cx="22" cy="22" r="18" class="rb"/><circle cx="22" cy="22" r="18" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${(C * (1 - done / 3)).toFixed(1)}" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle">${done}/3</text></svg>
       <div class="t"><b>${amb ? "Вы Амбассадор" : "Путь Амбассадора"}</b><span>${amb ? (n && n.done ? `Статус действует еще ${n.days_left} дн.` : "Повторите три шага, чтобы сохранить статус") : "Три простых шага: свой эфир, витрина, больше знакомств"}</span></div><i>&#8250;</i></div>
+    <button class="link" id="wkInfo">Что это и какие выгоды</button>
     ${steps.length > 1 ? `<button class="link" id="wkAll">Весь маршрут: еще ${steps.length - 1}</button>` : ""}`;
   requestAnimationFrame(() => requestAnimationFrame(() => { const f = el.querySelector(".rf"); if (f) f.style.strokeDashoffset = f.dataset.off; }));
   const g = $("#wkGo"); if (g) g.onclick = () => runStep(st);
   const r = $("#wkAmb"); if (r) r.onclick = ambHowSheet;
   const al = $("#wkAll"); if (al) al.onclick = routeSheet;
+  const wi = $("#wkInfo"); if (wi) wi.onclick = ambInfoSheet;
 }
 function routeSheet() {
   const amb = S.me.level === "inside", n = S.norm, steps = routeSteps();
