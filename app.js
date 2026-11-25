@@ -215,11 +215,11 @@ function renderHero() {
   const e = S.events.soon[0];
   if (!e) { $("#heroBox").innerHTML = ""; return; }
   const w = when(e.starts_at);
-  $("#heroBox").innerHTML = `<div class="panel nx"><div class="t"><span class="eyebrow">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t}</span><b>${esc(e.title)}</b></div><button class="btn sm" id="heroGo">${e.locked ? "Для Амбассадоров" : e.going ? "Вы идете" : "Буду"}</button></div>`;
+  $("#heroBox").innerHTML = `<div class="panel nx">${e.cover ? `<img class="cvr" src="${esc(e.cover)}" alt="">` : ""}<div class="t"><span class="eyebrow">Ближайший эфир · ${w.wd} ${w.d} ${w.m}, ${w.t}</span><b>${esc(e.title)}</b></div><button class="btn sm" id="heroGo">${e.locked ? "Для Амбассадоров" : e.going ? "Вы идете" : "Буду"}</button></div>`;
   $("#heroGo").onclick = () => eventSheet(e);
 }
 function eventSheet(e) { const w = when(e.starts_at);
-  openSheet(`<p class="sub">${w.wd}, ${w.d} ${w.m} · ${w.t} МСК · ${esc(e.place)}</p><h3>${esc(e.title)}</h3>
+  openSheet(`${e.cover ? `<img class="cvr big" src="${esc(e.cover)}" alt="${esc(e.title)}">` : ""}<p class="sub">${w.wd}, ${w.d} ${w.m} · ${w.t} МСК · ${esc(e.place)}</p><h3>${esc(e.title)}</h3>
     <div class="tags">${e.rubric ? `<span class="tag">${esc(e.rubric)}</span>` : ""}${e.speaker ? `<span class="tag">${esc(e.speaker)}</span>` : ""}${e.inside_only ? `<span class="lock">${lockSVG}Амбассадор-level</span>` : ""}</div>
     ${e.description ? `<p style="margin:0">${esc(e.description)}</p>` : ""}
     ${e.locked ? '<p class="sub">Закрытое событие для Амбассадоров. Как им стать, написано в разделе «Профиль».</p>'
@@ -247,7 +247,7 @@ function guestSheet(e) {
 }
 function recSheet(r) { const w = when(r.starts_at);
   const ideas = r.summary || [], ts = r.timecodes || [];
-  openSheet(`<p class="sub">${esc(r.speaker)} · ${w.d} ${w.m}</p><h3>${esc(r.title)}</h3>
+  openSheet(`${r.cover ? `<img class="cvr big" src="${esc(r.cover)}" alt="${esc(r.title)}">` : ""}<p class="sub">${esc(r.speaker)} · ${w.d} ${w.m}</p><h3>${esc(r.title)}</h3>
     ${r.locked ? '<p class="sub">Запись доступна Амбассадорам.</p>' : `
     <div class="btns">${r.recording_url ? `<a class="btn sm" id="recGo" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}
       ${r.podcast_url ? `<a class="btn sm ghost" href="${esc(r.podcast_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Слушать подкастом</a>` : ""}</div>

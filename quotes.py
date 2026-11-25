@@ -38,12 +38,14 @@ def _orb(img, cx, cy, r, col, alpha):
     img.alpha_composite(layer.filter(ImageFilter.GaussianBlur(r * 0.45)))
 
 
-def _logo(img, cx=540, cy=230):
+def _logo(img, cx=540, cy=230, scale=1.0):
     """Солнце-спираль берем из фонового файла карточки (светлые лучи на темном), обрезаем по самому знаку и ставим точно по центру."""
     bg = Image.open(io.BytesIO(card_assets.bg_bytes())).convert("L").crop((430, 50, 650, 270))
     mask = bg.point(lambda v: 0 if v < 90 else min(255, int((v - 90) * 2.2)))
     bbox = mask.getbbox()
     mask = mask.crop(bbox)
+    if scale != 1.0:
+        mask = mask.resize((int(mask.width * scale), int(mask.height * scale)), Image.LANCZOS)
     white = Image.new("RGBA", mask.size, (255, 255, 255, 255))
     white.putalpha(mask)
     img.alpha_composite(white, (int(cx - mask.width / 2), int(cy - mask.height / 2)))
