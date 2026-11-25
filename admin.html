@@ -516,6 +516,26 @@ html[data-theme] body .svc .btn.primary{background:var(--ink);color:#fff}
 html[data-theme] body .svc .btn.ok{background:var(--ok);color:#fff}
 html[data-theme] body .svc .btn.bad{background:rgba(196,54,31,.1);color:var(--bad)}
 html[data-theme] body .svc .card{border:0;border-radius:18px;box-shadow:0 0 0 1px var(--line)}
+
+/* аналитика, контент-план, справка, команда */
+html[data-theme] body .an .eb{display:none}
+html[data-theme] body .an .per label,html[data-theme] body .an .per input[type=date],html[data-theme] body .an .per .dash{display:none}
+html[data-theme] body .an .sec{font-size:18px;font-weight:650;letter-spacing:-.02em;text-transform:none;color:var(--ink);margin:30px 0 12px}
+html[data-theme] body .an .sec i{display:none}
+html[data-theme] body .an .k{padding:20px 22px}
+html[data-theme] body .an .k .l{font-size:14px;color:var(--mu);font-weight:500}
+html[data-theme] body .an .k b{font-size:40px;line-height:1.1;margin:6px 0}
+html[data-theme] body .an .k .s{font-size:13px;color:var(--mu)}
+html[data-theme] body .kcard .tag{display:none}
+html[data-theme] body .kcard .m{font-size:13px}
+html[data-theme] body .hero{background:#fff;color:var(--ink);border-radius:22px;box-shadow:0 0 0 1px var(--line);padding:28px 30px}
+html[data-theme] body .hero .eb{color:var(--acc)}
+html[data-theme] body .hero .hl{color:var(--ink);font-size:28px;font-weight:700;letter-spacing:-.025em}
+html[data-theme] body .hero .hs{color:var(--mu)}
+html[data-theme] body .tag.d{background:rgba(0,0,0,.06);color:var(--mu)}
+html[data-theme] body .prow .pc2{display:none}
+html[data-theme] body .day{background:#fff;border:0;border-radius:16px;box-shadow:0 0 0 1px var(--line)}
+html[data-theme] body .day.today{box-shadow:0 0 0 2px var(--acc)}
 @media(max-width:980px){html[data-theme] body .search{flex:1 1 auto;min-width:0}html[data-theme] body .search input{width:100%}html[data-theme] body .main{margin-left:0;padding:0 16px 110px}html[data-theme] body .side{width:auto}}
 </style>
 </head>
@@ -532,7 +552,7 @@ html[data-theme] body .svc .card{border:0;border-radius:18px;box-shadow:0 0 0 1p
 <section id="t-team" class="list" hidden>
       
       <div class="card"><h2>Команда клуба</h2>
-        <p class="muted">Кто откроет эту ссылку в Telegram, станет частью команды: приложение откроется без оплаты, придут уведомления об оплатах и баллах. Отправляйте ее только своим.</p>
+        <p class="muted">Кто откроет эту ссылку в Telegram, станет частью команды: приложение откроется без оплаты, придут уведомления об оплатах и заявках. Отправляйте ее только своим.</p>
         <div class="actions"><input id="teamLink" readonly style="max-width:520px"><button class="btn primary" id="teamCopy">Скопировать</button><button class="btn" id="teamRegen">Сменить ссылку</button></div>
         <p class="muted" style="font-size:12.5px">«Сменить ссылку» отключает старую. Те, кто уже в команде, остаются.</p>
         <div class="list" id="teamList" style="margin-top:8px"></div></div>
@@ -1112,7 +1132,7 @@ const byId=new Map(S.people.filter(p=>p.mid).map(p=>[p.mid,p])),byTg=new Map(S.p
 list.forEach(m=>{LM[m.tg_id]=m;if(m.role==="team")return;if(m.status==="guest"&&!m.paid_until)return;
 let p=byId.get(m.tg_id)||(m.username?byTg.get(String(m.username).toLowerCase()):null);
 const nm=[m.first_name,m.last_name].filter(Boolean).join(" ").trim()||m.username||("id "+m.tg_id); /* "id N" хранится для сверки, на экране показывается через dn() */
-if(!p){p={id:m.tg_id,mid:m.tg_id,name:nm,tg:m.username||"",city:m.city||"",sphere:m.sphere||"",project:m.project||"",ints:"",ask:m.seek||"",give:m.give||"",level:"Не определен",stage:"Не касались",next:"Написать лично: познакомиться, узнать запрос и чем может быть полезен(а)",due:iso(today),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""};S.people.push(p);ch=true}
+if(!p){p={id:m.tg_id,mid:m.tg_id,name:nm,tg:m.username||"",city:m.city||"",sphere:m.sphere||"",project:m.project||"",ints:"",ask:m.seek||"",give:m.give||"",level:"Не определен",stage:"Не касались",next:"",due:iso(today),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""};S.people.push(p);ch=true}
 else{if(!p.mid){p.mid=m.tg_id;ch=true}
 {const real=[m.first_name,m.last_name].filter(Boolean).join(" ").trim();if(real&&real!==p.name&&(/^id \d+$/.test(p.name||"")||String(p.name||"").toLowerCase()===String(p.tg||m.username||"").replace(/^@/,"").toLowerCase())){p.name=real;ch=true}else if(!real&&/^id \d+$/.test(p.name||"")&&nm&&nm!==p.name){p.name=nm;ch=true}}
 if(!p.tg&&m.username){p.tg=m.username;ch=true}
@@ -1304,7 +1324,7 @@ const SEGS={
  year:{t:"Годовой (12 мес.)",c:"a",tpl:"tf_year",next:"Личный разговор и доп форматы года"},
  mid:{t:"3 и 6 месяцев",c:"a",tpl:"tf_mid",next:"Предложить знакомство и Random Coffee"},
  month:{t:"1 месяц",c:"a",tpl:"tf_month",next:"Помочь взять максимум из месяца, ближе к концу предложить продолжение"},
- other:{t:"Без данных об оплате",c:"n",tpl:"first",next:"Написать лично: познакомиться, узнать запрос и чем может быть полезен(а)"}};
+ other:{t:"Без данных об оплате",c:"n",tpl:"first",next:""}};
 const SEGO=["cancel","new","ending","inside","year","mid","month","other"];
 function payMonths(m){const a=(m.pay||[]).filter(x=>x.months);return +m.period_months||(a.length?+a[a.length-1].months:0)||0}
 function leftOf(m){return m&&m.paid_until?Math.round((parse(String(m.paid_until).slice(0,10))-today)/864e5):null}
@@ -1352,7 +1372,7 @@ body.forEach(r=>{
 const id=g(r,ix.id).replace(/\D/g,""),un=g(r,ix.un).replace(/^@/,""),nm=g(r,ix.nm);
 if(!id&&!un){skip++;return}
 let p=S.people.find(x=>(id&&String(x.tgid||"")==id)||(un&&x.tg&&x.tg.toLowerCase()==un.toLowerCase()));
-if(!p){const nid=S.nid.p++;p={id:nid,name:nm||un||id,tg:un,city:"",sphere:"",project:"",ints:"",ask:"",give:"",level:"Не определен",stage:"Не касались",next:"Написать лично: познакомиться, узнать сферу, запрос и чем может быть полезен(а)",due:iso(addDays(today,1)),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""};S.people.push(p);add++}else upd++;
+if(!p){const nid=S.nid.p++;p={id:nid,name:nm||un||id,tg:un,city:"",sphere:"",project:"",ints:"",ask:"",give:"",level:"Не определен",stage:"Не касались",next:"",due:iso(addDays(today,1)),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""};S.people.push(p);add++}else upd++;
 if(id)p.tgid=id;if(un&&!p.tg)p.tg=un;
 if(nm&&(!p.name||p.name==p.tg||p.name==p.tgid||p.name==un))p.name=nm;
 const lv=g(r,ix.lv);if(lv)p.plan=/inside/i.test(lv)?"Inside":"";
@@ -1392,7 +1412,7 @@ if(t=="plan")n=tasks().filter(x=>x.kind=="c"&&x.due<=today).length;
 if(t=="pts")n=ADM.pend||0;
 return n?`<span class="bd">${n}</span>`:""}
 const VIEW={};
-function render(keep){const y=window.scrollY;if(ADM.stash)ADM.stash();if(!VIEW[S.ui.tab])S.ui.tab="start";const t=S.ui.tab;
+function render(keep){const y=window.scrollY;if(ADM.stash)ADM.stash();if(!VIEW[S.ui.tab]||S.ui.tab=="start")S.ui.tab="today";const t=S.ui.tab;
 $("#nav").innerHTML=navHtml(t);
 try{if(location.hash!=="#"+t)history.replaceState(null,"","#"+t)}catch(e){}
 const pv=t=="crm"&&S.ui.pid&&pers(S.ui.pid);
@@ -1408,7 +1428,7 @@ const wd=today.getDay();
 const rhythm=[["Пн","Подготовка недели","Проверить календарь, написать участникам и экспертам, собрать материалы."],["Вт","Главный день планирования","Публикуем «Силу окружения». Запрашиваем материалы на следующую неделю: на ответы нужно 5-7 дней."],["Ср","Практика недели","Публикуем практику, отвечаем на отклики, согласуем тексты на пятницу."],["Чт","Рубрика по очереди","Люди Единения, лаборатория или «За кулисами». Идем по плану."],["Пт","Победы или выбор редакции","Публикуем, подводим итоги недели: пять строк Кате («Сегодня»)."]];
 const F1=["Прочитать эти шесть страниц","Открыть «Сегодня» и написать первым трем людям из списка","Заполнить «Переменные клуба» на странице «Письма» (ваше имя и ссылки на ветки)","Открыть «Контент-план» и проверить, у каких постов следующей недели нет материала","Открыть «Знакомства» и отправить первые запросы согласия","Спросить Катю про все, что отмечено «уточнить»"];
 let h=`<div class="hero"><div class="eb">Единение</div><div class="hl">Масштаб человека раскрывается в единении с собой, другими и миром</div><div class="hs">Ваша работа в одной фразе: чтобы каждого человека заметили, помогли найти свое и дали внести вклад, а ни одно обещание не потерялось.</div></div>`;
-h+=`<h2>Как устроен сервис</h2><div class="g3"><div class="c"><h3>Работа с людьми</h3><div class="m">Участники, Знакомства, Кейсы. Здесь живет история каждого человека: с чем пришел, чего хочет, что получил.</div>${B("Открыть участников","nav","crm")}</div><div class="c"><h3>Контент</h3><div class="m">Контент-план, Рубрикатор, Письма. Недельный график постов, готовые тексты и сообщения, которые остается скопировать.</div>${B("Открыть контент-план","nav","plan")}</div><div class="c"><h3>Клуб</h3><div class="m">Онбординг, Баллы, Правила, Устройство. Как клуб работает, что обещаем и как начисляем баллы.</div>${B("Открыть правила","nav","rules")}</div></div>`;
+h+=`<h2>Как устроен сервис</h2><div class="g3"><div class="c"><h3>Работа с людьми</h3><div class="m">Участники, Знакомства, Кейсы. Здесь живет история каждого человека: с чем пришел, чего хочет, что получил.</div>${B("Открыть участников","nav","crm")}</div><div class="c"><h3>Контент</h3><div class="m">Контент-план, Рубрикатор, Письма. Недельный график постов, готовые тексты и сообщения, которые остается скопировать.</div>${B("Открыть контент-план","nav","plan")}</div><div class="c"><h3>Клуб</h3><div class="m">Онбординг, Правила, Устройство. Как клуб работает и что мы обещаем участникам.</div>${B("Открыть правила","nav","rules")}</div></div>`;
 h+=`<h2>Маршрут на 20 минут</h2>`+route.map((r,i)=>`<div class="c"><div class="row"><span class="tag d">${r[0]}</span><span class="t">${i+1}. ${r[1]}</span><span class="sp"></span>${i?B("Открыть","nav",r[2],"","bp bs"):""}</div></div>`).join("");
 h+=`<h2>Ритм недели менеджера<small>сегодня подсвечен</small></h2><div class="dayg">${rhythm.map((r,i)=>`<div class="day ${wd==i+1?"today":""}"><h4>${r[0]}</h4><div class="t" style="font-size:14.5px">${r[1]}</div><div class="m" style="margin-top:6px">${r[2]}</div></div>`).join("")}</div>`;
 h+=`<h2>Первый рабочий день</h2><div class="c ck">${F1.map((t,i)=>`<label><input type="checkbox" data-bind="fd|${i}" ${S.ui.fd[i]?"checked":""}>${t}</label>`).join("")}</div>`;
@@ -1787,7 +1807,7 @@ rubOpen(a){S.ui.rb=S.ui.rb==a?null:a;save();render(true)},
 rubAdd(a){const r=R.find(x=>x.t==a);modal("Добавить в контент-план: "+a,[{k:"d",label:"Дата выхода",type:"date",val:iso(addDays(today,7))},{k:"title",label:"Тема",val:r.title}],v=>{if(!v.d)return false;S.extra.push({id:S.nid.x++,date:v.d,tag:a,title:v.title});S.ui.cw="month"},"Добавить")},
 addPost(){modal("Новый пост в плане",[{k:"d",label:"Дата выхода",type:"date",val:iso(addDays(today,7))},{k:"tag",label:"Рубрика",type:"select",opts:R.map(r=>[r.t,r.t])},{k:"title",label:"Тема"}],v=>{if(!v.d)return false;S.extra.push({id:S.nid.x++,date:v.d,tag:v.tag,title:v.title})},"Добавить")},
 addTodo(){modal("Новая задача",[{k:"title",label:"Что нужно сделать"},{k:"why",label:"Зачем и что должно получиться",type:"textarea"},{k:"d",label:"Срок",type:"date",val:iso(addDays(today,1))},{k:"owner",label:"Кто делает",type:"select",opts:[["Менеджер","Менеджер"],["Катя","Катя"],["Влад","Влад"]]}],v=>{if(!v.title.trim()){toast("Напишите, что сделать");return false}S.todo.push({id:S.nid.t++,title:v.title.trim(),why:v.why,due:v.d||iso(today),owner:v.owner,done:false})},"Добавить")},
-addPerson(){modal("Новый человек",[{k:"name",label:"Имя Фамилия"},{k:"tg",label:"Telegram (без @)"},{k:"city",label:"Город"},{k:"sphere",label:"Сфера деятельности"}],v=>{if(!v.name.trim()){toast("Нужно имя");return false}const id=S.nid.p++;S.people.push({id,name:v.name.trim(),tg:v.tg.replace(/^@/,"").trim(),city:v.city,sphere:v.sphere,project:"",ints:"",ask:"",give:"",level:"Не определен",stage:"Не касались",next:"Написать лично: познакомиться, узнать сферу, запрос и чем может быть полезен(а)",due:iso(addDays(today,1)),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""});S.ui.tab="crm";S.ui.pid=id;S.ui.ptab="profile"},"Добавить")},
+addPerson(){modal("Новый человек",[{k:"name",label:"Имя Фамилия"},{k:"tg",label:"Telegram (без @)"},{k:"city",label:"Город"},{k:"sphere",label:"Сфера деятельности"}],v=>{if(!v.name.trim()){toast("Нужно имя");return false}const id=S.nid.p++;S.people.push({id,name:v.name.trim(),tg:v.tg.replace(/^@/,"").trim(),city:v.city,sphere:v.sphere,project:"",ints:"",ask:"",give:"",level:"Не определен",stage:"Не касались",next:"",due:iso(addDays(today,1)),comment:"",msg:"",plan:"",consent:"не спрашивали",pref:"",cameWith:"",goals:"",outcome:"",track:[0,0,0,0,0],efir:"",check:""});S.ui.tab="crm";S.ui.pid=id;S.ui.ptab="profile"},"Добавить")},
 quickLog(){modal("Быстрая запись в историю",[{k:"pid",label:"Кто",type:"select",opts:peopleOpts()},{k:"kind",label:"Что это",type:"select",opts:KINDS},{k:"text",label:"Что произошло",type:"textarea",ph:"Можно вставить фрагмент из чата"},{k:"d",label:"Дата",type:"date",val:iso(today)},{k:"conf",label:"Статус",type:"select",opts:[["1","Подтверждено"],["0","Ждет подтверждения"]]}],v=>{if(!v.text.trim()){toast("Напишите, что произошло");return false}addHist(+v.pid,v.kind,v.text.trim(),v.conf=="1",v.d||iso(today));toast("Записано в историю")},"Записать")},
 spend(a){const p=pers(+a);modal("Списать баллы: "+p.name+" (баланс "+bal(p.id)+")",[{k:"r",label:"На что (подарок или событие)"},{k:"c",label:"Сколько баллов",type:"number"}],v=>{const c=Math.max(0,+v.c||0);if(!v.r.trim()||!c){toast("Укажите, на что и сколько баллов");return false}if(bal(p.id)<c){toast("Не хватает баллов");return false}S.spend.push({id:S.nid.s++,pid:p.id,reward:v.r.trim(),cost:c,d:iso(today)})},"Списать")},
 syncNow(){syncSheet(true)},
@@ -1820,7 +1840,7 @@ function mkTabs(main,title,items,skip){items.forEach(o=>{TABMAIN[o[0]]=main;cons
   VIEW[o[0]]=function(){const t=o[0];const bar=(skip&&skip(t))?"":`<div class="seg" style="margin-bottom:6px">${items.map(q=>`<button class="${q[0]==t?"on":""}" data-act="nav" data-a="${q[0]}">${q[1]}</button>`).join("")}</div>`;return bar+v.apply(this,arguments)};META[o[0]]=["",title,""]})}
 /* ===== Сообщения: три раздела на одной странице ===== */
 const MSGK=["texts","msgs","mail"];
-const MSGT=[["texts","Тексты бота"],["msgs","Журнал отправленного"],["mail","Шаблоны для личных писем"]];
+const MSGT=[["texts","Тексты бота"],["msgs","Журнал отправленного"]];
 const msgTabs=t=>`<div class="seg" style="margin-bottom:14px">${MSGT.map(o=>`<button class="${o[0]==t?"on":""}" data-act="nav" data-a="${o[0]}">${o[1]}</button>`).join("")}</div>`;
 ["texts","msgs","mail"].forEach(k=>{const v=VIEW[k];VIEW[k]=()=>msgTabs(k)+v();META[k]=["","Сообщения",""]});
 function navHtml(t){S.ui.nf=S.ui.nf||{};
@@ -1985,7 +2005,7 @@ function crmChips(){const v=S.ui.flt.v||"attn";return `<div class="crmchips">${C
 ACT.fv=function(v){S.ui.flt.v=v;save();render(true)};
 function filtered(){const f=S.ui.flt,q=(f.q||"").toLowerCase(),c=CHIPS.find(x=>x[0]===(f.v||"attn"))||CHIPS[0];return S.people.filter(p=>(f.lv=="Все"||p.level==f.lv)&&c[2](p)&&(!q||[p.name,p.tg,p.city,p.sphere,p.project].join(" ").toLowerCase().includes(q))).sort((a,b)=>{const da=a.due||"9999",db=b.due||"9999";return da<db?-1:da>db?1:0})}
 function compactList(list){return `<div class="plist">${list.map(p=>{const m=lm(p),inside=m&&m.level=="inside",st=pStatus(p),la=lastAny(p),n=dAgo(la),od=p.due&&p.due<iso(today);
-return `<div class="prow" data-act="openP" data-a="${p.id}"><div>${av(p)}<div class="pn"><b>${esc(dn(p))}</b><span class="m">${pTg(p)} ${esc([p.city,p.sphere].filter(Boolean).join(" · "))}</span></div></div><div class="pw">${tag(st[0],st[1])}${inside?tag("Амбассадор","d"):""}${isYear(p)?tag("Годовой","d"):""}</div><div class="pc2">${la?(n<=0?"сегодня":n===1?"вчера":n+" дн. назад"):"контакта не было"}<small>${lastContact(p)?"мы писали":m&&m.last_active?"действие в Клубе":""}</small></div><div class="pnx">${p.next?`<b>${esc(p.next)}</b>`:`<span class="m">шаг не задан</span>`}${p.due?`<small class="${od?"od":""}">${od?"просрочено, ":""}${fmt(parse(p.due),{day:"numeric",month:"short"})}</small>`:""}</div></div>`}).join("")}</div>`}
+return `<div class="prow" data-act="openP" data-a="${p.id}"><div>${av(p)}<div class="pn"><b>${esc(dn(p))}</b><span class="m">${pTg(p)} ${esc([p.city,p.sphere].filter(Boolean).join(" · "))}</span></div></div><div class="pw">${tag(st[0],st[1])}${inside?tag("Амбассадор","d"):""}${isYear(p)?tag("Годовой","d"):""}</div><div class="pc2">${la?(n<=0?"сегодня":n===1?"вчера":n+" дн. назад"):"контакта не было"}<small>${lastContact(p)?"мы писали":m&&m.last_active?"действие в Клубе":""}</small></div><div class="pnx">${p.next&&!/^Написать лично/.test(p.next)?`<b>${esc(p.next)}</b>${p.due?`<small class="${od?"od":""}">${od?"просрочено, ":""}${fmt(parse(p.due),{day:"numeric",month:"short"})}</small>`:""}`:``}</div></div>`}).join("")}</div>`}
 function journalBlock(p){
  const btns=[["написали","Написали"],["ответил","Ответил(а)"],["созвон","Созвон"],["встреча","Встреча"],["заметка","Заметка"],["обещали","Обещали"]];
  let auto=[];const m=lm(p);
@@ -2017,12 +2037,14 @@ function moneyBlock(p){const m=lm(p);
  return h}
 
 /* ===== склейка страниц во вкладки ===== */
-mkTabs("crm","Участники",[["crm","Участники","Все, кто в клубе: статус, оплата, история"],["intro","Знакомства","Идеи знакомств между участниками и что с ними стало"],["forms","Анкеты","Анкеты участников и подсказки, что с каждым делать"],["cases","Кейсы","Истории результатов участников"],["usage","Что смотрят","Какие разделы приложения открывают участники"]],t=>t=="crm"&&S.ui.pid);
+mkTabs("crm","Участники",[["crm","Участники","Все, кто в клубе: статус, оплата, история"],["forms","Анкеты","Анкеты участников и подсказки, что с каждым делать"],["cases","Кейсы","Истории результатов участников"],["usage","Что смотрят","Какие разделы приложения открывают участники"]],t=>t=="crm"&&S.ui.pid);
 mkTabs("events","Эфиры",[["events","Эфиры","Расписание эфиров клуба и их записи"],["library","Материалы","Конспекты, подкасты и записи для участников"],["cal","События партнеров","Афиша чужих событий со скидками и промокодами"]]);
 mkTabs("pts","Вклад участников",[["pts","Заявки","Заявки на подтверждение вклада"],["shop","Подарки","Что можно получить за баллы и заявки на подарки"],["offers","Предложения участников","Что участники предложили клубу: проверка и баллы"]]);
 mkTabs("plan","Контент-план",[["plan","Публикации","Что и когда выходит"],["rub","Рубрикатор","Рубрики и правила для публикаций"]]);
-mkTabs("today","Сегодня",[["today","Кому написать","Люди, которым нужно написать сегодня"],["touch","Касания","План личных сообщений по тарифам"],["cab","Подготовка","Что подтвердить и добавить для эфиров"]]);
-mkTabs("start","Справка",[["start","Начать здесь","Двадцать минут, и вы знаете, что делать"],["onb","Онбординг","Что делать с новым участником по дням"],["rules","Правила","Правила клуба"],["arch","Устройство клуба","Как все устроено"]]);
+META.stats[1]="Аналитика";META.team&&(META.team[1]="Команда");
+mkTabs("today","Сегодня",[["cab","Подготовка","Что подтвердить и добавить для эфиров"]],()=>true);
+VIEW.today=function(){return VIEW.cab.apply(this,arguments)};META.today=["","Сегодня",""];
+mkTabs("rules","Справка",[["rules","Правила","Правила клуба"],["arch","Устройство клуба","Как все устроено"]]);
 /* ===== переключатель темы ===== */
 ACT.theme=function(){const d=document.documentElement,n=d.getAttribute("data-theme")=="night"?"light":"night";d.setAttribute("data-theme",n);try{localStorage.setItem("edn-theme2",n)}catch(e){}themeBtn()};
 
@@ -2037,8 +2059,8 @@ themeBtn=function(){const e=document.querySelector(".sf");if(e)e.innerHTML='<but
 themeBtn();
 document.documentElement.setAttribute("data-theme","light");
 NAV.length=0;
-NAV.push(["",[["today","Сегодня"],["crm","Участники"],["events","Эфиры"],["plan","Контент-план"]]],["",[["texts","Сообщения"],["funnels","Воронки"],["pts","Вклад"],["stats","Аналитика"]]],["",[["team","Команда"],["start","Справка"]]]);
-{const _bd=badge;badge=function(t){if(t!="today")return _bd(t);const n=(+(_bd("today").replace(/\D/g,"")||0))+(+(_bd("cab").replace(/\D/g,"")||0));return n?`<span class="bd">${n}</span>`:""}}
+NAV.push(["",[["today","Сегодня"],["crm","Участники"],["events","Эфиры"]]],["",[["texts","Сообщения"],["funnels","Воронки"],["pts","Вклад"],["stats","Аналитика"]]],["",[["team","Команда"],["rules","Справка"]]]);
+{const _bd=badge;badge=function(t){return t=="today"?_bd("cab"):_bd(t)}}
 ACT.newMenu=function(a,b,el){const m=$("#nm");m.classList.toggle("on")};
 document.addEventListener("click",e=>{const m=$("#nm");if(m&&!e.target.closest(".nw")||e.target.closest("#nm button"))m&&m.classList.remove("on")});
 
