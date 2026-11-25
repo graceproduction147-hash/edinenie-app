@@ -356,3 +356,20 @@ nav.tabs button{letter-spacing:.1em;font-size:9.5px}
 .cvr{width:104px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;flex:none}
 .cvr.big{width:100%;border-radius:14px;margin-bottom:12px;display:block}
 .panel.nx{flex-direction:column;align-items:stretch;gap:12px}.panel.nx .cvr{width:100%;border-radius:12px}.panel.nx .btn{align-self:flex-start}
+
+#ritual{border-color:var(--line-strong)}
+#ritual .rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+#ritual .rstreak{display:flex;align-items:center;gap:8px;border:1px solid var(--accent);border-radius:16px;padding:8px 12px;background:var(--accent-soft)}
+#ritual .rstreak b{font:400 28px var(--font-display);color:var(--accent);line-height:1}#ritual .rstreak span{font-size:11px;color:var(--muted);line-height:1.2}
+#ritual .rweek{display:flex;gap:8px;margin:12px 0 4px}#ritual .rweek i{flex:1;height:8px;border-radius:99px;background:var(--line)}#ritual .rweek i.on{background:var(--accent)}
+.rstep{padding:14px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px}.rstep:first-of-type{border-top:0}
+.rstep .rt{display:flex;align-items:center;gap:10px}.rstep .rt b{font-size:15px}
+.rstep .ck{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-strong);flex:none;transition:all .35s}
+.rstep.ok .ck{background:var(--accent);border-color:var(--accent);box-shadow:0 0 14px rgba(220,166,126,.5);position:relative}
+.rstep.ok .ck::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid #1b1410;border-width:0 2px 2px 0;transform:rotate(40deg)}
+.rstep .btn{align-self:flex-start}.rstep .sub{margin:0}
+.moods{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.moods button{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:1px solid var(--line);border-radius:14px;padding:10px 2px;color:var(--muted);font:500 10px var(--font-body);cursor:pointer;transition:all .25s}
+.moods button span{width:18px;height:18px;border-radius:50%;background:var(--c);opacity:.55;transition:all .25s}
+.moods button[aria-pressed="true"]{border-color:var(--c);color:var(--fg);background:rgba(255,255,255,.05)}.moods button[aria-pressed="true"] span{opacity:1;transform:scale(1.25);box-shadow:0 0 14px var(--c)}
+.rdone{margin:2px 0 0;font-size:13px;color:var(--accent)}

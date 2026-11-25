@@ -708,7 +708,7 @@ function renderMonth() {
   const fp = PILLARS.find(p => p.sph.includes(w.focus));
   el.innerHTML = `<div class="t"><span class="eyebrow">Ваш месяц</span><b>${fp ? "Фокус: " + esc(fp.t) : "Задайте фокус и цель на месяц"}</b>${w.goal ? `<span class="sub">${esc(w.goal)}</span>` : ""}</div><i>&#8250;</i>`;
 }
-function refreshHome() { renderWeekAction(); renderMonth(); }
+function refreshHome() { renderWeekAction(); renderMonth(); renderRitual(); }
 
 /* ---------- заявка на свой эфир ---------- */
 function streamSheet() {
@@ -756,6 +756,7 @@ window.addEventListener("pageshow", () => { if (S.me) loadMonthly(); });
 async function openQuote() {
   try {
     const q = await api("/api/quote"); track("quote");
+    if (!(S.daily && S.daily.card)) dailyStep("card");
     const ov = document.createElement("div"); ov.id = "quoteFs";
     ov.innerHTML = `<img src="${esc(q.url)}" alt="${esc(q.text)}"><button class="qsave" aria-label="Сохранить в галерею"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 19h14"/></svg></button><button class="qx" aria-label="Закрыть">&#10005;</button>`;
     document.body.appendChild(ov);
@@ -774,7 +775,31 @@ async function openQuote() {
   } catch (e) { fail(e); }
 }
 const _hp = $("#homePerks"); if (_hp) _hp.onclick = levelsSheet;
-const _qb = $("#quoteBtn"); if (_qb) _qb.onclick = openQuote;
+/* ---------- ритуал дня на главной: состояние, фокус, карта ---------- */
+const MOODS = [["Тяжело", "#6C7AA8"], ["Устало", "#8E86B8"], ["Ровно", "#B99BC0"], ["Хорошо", "#E0A27E"], ["На подъеме", "#F2C27A"]];
+async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); }
+async function dailyStep(step, extra) { try { S.daily = await api("/api/daily", {method: "POST", json: Object.assign({step}, extra || {})}); renderRitual(); haptic(); } catch (e) { fail(e); } }
+function renderRitual() {
+  const el = $("#ritual"), d = S.daily; if (!el) return;
+  if (!d) { el.hidden = true; return; }
+  el.hidden = false;
+  const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card;
+  const done = n >= 3;
+  const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
+  el.innerHTML = `<div class="rhead"><div><span class="eyebrow">Сегодня</span><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3></div><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"}<br>подряд</span></div></div>
+    <div class="rweek">${wk}</div>
+    <div class="rstep ${d.mood != null ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Как вы сейчас?</b></div>
+      <div class="moods">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
+    <div class="rstep ${d.focus ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Ваш фокус</b></div>
+      ${fp ? `<p class="sub">${esc(fp.t)}${w.goal ? ": " + esc(w.goal) : ""}</p><button class="btn sm ${d.focus ? "ghost" : ""}" id="rFocus">${d.focus ? "Помню" : "Помню о нем"}</button>`
+           : `<p class="sub">Выберите сферу и цель на месяц, и они будут напоминать о себе здесь.</p><button class="btn sm" data-tab="profile">Задать фокус</button>`}</div>
+    <div class="rstep ${d.card ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Карта дня</b></div>
+      <p class="sub">${d.card ? "Ваша карта на сегодня получена." : "Вытяните послание на день."}</p><button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть снова" : "Вытянуть карту"}</button></div>
+    ${done ? `<p class="rdone">Все три шага сделаны. До завтра.</p>` : ""}`;
+  $$("#ritual [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
+  const f = $("#rFocus"); if (f) f.onclick = () => dailyStep("focus", {on: true});
+  const c = $("#rCard"); if (c) c.onclick = openQuote;
+}
 
 /* ---------- аватарка из Telegram ---------- */
 function tgAvatar() {
@@ -798,7 +823,7 @@ function tgAvatar() {
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
-  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly()]);
+  await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants(), loadMonthly(), loadDaily()]);
   refreshHome(); tgAvatar();
   route();
 }

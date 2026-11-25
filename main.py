@@ -1114,6 +1114,67 @@ def ensure_wants(con):
     con.execute("CREATE TABLE IF NOT EXISTS wants(tg_id INTEGER PRIMARY KEY, focus TEXT DEFAULT '', goal TEXT DEFAULT '', updated_at TEXT)")
 
 
+def _daily_ensure(con):
+    con.execute("""CREATE TABLE IF NOT EXISTS daily(
+      tg_id INTEGER, day TEXT, mood INTEGER, focus INTEGER DEFAULT 0, card INTEGER DEFAULT 0, updated_at TEXT,
+      PRIMARY KEY(tg_id, day))""")
+
+
+def _daily_state(con, m):
+    """Ритуал дня: состояние, фокус, карта. День идет в серию, если сделано хотя бы два шага.
+    Раз в семь дней серии накапливается один «пропуск»: пропущенный день ее не обрывает."""
+    _daily_ensure(con)
+    today = datetime.now(MSK).date()
+    rows = {r["day"]: r for r in con.execute("SELECT * FROM daily WHERE tg_id=? AND day>=?", (m["tg_id"], (today - timedelta(days=400)).isoformat())).fetchall()}
+
+    def steps(r):
+        return 0 if not r else int(r["mood"] is not None) + int(bool(r["focus"])) + int(bool(r["card"]))
+    t = rows.get(today.isoformat())
+    streak, misses, d = 0, 0, today if steps(t) >= 2 else today - timedelta(days=1)
+    while True:
+        if steps(rows.get(d.isoformat())) >= 2:
+            streak += 1
+        elif misses < streak // 7:
+            misses += 1
+        else:
+            break
+        d -= timedelta(days=1)
+        if streak > 400:
+            break
+    week = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        r = rows.get(day.isoformat())
+        week.append({"d": day.isoformat(), "mood": r["mood"] if r else None, "n": steps(r)})
+    return {"day": today.isoformat(), "mood": t["mood"] if t else None, "focus": bool(t and t["focus"]), "card": bool(t and t["card"]),
+            "streak": streak, "week": week}
+
+
+@app.get("/api/daily")
+def daily_get(m=Depends(member), con=Depends(get_con)):
+    return _daily_state(con, m)
+
+
+@app.post("/api/daily")
+async def daily_set(req: Request, m=Depends(member), con=Depends(get_con)):
+    _daily_ensure(con)
+    d = await req.json()
+    step = d.get("step")
+    day = datetime.now(MSK).date().isoformat()
+    con.execute("INSERT OR IGNORE INTO daily(tg_id, day, updated_at) VALUES(?,?,?)", (m["tg_id"], day, db.now()))
+    if step == "mood":
+        v = int(d.get("value") or 0)
+        if not 1 <= v <= 5:
+            raise HTTPException(400, "Состояние от 1 до 5")
+        con.execute("UPDATE daily SET mood=?, updated_at=? WHERE tg_id=? AND day=?", (v, db.now(), m["tg_id"], day))
+    elif step in ("focus", "card"):
+        con.execute(f"UPDATE daily SET {step}=?, updated_at=? WHERE tg_id=? AND day=?", (1 if d.get("on", True) else 0, db.now(), m["tg_id"], day))
+    else:
+        raise HTTPException(400, "Неизвестный шаг")
+    con.commit()
+    return _daily_state(con, m)
+
+
 @app.get("/api/monthly-status")
 def monthly_status(m=Depends(member), con=Depends(get_con)):
     """Кнопка «Подвести итоги месяца»: с 28 числа целевой месяц текущий, до 28 числа прошлый.
