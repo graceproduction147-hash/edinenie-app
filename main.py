@@ -4269,4 +4269,13 @@ def app_page():
     return _page("index.html")
 
 
+@app.middleware("http")
+async def no_stale_static(request: Request, call_next):
+    """Telegram держит мини-приложение в кеше: просим браузер каждый раз сверяться с сервером (если файл не менялся, придет короткий ответ 304)."""
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/") and request.url.path.endswith((".js", ".css", ".html")):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
