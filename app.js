@@ -167,6 +167,7 @@ function renderFeed() {
     + (S.evView === "cal" ? calView() : `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`)
     + (S.events && S.events.soon.length ? '<p class="sub">Бот напомнит об эфирах клуба за день и за час до начала.</p>' : "")
     + (c && c.outro ? `<p class="sub" style="white-space:pre-wrap;margin-top:16px">${esc(c.outro)}</p>` : "");
+  if (!$("#homeCal")) return;
   $("#homeCal").innerHTML = items.length ? `<div class="row2"><span>Ближайшие события</span></div>
     <div class="list">${items.slice(0, 3).map(x => x.html).join("")}</div>
     <button class="btn ghost" data-tab="events" data-seg="soon">Все события</button>` : "";
@@ -297,6 +298,7 @@ async function loadLib() {
     bindLib($("#libList"), items); } catch (e) { fail(e); }
 }
 async function loadHomeLib() { const items = (await api("/api/library")).slice(0, 3);
+  if (!$("#homeLib")) return;
   $("#homeLib").innerHTML = items.length ? items.map(libItem).join("") : '<p class="empty-line">Первые материалы появятся после эфиров клуба.</p>'; bindLib($("#homeLib"), items); }
 function libSheet(x) {
   openSheet(`<p class="sub">${esc([TYPE[x.type], x.author, x.meta].filter(Boolean).join(" · "))}</p><h3>${esc(x.title)}</h3>
