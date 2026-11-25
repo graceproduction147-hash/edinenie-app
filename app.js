@@ -80,16 +80,18 @@ function renderLvl(v) {
   $("#lvlMore").onclick = levelsSheet;
 }
 function levelsSheet() {
-  const amb = S.me && S.me.level === "inside", n = S.norm;
+  const amb = S.me && S.me.level === "inside", yr = !!S.year, n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
-  openSheet(`<p class="sub">Ваш статус: ${amb ? "Амбассадор" : "Резидент"}</p><h3>Резидент и Амбассадор</h3>
-    <p class="sub"><b>Резидент</b>: каждый участник клуба. Эфиры, конспекты, библиотека, события партнеров, витрина предложений (по приглашениям) и 2 рекомендации знакомств в месяц.</p>
-    <p class="sub"><b>Амбассадор</b>: тот, кто проявляется в клубе и приводит друзей. Дополнительно: возможность провести свой эфир внутри клуба и опубликовать его, постоянное место на витрине предложений, 4 рекомендации знакомств в месяц вместо 2, закрытые эфиры и материалы. Статус дается не за оплату, а за вклад, и его подтверждает команда.</p>
-    ${n ? `<p class="sub" style="margin-top:8px">${n.done ? `Вы Амбассадор. Статус действует еще ${n.days_left} дн. Чтобы сохранить его, повторите три шага за следующие ${n.days} дней.` : `Чтобы стать Амбассадором, за ${n.days} дней сделайте три шага:`}</p>
-    <ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : ""}
-    <p class="sub" style="margin-top:8px">Годовой тариф добавляет бонусы: статус «Партнер», место на витрине без приглашений и гостевые пропуска на эфиры.</p>
-    <button class="btn" id="lvInv">Пригласить друга</button>`,
-    s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); }; });
+  const tier = (cls, mine, name, how, perks, extra) => `<div class="tier ${cls}${mine ? " mine" : ""}"><div class="th"><h4>${name}</h4>${mine ? '<span class="you">у вас</span>' : ""}</div><p class="how">${how}</p><ul class="pk">${perks.map(p => `<li>${p}</li>`).join("")}</ul>${extra || ""}</div>`;
+  openSheet(`<h3>Возможности клуба</h3><p class="sub">Что внутри и за что это дается. Годовой тариф и статус Амбассадора можно иметь одновременно.</p>
+    ${tier("res", !amb, "Резидент", "Для каждого участника клуба", ["Эфиры, конспекты и библиотека", "События партнеров", "Витрина предложений по приглашениям", "2 рекомендации знакомств в месяц"])}
+    ${tier("yr", yr, "Годовой тариф", "За оплату годового участия", ["Статус «Партнер» в карточке знакомств и в шапке", "Место на витрине без приглашений весь год", "2 гостевых пропуска на эфиры: позовите друга бесплатно"], yr ? "" : '<button class="btn sm" id="lvYear">Узнать про годовой тариф</button>')}
+    ${tier("amb", amb, "Амбассадор", "За вклад, а не за оплату. Подтверждает команда", ["Провести свой эфир внутри клуба и опубликовать его", "Постоянное место на витрине предложений", "4 рекомендации знакомств в месяц вместо 2"],
+      (n ? `<p class="sub" style="margin:10px 0 6px">${n.done ? `Статус действует еще ${n.days_left} дн. Чтобы сохранить, повторите три шага за ${n.days} дней.` : `Три шага за ${n.days} дней:`}</p><ul class="norm">${items.map(i => `<li class="${n[i[0]] ? "ok" : ""}"><i></i><div><b>${i[1]}</b><span>${n[i[0]] ? "Подтверждено командой" : i[2]}</span></div></li>`).join("")}</ul>` : "")
+      + '<div class="btns"><button class="btn sm" id="lvInv">Пригласить друга</button><button class="btn sm ghost" id="lvStream">Свой эфир</button></div>')}`,
+    s => { const b = s.querySelector("#lvInv"); if (b) b.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) { closeSheet(); taskSheet(k); } else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
+      const st = s.querySelector("#lvStream"); if (st) st.onclick = () => { closeSheet(); streamSheet(); };
+      const y = s.querySelector("#lvYear"); if (y) y.onclick = () => { if (TG && TG.openLink) TG.openLink(S.join); else window.open(S.join, "_blank"); }; });
 }
 let _trk = {};
 function track(k) {
@@ -542,13 +544,13 @@ function renderLevels() {
   const el = $("#levelsCard"), amb = S.me && S.me.level === "inside"; if (!el) return;
   el.innerHTML = `<span class="eyebrow">Ваш статус</span><h3>${amb ? "Амбассадор" : "Резидент"}</h3>
     <p class="sub">${amb ? "Вы проявляетесь в клубе и приводите друзей. Вам доступны свой эфир, витрина и 4 рекомендации знакомств в месяц." : "Станьте Амбассадором: приводите друзей и делитесь клубом. Тогда можно провести свой эфир, попасть на витрину и получать 4 рекомендации в месяц."}</p>
-    <button class="btn ghost" id="toLevels">Как стать Амбассадором</button>`;
+    <button class="btn ghost" id="toLevels">Возможности клуба</button>`;
   $("#toLevels").onclick = levelsSheet;
 }
 
 /* ---------- бонусы годового тарифа ---------- */
 function renderYear() {
-  const el = $("#yearCard"); if (!el) return;
+  const el = $("#yearCard"); if (!el) return; if (!S.year) { el.hidden = true; return; } el.hidden = false;
   const g = S.events && S.events.guest, left = g ? g.left : 0, tot = g ? g.total : 2;
   const list = `<ul class="bl"><li><b>Статус «Партнер»</b><span>Виден в вашей карточке в знакомствах и в шапке приложения.</span></li>
     <li><b>Место на витрине без приглашений</b><span>Одно ваше предложение размещено весь год, пока вы на годовом тарифе.</span></li>
@@ -736,6 +738,7 @@ async function openQuote() {
     };
   } catch (e) { fail(e); }
 }
+const _hp = $("#homePerks"); if (_hp) _hp.onclick = levelsSheet;
 const _qb = $("#quoteBtn"); if (_qb) _qb.onclick = openQuote;
 
 /* ---------- аватарка из Telegram ---------- */
