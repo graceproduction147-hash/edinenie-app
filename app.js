@@ -33,6 +33,7 @@ function haptic(type) { try { TG.HapticFeedback.impactOccurred(type || "light");
 const ORBS = [["#F2B394","#B0583F","#2A1218"],["#DCE6FF","#7189CF","#1A2140"],["#E8C9A0","#A0704A","#24170F"],["#E9B6C6","#9A4C6A","#24111C"],["#BFE0D0","#4E8C78","#0F1F1C"]];
 const orb = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length];
   return `radial-gradient(70% 60% at 82% 0%,${o[0]} 0%,${o[1]} 28%,transparent 62%),radial-gradient(90% 70% at 10% 110%,${o[2]} 0%,transparent 70%),#0F1224`; };
+const stTag = p => `<em class="st">${p.level === "inside" ? "амбассадор" : "резидент"}</em>`;
 const avaEl = p => `<div class="ava" style="background:${p.photo ? `url(/botpic/${esc(p.photo)}) center/cover` : avaBg(p.tg_id)}">${p.photo ? "" : esc(initials(p))}</div>`;
 const avaBg = id => { const o = ORBS[Math.abs(Number(id) || 0) % ORBS.length]; return `radial-gradient(circle at 50% 20%,${o[1]},${o[2]} 70%)`; };
 const initials = p => ((p.first_name || "?")[0] + ((p.last_name || "")[0] || "")).toUpperCase();
@@ -149,7 +150,7 @@ function taskSheet(k, ref) {
 function renderShop() {}
 
 /* ---------- эфиры ---------- */
-async function loadEvents() { S.events = await api("/api/events"); renderEvents(); renderHero(); }
+async function loadEvents() { S.events = await api("/api/events"); renderEvents(); renderHero(); try { renderWeekAction(); } catch (e) {} }
 function evRow(e) { const w = when(e.starts_at);
   return `<button class="item" data-ev="${e.id}"><div class="date"><b>${w.d}</b><span>${w.m}</span></div>
     <div class="t"><b>${esc(e.title)}</b><span>${w.wd}, ${w.t} · ${esc(e.rubric || "Эфир")} · ${esc(e.place)}</span></div>
@@ -248,12 +249,17 @@ function recSheet(r) { const w = when(r.starts_at);
   const ideas = r.summary || [], ts = r.timecodes || [];
   openSheet(`<p class="sub">${esc(r.speaker)} · ${w.d} ${w.m}</p><h3>${esc(r.title)}</h3>
     ${r.locked ? '<p class="sub">Запись доступна Амбассадорам.</p>' : `
-    <div class="btns">${r.recording_url ? `<a class="btn sm" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}
+    <div class="btns">${r.recording_url ? `<a class="btn sm" id="recGo" href="${esc(r.recording_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Смотреть запись</a>` : ""}
       ${r.podcast_url ? `<a class="btn sm ghost" href="${esc(r.podcast_url)}" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Слушать подкастом</a>` : ""}</div>
     ${ideas.length ? `<div><p class="sub" style="margin-bottom:6px">Главное из эфира</p><ul>${ideas.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>` : ""}
     ${ts.length ? `<div><p class="sub" style="margin-bottom:6px">Таймкоды</p><div class="ts">${ts.map(t => `<div><b>${esc(t[0])}</b><span>${esc(t[1])}</span></div>`).join("")}</div></div>` : ""}
+    <div class="switch"><span>Смотрел(а) этот эфир</span><button class="toggle" id="recW" aria-pressed="${r.watched ? "true" : "false"}" aria-label="Смотрел(а) этот эфир"></button></div>
     <button class="btn" id="ins">Оставить инсайт</button>`}`,
-    s => { const b = s.querySelector("#ins"); if (b) b.onclick = () => taskSheet(S.rules.find(k => k.code === "insight"), "event:" + r.id); });
+    s => {
+      const w = s.querySelector("#recW"), setW = async on => { try { await api(`/api/events/${r.id}/watch`, {json: {on}}); r.watched = on; if (w) w.setAttribute("aria-pressed", on ? "true" : "false"); renderWeekAction(); } catch (e) { fail(e); } };
+      if (w) w.onclick = () => setW(w.getAttribute("aria-pressed") !== "true");
+      const go = s.querySelector("#recGo"); if (go) go.addEventListener("click", () => { if (!r.watched) setW(true); });
+      const b = s.querySelector("#ins"); if (b) b.onclick = () => taskSheet(S.rules.find(k => k.code === "insight"), "event:" + r.id); });
 }
 function evSeg(k) { $$("[data-es]").forEach(x => x.setAttribute("aria-pressed", x.dataset.es === k ? "true" : "false"));
   $("#evSoon").hidden = k !== "soon"; $("#evOff").hidden = k !== "off"; if (k === "off") loadOffers(); }
@@ -442,7 +448,7 @@ async function loadCoffee() {
       c.items.map(p => {
         const msg = `${p.first_name || ""}, привет! Я ${S.me.first_name || ""}, ${(S.me.sphere || "").toLowerCase()}. Увидел(а) вас в Единении и хочу познакомиться. Давайте созвонимся на 20 минут?`;
         return `<div class="panel" data-rec="${p.id}">
-        <div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
+        <div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))} ${stTag(p)}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>
         ${p.project ? `<div class="r"><span class="lbl">Проект</span><p>${esc(p.project)}</p></div>` : ""}
         <div class="r"><span class="lbl">Ищет</span><p>${esc(p.seek || "Не указано")}</p></div><div class="r"><span class="lbl">Может помочь</span><p>${esc(p.give || "Не указано")}</p></div>
         <div class="why">${esc(p.reason)}</div>
@@ -469,7 +475,7 @@ function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
   if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
   el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
-    ${c.items.map(p => `<div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
+    ${c.items.map(p => `<div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))} ${stTag(p)}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
     <button class="btn ghost" data-tab="people">Открыть рекомендации</button>`;
 }
 
@@ -631,15 +637,22 @@ function renderWeekAction() {
     <p>Ваш статус: ${amb ? "Амбассадор" : "Резидент"}. Ниже ваш личный маршрут по клубу: куда заглянуть, чтобы взять из него больше.</p></div>`;
   const c = S.coffee, n = S.norm;
   const li = (ok, h, p, tab) => `<li class="${ok ? "ok" : ""}"${!ok && tab ? ` data-tab="${tab}" style="cursor:pointer"` : ""}><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
-  const res = [];
-  if (c && c.items && c.items.length) res.push(li(c.items.some(i => i.written), "Познакомьтесь с людьми из рекомендаций", `Мы подобрали вам знакомства на месяц: ${c.items.length}`, "people"));
-  if (S.wants) res.push(li(!wantsStale(), "Выберите фокус и цель месяца", "Одна сфера и один-два шага: по ним мы подбираем людей", "profile"));
+  const res = [], m = S.me;
+  if (c && c.items && c.items.length && !c.items.some(i => i.written)) res.push(li(false, "Свяжитесь с людьми из рекомендаций", `Мы подобрали вам знакомства на месяц: ${c.items.length}`, "people"));
+  if (!m.profile_done || !m.seek || !m.give) res.push(li(false, "Заполните анкету", "Кого вы ищете и чем можете помочь: по этому мы подбираем людей", "profile"));
+  if (!m.photo) res.push(li(false, "Добавьте фото", "Людям легче знакомиться с теми, кого они видят", "profile"));
+  if (S.wants && wantsStale()) res.push(li(false, "Выберите фокус и цель месяца", "Одна сфера и один-два шага", "profile"));
+  const ev = S.events || {soon: [], records: []};
+  const nextEv = (ev.soon || []).find(e => !e.locked && !e.going);
+  if (nextEv) res.push(li(false, "Запишитесь на ближайший эфир", nextEv.title, "events"));
+  const unw = (ev.records || []).find(r => !r.locked && !r.watched);
+  if (unw) res.push(`<li data-rec="${unw.id}" style="cursor:pointer"><i></i><div><b>Посмотрите эфир, который еще не смотрели</b><span>${esc(unw.title)}</span></div></li>`);
   const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
   const perks = ["Провести свой эфир внутри клуба и опубликовать его", "Разместиться на витрине предложений", "Получать 4 рекомендации знакомств в месяц вместо 2"];
   el.hidden = false;
   el.innerHTML = `<span class="eyebrow">Ваш маршрут</span><h3>Что можно сделать в клубе</h3>
     <p class="sub">Подсказки на месяц. Берите то, что откликается.</p>
-    ${res.length ? `<div class="sub"><b>Для Резидентов</b></div><ul class="norm">${res.join("")}</ul>` : ""}
+    <div class="sub"><b>Для Резидентов</b></div>${res.length ? `<ul class="norm">${res.join("")}</ul>` : `<p class="sub">Всё, что мы предлагали, вы уже сделали. Загляните в эфиры и библиотеку.</p>`}
     <div class="sub" style="margin-top:6px"><b>Для Амбассадоров</b></div>
     <p class="sub">${amb ? "Вы Амбассадор. Чтобы сохранить статус, повторяйте три шага:" : "Амбассадорство открывается за вклад в клуб. Три шага:"}</p>
     ${n ? `<ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>` : ""}
@@ -647,6 +660,7 @@ function renderWeekAction() {
     <div class="sub" style="margin-top:6px"><b>Что дает Амбассадорство</b></div>
     <p class="sub">${perks.map(t => "· " + esc(t)).join("<br>")}</p>
     <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkMore">Об уровнях</button></div>`;
+  $$("#weekAction [data-rec]").forEach(x => x.onclick = () => { const r = (S.events.records || []).find(q => String(q.id) === x.dataset.rec); if (r) recSheet(r); });
   const mb = $("#wkMore"); if (mb) mb.onclick = levelsSheet;
   const ib = $("#wkInv"); if (ib) ib.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
 }
@@ -663,12 +677,30 @@ function renderMonth() {
 }
 function refreshHome() { renderWeekAction(); renderMonth(); }
 
+/* ---------- аватарка из Telegram ---------- */
+function tgAvatar() {
+  // Если у участника нет фото, один раз пробуем взять аватарку из Telegram и сохранить как фото профиля.
+  try {
+    const u = TG && TG.initDataUnsafe && TG.initDataUnsafe.user, m = S.me;
+    if (!u || !u.photo_url || !m || m.photo) return;
+    const key = "tgava:" + m.tg_id; if (localStorage.getItem(key)) return; localStorage.setItem(key, "1");
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = async () => { try {
+      const side = 640, k = Math.min(1, side / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const r = await api("/api/me/photo", {method: "POST", json: {image: c.toDataURL("image/jpeg", 0.85)}}); S.me.photo = r.photo; fillProfile(); refreshHome();
+    } catch (e) {} };
+    img.src = u.photo_url;
+  } catch (e) {}
+}
+
 /* ---------- запуск ---------- */
 async function start() {
   $("#main").hidden = false; $("#tabs").hidden = false; $("#ptsPill").hidden = false;
   fillProfile();
   await Promise.allSettled([refreshPoints().then(fillProfile), loadEvents(), loadCal(), loadHomeLib(), loadFeed(), loadCoffee(), loadWants()]);
-  refreshHome();
+  refreshHome(); tgAvatar();
   route();
 }
 async function boot() {
