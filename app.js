@@ -832,6 +832,15 @@ function progChart(P) {
   const yl = [[5, "на подъеме"], [1, "тяжело"]].map(([v, t]) => `<text x="${L + 2}" y="${Y(v) + (v === 5 ? 12 : -4)}" fill="var(--muted)" font-size="9" opacity=".8">${t}</text>`).join("");
   return `<svg viewBox="0 0 ${W} ${H + 12}" width="100%" role="img" aria-label="График состояния по дням">${grid}${yl}${line}${dots}${bars}${lab}</svg>`;
 }
+function progAreas(P) {
+  const A = P.areas || [], used = A.filter(x => x.days);
+  if (!used.length) return `<div class="pg-areas"><h4>Что влияет на состояние</h4><p class="sub">Отмечайте на главной, чему уделяете внимание: тело, отношения, отдых, веселье, деньги. Через пару недель здесь будет видно, какие сферы поднимают ваше состояние.</p></div>`;
+  const top = A.filter(x => x.effect != null && x.effect >= 0.3).sort((a, b) => b.effect - a.effect)[0], max = Math.max(...A.map(x => x.days), 1);
+  return `<div class="pg-areas"><h4>Что влияет на состояние</h4>
+    ${top ? `<p class="pg-ins">В дни, когда вы уделяете внимание сфере «${AREAS[top.k]}», состояние в среднем выше на ${top.effect}.</p>` : '<p class="sub">Пока мало данных для выводов: нужно хотя бы по 3 дня с отметкой и без нее.</p>'}
+    ${A.map(x => `<div class="ar"><span class="an">${AREAS[x.k]}</span><span class="ab"><i style="width:${Math.round(x.days / max * 100)}%"></i></span><span class="ad">${x.days} дн.</span><span class="ae ${x.effect == null ? "" : x.effect > 0 ? "up" : x.effect < 0 ? "dn" : ""}">${x.effect == null ? "—" : (x.effect > 0 ? "+" : "") + x.effect}</span></div>`).join("")}
+    <p class="sub" style="margin-top:8px">Справа разница среднего состояния в дни с этой сферой и без нее. Это наблюдение за вашими днями, а не доказанная причина.</p></div>`;
+}
 async function progressSheet(days) {
   days = days || 30;
   let P; try { P = await api("/api/progress?days=" + days); } catch (e) { fail(e); return; }
@@ -845,6 +854,7 @@ async function progressSheet(days) {
       <div><b>${P.streak}</b><span>серия сейчас</span></div><div><b>${P.best}</b><span>лучшая серия</span></div>
       <div><b>${P.done}<small> из ${P.days}</small></b><span>дней с ритуалом</span></div>
       <div><b>${P.avg != null ? P.avg : "—"}${delta != null && delta !== 0 ? `<small class="${delta > 0 ? "up" : "dn"}"> ${delta > 0 ? "+" : ""}${delta}</small>` : ""}</b><span>среднее состояние${delta != null ? " (к прошлому периоду)" : ""}</span></div></div>
+    ${progAreas(P)}
     <div class="switch"><span>Напоминание в 10:00 по Москве</span><button class="toggle" id="pgPush" aria-pressed="${P.push}" aria-label="Напоминание в 10:00"></button></div>`, s => {
     s.querySelectorAll("#pgR .chip").forEach(b => b.onclick = () => progressSheet(+b.dataset.d));
     const t = s.querySelector("#pgPush"); t.onclick = async () => { const on = t.getAttribute("aria-pressed") !== "true"; try { await api("/api/daily/push", {json: {on}}); t.setAttribute("aria-pressed", String(on)); toast(on ? "Напоминание включено" : "Напоминание выключено"); } catch (e) { fail(e); } };
@@ -853,6 +863,7 @@ async function progressSheet(days) {
 const _pb = $("#progBtn"); if (_pb) _pb.onclick = () => progressSheet(30);
 
 /* ---------- ритуал дня на главной: состояние, фокус, карта ---------- */
+const AREAS = {body: "Тело", relations: "Отношения", rest: "Отдых", fun: "Веселье", money: "Деньги"};
 const MOODS = [["Тяжело", "#6C7AA8"], ["Устало", "#8E86B8"], ["Ровно", "#B99BC0"], ["Хорошо", "#E0A27E"], ["На подъеме", "#F2C27A"]];
 async function loadDaily() { try { S.daily = await api("/api/daily"); } catch (e) { S.daily = null; } renderRitual(); const ps = $("#progSub"); if (ps && S.daily) ps.textContent = S.daily.streak ? `Серия: ${S.daily.streak} дн.` : "Состояние по дням, серия, график"; }
 async function dailyStep(step, extra) { try { S.daily = await api("/api/daily", {method: "POST", json: Object.assign({step}, extra || {})}); renderRitual(); haptic(); } catch (e) { fail(e); } }
@@ -860,13 +871,16 @@ function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
   if (!d) { el.hidden = true; return; }
   el.hidden = false;
-  const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card, edit = !!S.rfEdit;
-  const done = n >= 3;
+  const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
+  const done = n >= 4;
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
   el.innerHTML = `<div class="rhead"><div><span class="eyebrow">Сегодня</span><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3></div><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"}<br>подряд</span></div></div>
     <div class="rweek">${wk}</div>
     <div class="rstep ${d.mood != null ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Как вы сейчас?</b></div>
       <div class="moods">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
+    <div class="rstep ${d.areas.length ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Чему уделите внимание сегодня?</b></div>
+      <div class="chips" id="rAreas">${Object.keys(AREAS).map(k => `<button class="chip" data-a="${k}" aria-pressed="${d.areas.includes(k)}">${AREAS[k]}</button>`).join("")}</div>
+      <p class="sub">Можно несколько. По этим отметкам вы потом увидите, что влияет на ваше состояние.</p></div>
     <div class="rstep ${d.focus ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Ваш фокус</b></div>
       ${edit || !fp ? `<p class="sub">${fp ? "Измените сферу или цель месяца." : "Выберите главную сферу и одну цель на месяц."}</p>
         <div class="chips" id="rfChips">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
@@ -876,7 +890,8 @@ function renderRitual() {
         <div class="btns"><button class="btn sm ${d.focus ? "ghost" : ""}" id="rFocus">${d.focus ? "Помню" : "Помню о нем"}</button><button class="btn sm ghost" id="rfEdit">Изменить</button></div>`}</div>
     <div class="rstep ${d.card ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Карта дня</b></div>
       <p class="sub">${d.card ? "Ваша карта на сегодня получена." : "Вытяните послание на день."}</p><button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть снова" : "Вытянуть карту"}</button></div>
-    ${done ? `<p class="rdone">Все три шага сделаны. До завтра.</p>` : ""}`;
+    ${done ? `<p class="rdone">Все шаги сделаны. До завтра.</p>` : ""}`;
+  $$("#ritual #rAreas .chip").forEach(b => b.onclick = () => { const cur = new Set(S.daily.areas), k = b.dataset.a; cur.has(k) ? cur.delete(k) : cur.add(k); dailyStep("areas", {value: [...cur]}); });
   $$("#ritual [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
   const f = $("#rFocus"); if (f) f.onclick = () => dailyStep("focus", {on: true});
   const re = $("#rfEdit"); if (re) re.onclick = () => { S.rfEdit = true; renderRitual(); };
