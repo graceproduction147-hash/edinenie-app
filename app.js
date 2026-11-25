@@ -744,11 +744,14 @@ function routeSheet() {
   });
 }
 function renderMonth() {
-  const el = $("#monthCard"), w = S.wants; if (!el) return;
-  if (!w) { el.hidden = true; return; }
-  el.hidden = false; el.dataset.tab = "profile";
-  const fp = PILLARS.find(p => p.sph.includes(w.focus));
-  el.innerHTML = `<div class="t"><span class="eyebrow">Ваш месяц</span><b>${w.focus ? "Фокус месяца: " + esc(w.focus) : "Задайте фокус и цель на месяц"}</b>${w.goal ? `<span class="sub">${esc(w.goal)}</span>` : ""}</div><i>&#8250;</i>`;
+  // когда ритуал выполнен, он скрывается, а на его месте остается фокус месяца: сфера и цель человека его словами
+  const el = $("#monthCard"), w = S.wants, d = S.daily; if (!el) return;
+  const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit;
+  if (!done || !w || !w.focus) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<span class="eyebrow">Фокус на месяц</span><h3>${esc(w.focus)}</h3>${w.goal ? `<p class="mgoal">${esc(w.goal)}</p>` : ""}
+    <div class="mfoot"><span class="sub">Ритуал на сегодня выполнен · ${d.streak} дн. подряд</span><button class="btn sm ghost" id="mcEdit">Изменить</button></div>`;
+  $("#mcEdit").onclick = () => { S.rfEdit = true; renderRitual(); };
 }
 function refreshHome() { renderWeekAction(); renderMonth(); renderRitual(); }
 
@@ -862,9 +865,10 @@ async function dailyStep(step, extra) { try { S.daily = await api("/api/daily", 
 function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
   if (!d) { el.hidden = true; return; }
-  el.hidden = false;
+  el.hidden = false; renderMonth();
   const w = S.wants || {}, fp = w.focus, n = (d.mood != null) + d.focus + d.card + (d.areas.length > 0), edit = !!S.rfEdit;
   const done = n >= 4;
+  if (done && !edit && !S.mEdit && !S.aEdit && w.focus) { el.hidden = true; return; }
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
   const row = (ok, t, sub, btn) => `<div class="rstep rrow ${ok ? "ok" : ""}"><div class="rt"><i class="ck"></i><div class="rtx"><b>${t}</b>${sub ? `<span>${sub}</span>` : ""}</div>${btn || ""}</div></div>`;
   const mood = d.mood != null && !S.mEdit ? row(1, "Состояние: " + MOODS[d.mood - 1][0].toLowerCase(), "", '<button class="btn sm ghost" id="rmEdit">Изменить</button>')
