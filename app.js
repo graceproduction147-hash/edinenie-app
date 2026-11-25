@@ -735,7 +735,7 @@ function renderWeekAction() {
   el.hidden = false;
   el.innerHTML = `<span class="eyebrow">Ваш маршрут</span>
     ${st ? `<h3>${esc(st.h)}</h3><p class="sub">${esc(st.p)}</p><button class="btn solid" id="wkGo">${esc(st.btn)}</button>`
-         : `<h3>Все шаги пройдены</h3><p class="sub">Загляните в эфиры и библиотеку: там всегда есть что-то новое.</p><button class="btn solid" data-tab="events">К эфирам</button>`}
+         : `<h3>Все шаги пройдены</h3><p class="sub">Загляните в эфиры и библиотеку: там всегда есть что-то новое.</p><button class="btn solid" data-tab="lib">К эфирам</button>`}
     <div class="ringrow" id="wkAmb" role="button" tabindex="0"><svg viewBox="0 0 44 44" width="44" height="44"><circle cx="22" cy="22" r="18" class="rb"/><circle cx="22" cy="22" r="18" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${(C * (1 - done / 3)).toFixed(1)}" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle">${done}/3</text></svg>
       <div class="t"><b>${amb ? "Вы Амбассадор" : "Путь Амбассадора"}</b><span>${amb ? (n && n.done ? `Статус действует еще ${n.days_left} дн.` : "Повторите три шага, чтобы сохранить статус") : "Свой эфир, витрина, 4 знакомства в месяц"}</span></div><i>&#8250;</i></div>
     ${steps.length > 1 ? `<button class="link" id="wkAll">Весь маршрут: еще ${steps.length - 1}</button>` : ""}`;
