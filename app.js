@@ -584,6 +584,7 @@ function fillProfile() {
   $("#pSeek").value = m.seek || ""; $("#pGive").value = m.give || ""; bindPreview(); previewCard();
   $("#pCoffee").setAttribute("aria-pressed", m.coffee ? "true" : "false"); $("#pOff").setAttribute("aria-pressed", m.offline ? "true" : "false");
 }
+$("#supportBtn").onclick = () => { haptic(); openPay(S.support || "https://t.me/edinenie_support"); };
 $$(".toggle").forEach(t => t.onclick = () => t.setAttribute("aria-pressed", t.getAttribute("aria-pressed") === "true" ? "false" : "true"));
 $("#saveProfile").onclick = async () => {
   const data = {first_name: $("#pName").value.trim(), sphere: $("#pSphere").value.trim(), project: $("#pProject").value.trim(), city: $("#pCity").value.trim(), seek: $("#pSeek").value.trim(), give: $("#pGive").value.trim(),
@@ -968,7 +969,7 @@ async function start() {
 async function boot() {
   if (TG) { TG.ready(); TG.expand(); try { TG.setHeaderColor("#0A0D1A"); TG.setBackgroundColor("#0A0D1A"); } catch (e) {} }
   try {
-    const d = await api("/api/me"); S.me = d.me; S.year = !!d.year; S.join = d.join; S.stats = d.stats; S.points = d.points; S.norm = d.norm || null; $("#gateJoin").href = d.join;
+    const d = await api("/api/me"); S.me = d.me; S.year = !!d.year; S.join = d.join; S.support = d.support; S.stats = d.stats; S.points = d.points; S.norm = d.norm || null; $("#gateJoin").href = d.join;
     $("#boot").hidden = true;
     if (d.me.status !== "active") {
       $("#gate").hidden = false;
