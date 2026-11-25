@@ -482,3 +482,6 @@ nav.tabs button{letter-spacing:.1em;font-size:9.5px}
 .lv .lh span{font-size:12px;color:var(--muted)}.lv .lh em{margin-left:auto;font:600 9px var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
 .lv ul{list-style:none;margin:0;padding:0}.lv li{font-size:14px;padding:4px 0;color:var(--text)}
 .lv.mine .lh b{color:var(--accent)}
+.pcard .pdesc{margin:2px 0 8px;font-size:13px;line-height:1.4;color:var(--muted)}
+.pcard .psec{margin:14px 0 0;font:600 10px var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.pcard #pkTeam{margin-top:12px}
