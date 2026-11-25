@@ -755,10 +755,10 @@ function renderMonth() {
   const done = d && (d.mood != null) && d.focus && d.card && d.areas.length > 0 && !S.rfEdit && !S.mEdit && !S.aEdit && !S.rOpen;
   if (!done || !w || !w.goal) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<div class="mdone"><i class="mck"></i><div><b>Ритуал на сегодня выполнен</b><span>${d.streak} ${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"} подряд</span></div></div>
-    <span class="eyebrow">Фокус на месяц</span><p class="mgoal">${esc(w.goal)}</p>
-    <div class="mmood"><span class="sub">Состояние сегодня</span><div class="moods mini">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" aria-label="${m[0]}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
-    <div class="mfoot"><span class="rbt"><button class="btn sm ghost" id="mcOpen">Открыть ритуал</button><button class="btn sm ghost" id="mcEdit">Фокус</button></span></div>`;
+  el.innerHTML = `<div class="mdone"><i class="mck"></i><b>Ритуал выполнен</b><span>${d.streak} дн. подряд</span></div>
+    <p class="mgoal">${esc(w.goal)}</p>
+    <div class="moods mini">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" aria-label="${m[0]}" style="--c:${m[1]}"><span></span></button>`).join("")}</div>
+    <div class="mfoot"><button class="link" id="mcOpen">Открыть ритуал</button><button class="link" id="mcEdit">Изменить фокус</button></div>`;
   $("#mcEdit").onclick = () => { S.rfEdit = true; renderRitual(); };
   $("#mcOpen").onclick = () => { S.rOpen = true; renderRitual(); };
   $$("#monthCard [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
