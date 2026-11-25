@@ -421,6 +421,7 @@ h2{font-size:17px;letter-spacing:-.01em;margin:26px 0 12px}
           <input type="hidden" id="eId">
           <label class="full">Название<input id="eTitle"></label>
           <label>Рубрика<input id="eRubric" placeholder="Кейс участника"></label>
+          <label>Раздел библиотеки<select id="ePillar"><option value="">Не выбрано</option><option value="env">Окружение</option><option value="game">Большая игра</option><option value="state">Состояние</option></select></label>
           <label>Спикер<input id="eSpeaker" placeholder="Имя Фамилия (обязательно)"></label>
           <label>Дата и время (МСК)<input id="eStart" type="datetime-local"></label>
           <label>Место<input id="ePlace" value="Zoom"></label>
@@ -492,6 +493,7 @@ h2{font-size:17px;letter-spacing:-.01em;margin:26px 0 12px}
       <div class="card"><h2 id="lHead">Добавить материал</h2>
         <div class="form">
           <label>Тип<select id="lType"><option value="note">Конспект</option><option value="rec">Запись эфира</option><option value="pod">Подкаст</option><option value="clip">Нарезка</option><option value="guide">Гайд спикера</option><option value="case">Кейс участника</option></select></label>
+          <label>Раздел библиотеки<select id="lPillar"><option value="">Не выбрано</option><option value="env">Окружение</option><option value="game">Большая игра</option><option value="state">Состояние</option></select></label>
           <label>Автор<input id="lAuthor"></label>
           <label class="full">Название<input id="lTitle"></label>
           <label>Подпись (длительность, формат)<input id="lMeta" placeholder="6 мин чтения"></label>
@@ -2105,12 +2107,12 @@ async function loadEvents(){const d=await (await fetch("/admin/api/events-list",
     <div class="meta">Записались: ${e.going} ${e.recording_url?"· есть запись":""}</div></div><div class="actions"><button class="btn" data-edit="${e.id}">Изменить</button></div></div>`).join("")||'<p class="muted">Эфиров пока нет.</p>';
   $$("[data-edit]").forEach(b=>b.onclick=()=>editEvent(EVENTS.find(e=>e.id==b.dataset.edit)))}
 function toLocal(iso){if(!iso)return"";const d=new Date(iso);const m=new Date(d.toLocaleString("en-US",{timeZone:"Europe/Moscow"}));const p=n=>String(n).padStart(2,"0");return `${m.getFullYear()}-${p(m.getMonth()+1)}-${p(m.getDate())}T${p(m.getHours())}:${p(m.getMinutes())}`}
-function editEvent(e){$("#evFormTitle").textContent="Изменить эфир";$("#eId").value=e.id;$("#eTitle").value=e.title;$("#eRubric").value=e.rubric;$("#eSpeaker").value=e.speaker;$("#eStart").value=toLocal(e.starts_at);
+function editEvent(e){$("#evFormTitle").textContent="Изменить эфир";$("#eId").value=e.id;$("#eTitle").value=e.title;$("#eRubric").value=e.rubric;$("#ePillar").value=e.pillar||"";$("#eSpeaker").value=e.speaker;$("#eStart").value=toLocal(e.starts_at);
   $("#ePlace").value=e.place;$("#eJoin").value=e.join_url;$("#eInside").value=e.inside_only?1:0;$("#eDesc").value=e.description;$("#eRec").value=e.recording_url;$("#ePod").value=e.podcast_url;
   $("#eSum").value=(e.summary||[]).join("\n");$("#eTs").value=(e.timecodes||[]).map(t=>t.join(" ")).join("\n");window.scrollTo(0,0)}
-$("#eNew").onclick=()=>{$$("#t-events .form input,#t-events .form textarea").forEach(i=>i.value="");$("#ePlace").value="Zoom";$("#eId").value="";$("#evFormTitle").textContent="Новый эфир"};
+$("#eNew").onclick=()=>{$$("#t-events .form input,#t-events .form textarea").forEach(i=>i.value="");$("#ePillar").value="";$("#ePlace").value="Zoom";$("#eId").value="";$("#evFormTitle").textContent="Новый эфир"};
 $("#eSave").onclick=async()=>{if(!$("#eTitle").value||!$("#eStart").value){toast("Нужны название и дата");return}
-  const body={title:$("#eTitle").value,rubric:$("#eRubric").value,speaker:$("#eSpeaker").value,starts_at:new Date($("#eStart").value+":00+03:00").toISOString(),
+  const body={title:$("#eTitle").value,rubric:$("#eRubric").value,pillar:$("#ePillar").value,speaker:$("#eSpeaker").value,starts_at:new Date($("#eStart").value+":00+03:00").toISOString(),
     place:$("#ePlace").value,join_url:$("#eJoin").value,inside_only:Number($("#eInside").value),description:$("#eDesc").value,recording_url:$("#eRec").value,podcast_url:$("#ePod").value,
     summary:$("#eSum").value.split("\n").map(s=>s.trim()).filter(Boolean),timecodes:$("#eTs").value.split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{const i=s.indexOf(" ");return i>0?[s.slice(0,i),s.slice(i+1)]:[s,""]})};
   if($("#eId").value)body.id=Number($("#eId").value);
@@ -2118,18 +2120,18 @@ $("#eSave").onclick=async()=>{if(!$("#eTitle").value||!$("#eStart").value){toast
 
 const LTYPE={note:"Конспект",rec:"Запись эфира",pod:"Подкаст",clip:"Нарезка",guide:"Гайд спикера","case":"Кейс участника"};
 let LIB=[];
-function libReset(){$("#lId").value="";$$("#t-library input:not([type=hidden]),#t-library textarea").forEach(i=>i.value="");$("#lType").value="note";$("#lInside").value="0";$("#lHead").textContent="Добавить материал";$("#lSave").textContent="Добавить в библиотеку";$("#lCancel").hidden=true}
+function libReset(){$("#lId").value="";$$("#t-library input:not([type=hidden]),#t-library textarea").forEach(i=>i.value="");$("#lType").value="note";$("#lPillar").value="";$("#lInside").value="0";$("#lHead").textContent="Добавить материал";$("#lSave").textContent="Добавить в библиотеку";$("#lCancel").hidden=true}
 async function loadLib(){try{LIB=await api("/admin/api/library")}catch(e){toast(e.message);return}
   $("#libList").innerHTML=LIB.length?LIB.map(x=>`<tr><td style="white-space:nowrap">${esc((x.created_at||"").slice(0,10))}</td><td>${esc(LTYPE[x.type]||x.type)}</td><td>${esc(x.title)}</td><td>${esc(x.author)}</td><td>${x.inside_only?"да":""}</td><td style="white-space:nowrap"><button class="btn" data-le="${x.id}">Изменить</button> <button class="btn" data-ld="${x.id}">Удалить</button></td></tr>`).join(""):'<tr><td colspan="6" class="muted">Пока ничего нет.</td></tr>';
   $$("#libList [data-le]").forEach(b=>b.onclick=()=>{const x=LIB.find(i=>i.id==b.dataset.le);if(!x)return;
-    $("#lId").value=x.id;$("#lType").value=x.type;$("#lTitle").value=x.title||"";$("#lAuthor").value=x.author||"";$("#lMeta").value=x.meta||"";$("#lUrl").value=x.url||"";$("#lBody").value=x.body||"";$("#lInside").value=x.inside_only?"1":"0";
+    $("#lId").value=x.id;$("#lType").value=x.type;$("#lPillar").value=x.pillar||"";$("#lTitle").value=x.title||"";$("#lAuthor").value=x.author||"";$("#lMeta").value=x.meta||"";$("#lUrl").value=x.url||"";$("#lBody").value=x.body||"";$("#lInside").value=x.inside_only?"1":"0";
     $("#lHead").textContent="Изменить материал";$("#lSave").textContent="Сохранить изменения";$("#lCancel").hidden=false;$("#lHead").scrollIntoView({behavior:"smooth"})});
   $$("#libList [data-ld]").forEach(b=>b.onclick=async()=>{if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="Точно удалить?";setTimeout(()=>{b.dataset.sure="";b.textContent="Удалить"},4000);return}
     try{await api("/admin/api/library/"+b.dataset.ld,{method:"DELETE"});toast("Удалено");loadLib()}catch(e){toast(e.message)}})}
 $("#lCancel").onclick=libReset;
 $("#lSave").onclick=async()=>{if(!$("#lTitle").value){toast("Нужно название");return}
   const id=$("#lId").value;
-  try{await api("/admin/api/library"+(id?"/"+id:""),{json:{type:$("#lType").value,title:$("#lTitle").value,author:$("#lAuthor").value,meta:$("#lMeta").value,url:$("#lUrl").value,body:$("#lBody").value,inside_only:Number($("#lInside").value)}});
+  try{await api("/admin/api/library"+(id?"/"+id:""),{json:{type:$("#lType").value,title:$("#lTitle").value,author:$("#lAuthor").value,meta:$("#lMeta").value,url:$("#lUrl").value,body:$("#lBody").value,pillar:$("#lPillar").value,inside_only:Number($("#lInside").value)}});
     toast(id?"Изменения сохранены":"Материал в библиотеке");libReset();loadLib()}catch(e){toast(e.message)}};
 
 /* ===== Воронки ===== */

@@ -104,12 +104,32 @@ def connect():
     return con
 
 
+PILLAR_WORDS = (("env", ("окружен", "знакомств", "нетворк", "людей", "команд", "сообществ", "круг")),
+                ("game", ("игр", "масштаб", "деньг", "капитал", "сцен", "продаж", "выступ", "бренд", "событи", "слов")),
+                ("state", ("состоян", "практик", "энерг", "тело", "медитац", "смысл", "глубин", "ресурс")))
+
+
+def guess_pillar(title):
+    t = (title or "").lower()
+    for k, words in PILLAR_WORDS:
+        if any(w in t for w in words):
+            return k
+    return ""
+
+
 def init():
     con = connect()
     con.executescript(SCHEMA)
     cols = {r[1] for r in con.execute("PRAGMA table_info(members)")}
     if "role" not in cols:  # команда клуба: вход по секретной ссылке
         con.execute("ALTER TABLE members ADD COLUMN role TEXT DEFAULT ''")
+    for table in ("events", "library"):  # раздел библиотеки: окружение / большая игра / состояние
+        if "pillar" not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN pillar TEXT DEFAULT ''")
+            for r in con.execute(f"SELECT id, title FROM {table}").fetchall():
+                p = guess_pillar(r["title"])
+                if p:
+                    con.execute(f"UPDATE {table} SET pillar=? WHERE id=?", (p, r["id"]))
     if not con.execute("SELECT 1 FROM point_rules LIMIT 1").fetchone():
         con.executemany("INSERT INTO point_rules(code,title,hint,points,kind,sort) VALUES(?,?,?,?,?,?)", RULES)
     # Random Coffee заменен рекомендациями знакомств: правило баллов «coffee» теперь про отзыв с хештегом #знакомство
