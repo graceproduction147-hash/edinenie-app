@@ -860,7 +860,7 @@ function renderRitual() {
   const el = $("#ritual"), d = S.daily; if (!el) return;
   if (!d) { el.hidden = true; return; }
   el.hidden = false;
-  const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card;
+  const w = S.wants || {}, fp = PILLARS.find(p => p.sph.includes(w.focus)), n = (d.mood != null) + d.focus + d.card, edit = !!S.rfEdit;
   const done = n >= 3;
   const wk = d.week.map(x => `<i class="${x.n >= 2 ? "on" : ""}" ${x.mood ? `style="background:${MOODS[x.mood - 1][1]}"` : ""}></i>`).join("");
   el.innerHTML = `<div class="rhead"><div><span class="eyebrow">Сегодня</span><h3>${done ? "Ритуал дня выполнен" : "Ритуал на сегодня"}</h3></div><div class="rstreak"><b>${d.streak}</b><span>${d.streak === 1 ? "день" : d.streak >= 2 && d.streak <= 4 ? "дня" : "дней"}<br>подряд</span></div></div>
@@ -868,13 +868,25 @@ function renderRitual() {
     <div class="rstep ${d.mood != null ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Как вы сейчас?</b></div>
       <div class="moods">${MOODS.map((m, i) => `<button data-mood="${i + 1}" aria-pressed="${d.mood === i + 1}" style="--c:${m[1]}"><span></span>${m[0]}</button>`).join("")}</div></div>
     <div class="rstep ${d.focus ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Ваш фокус</b></div>
-      ${fp ? `<p class="sub">${esc(fp.t)}${w.goal ? ": " + esc(w.goal) : ""}</p><button class="btn sm ${d.focus ? "ghost" : ""}" id="rFocus">${d.focus ? "Помню" : "Помню о нем"}</button>`
-           : `<p class="sub">Выберите сферу и цель на месяц, и они будут напоминать о себе здесь.</p><button class="btn sm" data-tab="profile">Задать фокус</button>`}</div>
+      ${edit || !fp ? `<p class="sub">${fp ? "Измените сферу или цель месяца." : "Выберите главную сферу и одну цель на месяц."}</p>
+        <div class="chips" id="rfChips">${SPH.map(x => `<button class="chip" data-sph="${x}" aria-pressed="${w.focus === x}">${x}</button>`).join("")}</div>
+        <textarea id="rfGoal" rows="2" placeholder="Что хочу сделать за месяц: один-два конкретных шага">${esc(w.goal || "")}</textarea>
+        <div class="btns"><button class="btn sm solid" id="rfSave">Сохранить</button>${fp ? '<button class="btn sm ghost" id="rfCancel">Отмена</button>' : ""}</div>`
+      : `<p class="sub">${esc(fp.t)}${w.goal ? ": " + esc(w.goal) : ""}</p>
+        <div class="btns"><button class="btn sm ${d.focus ? "ghost" : ""}" id="rFocus">${d.focus ? "Помню" : "Помню о нем"}</button><button class="btn sm ghost" id="rfEdit">Изменить</button></div>`}</div>
     <div class="rstep ${d.card ? "ok" : ""}"><div class="rt"><i class="ck"></i><b>Карта дня</b></div>
       <p class="sub">${d.card ? "Ваша карта на сегодня получена." : "Вытяните послание на день."}</p><button class="btn sm ${d.card ? "ghost" : ""}" id="rCard">${d.card ? "Открыть снова" : "Вытянуть карту"}</button></div>
     ${done ? `<p class="rdone">Все три шага сделаны. До завтра.</p>` : ""}`;
   $$("#ritual [data-mood]").forEach(b => b.onclick = () => dailyStep("mood", {value: +b.dataset.mood}));
   const f = $("#rFocus"); if (f) f.onclick = () => dailyStep("focus", {on: true});
+  const re = $("#rfEdit"); if (re) re.onclick = () => { S.rfEdit = true; renderRitual(); };
+  const rc = $("#rfCancel"); if (rc) rc.onclick = () => { S.rfEdit = false; renderRitual(); };
+  $$("#rfChips .chip").forEach(c => c.onclick = () => { const on = c.getAttribute("aria-pressed") === "true"; $$("#rfChips .chip").forEach(x => x.setAttribute("aria-pressed", "false")); c.setAttribute("aria-pressed", on ? "false" : "true"); });
+  const rs = $("#rfSave"); if (rs) rs.onclick = async () => {
+    const ch = $("#rfChips .chip[aria-pressed=true]"), data = {focus: ch ? ch.dataset.sph : "", goal: $("#rfGoal").value.trim(), seek: (S.wants && S.wants.seek) || S.me.seek || "", give: (S.wants && S.wants.give) || S.me.give || ""};
+    if (!data.focus) { toast("Выберите сферу"); return; }
+    try { const r = await api("/api/wants", {method: "PUT", json: data}); S.wants = Object.assign({}, S.wants, data, {updated_at: r.updated_at}); S.rfEdit = false; try { renderWants(); } catch (e) {} await dailyStep("focus", {on: true}); refreshHome(); toast("Фокус сохранен"); }
+    catch (e) { fail(e); } };
   const c = $("#rCard"); if (c) c.onclick = openQuote;
 }
 
