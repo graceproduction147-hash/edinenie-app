@@ -659,8 +659,10 @@ function renderWeekAction() {
     ${n && n.done ? `<p class="sub">Статус действует еще ${n.days_left} дн.</p>` : ""}
     <div class="sub" style="margin-top:6px"><b>Что дает Амбассадорство</b></div>
     <p class="sub">${perks.map(t => "· " + esc(t)).join("<br>")}</p>
-    <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkMore">Об уровнях</button></div>`;
+    <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkStream">Предложить свой эфир</button></div>
+    <button class="btn ghost" id="wkMore" style="margin-top:8px">Об уровнях</button>`;
   $$("#weekAction [data-rec]").forEach(x => x.onclick = () => { const r = (S.events.records || []).find(q => String(q.id) === x.dataset.rec); if (r) recSheet(r); });
+  const sb = $("#wkStream"); if (sb) sb.onclick = streamSheet;
   const mb = $("#wkMore"); if (mb) mb.onclick = levelsSheet;
   const ib = $("#wkInv"); if (ib) ib.onclick = () => { const k = (S.rules || []).find(r => r.code === "invite"); if (k) taskSheet(k); else toast("Ссылка загрузится через секунду, попробуйте еще раз"); };
 }
@@ -676,6 +678,23 @@ function renderMonth() {
     <div class="btns"><button class="btn sm" data-tab="profile">${w.focus && w.goal ? "Изменить цель" : "Задать цель"}</button><a class="btn sm ghost" href="/static/monthly.html" style="text-align:center;text-decoration:none">Итоги месяца</a></div>`;
 }
 function refreshHome() { renderWeekAction(); renderMonth(); }
+
+/* ---------- заявка на свой эфир ---------- */
+function streamSheet() {
+  if (!S.me || S.me.level !== "inside") { openSheet(`<h3>Свой эфир</h3><p class="sub">Провести свой эфир внутри клуба могут Амбассадоры. Статус открывается за вклад: друг, два рассказа о клубе в сторис, инсайт после эфира.</p><button class="btn" id="stHow">Как стать Амбассадором</button>`, s => s.querySelector("#stHow").onclick = () => { closeSheet(); levelsSheet(); }); return; }
+  openSheet(`<h3>Предложить свой эфир</h3><p class="sub">Расскажите, о чем хотите провести эфир. Команда свяжется с вами и договорится о формате.</p>
+    <label class="f" for="stT">ТЕМА<input type="text" id="stT" maxlength="120" placeholder="О чем эфир"></label>
+    <label class="f" for="stB">О ЧЕМ РАССКАЖЕТЕ<textarea id="stB" rows="4" maxlength="800" placeholder="Две-три фразы: тема, для кого, что получат участники"></textarea></label>
+    <label class="f" for="stW">КОГДА УДОБНО<input type="text" id="stW" maxlength="120" placeholder="Например: декабрь, вечер будней"></label>
+    <button class="btn" id="stGo">Отправить заявку</button>`, s => {
+    s.querySelector("#stGo").onclick = async () => {
+      const t = s.querySelector("#stT").value.trim(), b = s.querySelector("#stB").value.trim();
+      if (!t || !b) { toast("Напишите тему и о чем будет эфир"); return; }
+      const btn = s.querySelector("#stGo"); btn.disabled = true;
+      try { await api("/api/stream-request", {json: {title: t, body: b, when: s.querySelector("#stW").value}}); closeSheet(); toast("Заявка отправлена команде"); }
+      catch (e) { btn.disabled = false; fail(e); } };
+  });
+}
 
 /* ---------- самообновление ---------- */
 // Мини-приложение в Telegram может неделями жить в фоне. Когда его открывают снова, сверяем версию и перезагружаем, если вышла новая.
