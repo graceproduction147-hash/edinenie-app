@@ -30,7 +30,8 @@ MANAGER_CHAT_IDS = [int(x) for x in env("MANAGER_CHAT_IDS").replace(" ", "").spl
 ADMIN_IDS = [int(x) for x in env("ADMIN_IDS").replace(" ", "").split(",") if x]
 ADMIN_PASSWORD = env("ADMIN_PASSWORD")       # вход в кабинет
 PUBLIC_URL = env("PUBLIC_URL", "https://app.edinenie-club.com").rstrip("/")
-JOIN_URL = env("JOIN_URL", "https://edinenie-club.com")
+# куда ведем на оплату и вступление: оплата проходит в Tribute. Старую настройку JOIN_URL не читаем: в ней мог остаться адрес сайта
+JOIN_URL = env("PAY_URL", "https://t.me/m/-3doU5bbMGYy")
 WEBHOOK_SECRET = env("WEBHOOK_SECRET", "change-me")
 TRIBUTE_API_KEY = env("TRIBUTE_API_KEY")
 # period_id из Tribute -> число месяцев, например {"123":1,"124":3}

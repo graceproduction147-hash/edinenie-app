@@ -117,6 +117,29 @@ def guess_pillar(title):
     return ""
 
 
+PAY_LINK = "https://t.me/m/-3doU5bbMGYy"
+
+
+def _fix_pay_links(con):
+    """Старый адрес сайта в сохраненных текстах (настройки, воронки) заменяем на ссылку Tribute. Адрес приложения app.edinenie-club.com не трогаем."""
+    import re
+    rx = re.compile(r"https?://(?:www\.)?edinenie-club\.com(?![\w-])(?!\.\w)/?")
+    def fix(table, key, cols):
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        for c in cols:
+            if c not in have:
+                continue
+            for r in con.execute(f"SELECT {key}, {c} FROM {table} WHERE {c} LIKE '%edinenie-club.com%'").fetchall():
+                new = rx.sub(PAY_LINK, r[1] or "")
+                if new != r[1]:
+                    con.execute(f"UPDATE {table} SET {c}=? WHERE {key}=?", (new, r[0]))
+    for table, key, cols in (("settings", "key", ["value"]), ("funnels", "id", ["offer_text", "offer_btn", "ask_text", "texts", "phone_text"]), ("funnel_steps", "id", ["text", "btn"])):
+        try:
+            fix(table, key, cols)
+        except Exception:
+            pass
+
+
 def init():
     con = connect()
     con.executescript(SCHEMA)
@@ -130,6 +153,7 @@ def init():
                 p = guess_pillar(r["title"])
                 if p:
                     con.execute(f"UPDATE {table} SET pillar=? WHERE id=?", (p, r["id"]))
+    _fix_pay_links(con)
     if not con.execute("SELECT 1 FROM point_rules LIMIT 1").fetchone():
         con.executemany("INSERT INTO point_rules(code,title,hint,points,kind,sort) VALUES(?,?,?,?,?,?)", RULES)
     # Random Coffee заменен рекомендациями знакомств: правило баллов «coffee» теперь про отзыв с хештегом #знакомство
