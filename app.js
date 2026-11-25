@@ -737,25 +737,25 @@ function renderWeekAction() {
     ${st ? `<h3>${esc(st.h)}</h3><p class="sub">${esc(st.p)}</p><button class="btn solid" id="wkGo">${esc(st.btn)}</button>`
          : `<h3>Все шаги пройдены</h3><p class="sub">Загляните в эфиры и библиотеку: там всегда есть что-то новое.</p><button class="btn solid" data-tab="lib">К эфирам</button>`}
     <div class="ringrow" id="wkAmb" role="button" tabindex="0"><svg viewBox="0 0 44 44" width="44" height="44"><circle cx="22" cy="22" r="18" class="rb"/><circle cx="22" cy="22" r="18" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${(C * (1 - done / 3)).toFixed(1)}" transform="rotate(-90 22 22)"/><text x="22" y="26" text-anchor="middle">${done}/3</text></svg>
-      <div class="t"><b>${amb ? "Вы Амбассадор" : "Путь Амбассадора"}</b><span>${amb ? (n && n.done ? `Статус действует еще ${n.days_left} дн.` : "Повторите три шага, чтобы сохранить статус") : "Свой эфир, витрина, 4 знакомства в месяц"}</span></div><i>&#8250;</i></div>
+      <div class="t"><b>${amb ? "Вы Амбассадор" : "Путь Амбассадора"}</b><span>${amb ? (n && n.done ? `Статус действует еще ${n.days_left} дн.` : "Повторите три шага, чтобы сохранить статус") : "Три простых шага: свой эфир, витрина, больше знакомств"}</span></div><i>&#8250;</i></div>
     ${steps.length > 1 ? `<button class="link" id="wkAll">Весь маршрут: еще ${steps.length - 1}</button>` : ""}`;
   requestAnimationFrame(() => requestAnimationFrame(() => { const f = el.querySelector(".rf"); if (f) f.style.strokeDashoffset = f.dataset.off; }));
   const g = $("#wkGo"); if (g) g.onclick = () => runStep(st);
-  const r = $("#wkAmb"); if (r) r.onclick = routeSheet;
+  const r = $("#wkAmb"); if (r) r.onclick = ambHowSheet;
   const al = $("#wkAll"); if (al) al.onclick = routeSheet;
 }
 function routeSheet() {
   const amb = S.me.level === "inside", n = S.norm, steps = routeSteps();
   const li = (ok, h, p) => `<li class="${ok ? "ok" : ""}"><i></i><div><b>${esc(h)}</b><span>${esc(p)}</span></div></li>`;
-  const items = [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
-  const perks = ["Провести свой эфир внутри клуба и опубликовать его", "Разместиться на витрине предложений", "Получать 4 рекомендации знакомств в месяц вместо 2"];
+  const items = [["invite", "Привести друга в клуб", "Он оплачивает участие по вашей ссылке"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n ? n.story_n || 0 : 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]];
+  const perks = ["Свой эфир внутри клуба", "Место на витрине на 1 месяц", "4 знакомства в месяц и персональные знакомства"];
   openSheet(`<h3>Ваш маршрут</h3>
     ${steps.length ? `<p class="sub"><b>Что можно сделать</b></p><ul class="norm">${steps.map((s, i) => `<li data-i="${i}" style="cursor:pointer"><i></i><div><b>${esc(s.h)}</b><span>${esc(s.p)}</span></div></li>`).join("")}</ul>` : ""}
     <p class="sub" style="margin-top:6px"><b>${amb ? "Чтобы сохранить статус Амбассадора" : "Путь Амбассадора"}</b></p>
     ${n ? `<ul class="norm">${items.map(i => li(n[i[0]], i[1], n[i[0]] ? "Подтверждено командой" : i[2])).join("")}</ul>` : ""}
-    <p class="sub"><b>Что дает Амбассадорство</b><br>${perks.map(t => "· " + esc(t)).join("<br>")}</p>
+    <p class="sub"><b>Что дает статус Амбассадора</b><br>${perks.map(t => "· " + esc(t)).join("<br>")}</p>
     <div class="btns"><button class="btn" id="wkInv">Пригласить друга</button><button class="btn ghost" id="wkStream">Предложить свой эфир</button></div>
-    <button class="btn ghost" id="wkMore">Об уровнях</button>`, s => {
+    <button class="btn ghost" id="wkMore">Возможности клуба</button>`, s => {
     s.querySelectorAll("li[data-i]").forEach(x => x.onclick = () => runStep(steps[+x.dataset.i]));
     s.querySelector("#wkStream").onclick = () => { closeSheet(); streamSheet(); };
     s.querySelector("#wkMore").onclick = () => { closeSheet(); levelsSheet(); };
