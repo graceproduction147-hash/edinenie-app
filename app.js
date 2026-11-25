@@ -470,10 +470,9 @@ function recAsk(c) {
 function renderHomeCoffee() {
   const c = S.coffee, el = $("#homeCoffee"); try { renderWeekAction(); } catch (e) {}
   if (!el) return;
-  if (!c || !c.items || !c.items.length) { el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div><p class="sub">Несколько подходящих людей каждый месяц. Заполните «ищу» и «могу помочь» в анкете.</p><button class="btn ghost" data-tab="people">Подробнее</button>`; return; }
-  el.innerHTML = `<div class="row2"><span>Рекомендации знакомств</span></div>
-    ${c.items.map(p => `<div class="person">${avaEl(p)}<div class="t"><b>${esc(fullName(p))} ${stTag(p)}</b><span>${esc([p.sphere, p.city].filter(Boolean).join(" · "))}</span></div></div>`).join("")}
-    <button class="btn ghost" data-tab="people">Открыть рекомендации</button>`;
+  const it = (c && c.items) || [];
+  el.innerHTML = it.length ? `<div class="avrow">${it.map(avaEl).join("")}</div><div class="t"><span class="eyebrow">Знакомства месяца</span><b>${esc(it.map(p => p.first_name || fullName(p)).slice(0, 3).join(", "))}</b></div><i>&#8250;</i>`
+    : `<div class="t"><span class="eyebrow">Знакомства месяца</span><b>Заполните анкету, и мы подберем людей</b></div><i>&#8250;</i>`;
 }
 
 /* ---------- профиль ---------- */
@@ -678,13 +677,9 @@ function routeSheet() {
 function renderMonth() {
   const el = $("#monthCard"), w = S.wants; if (!el) return;
   if (!w) { el.hidden = true; return; }
-  el.hidden = false;
+  el.hidden = false; el.dataset.tab = "profile";
   const fp = PILLARS.find(p => p.sph.includes(w.focus));
-  const head = fp ? `Фокус месяца: ${fp.t}` : "Фокус месяца не выбран";
-  const goal = w.goal ? `<p class="sub">Ваша цель: ${esc(w.goal)}</p>` : `<p class="sub">Задайте один-два конкретных шага на месяц. Так проще дойти до результата.</p>`;
-  el.innerHTML = `<span class="eyebrow">Ваш месяц</span><h3>${esc(head)}</h3>${goal}
-    <div class="list">${PILLARS.map(p => `<button class="item" data-tab="${p.tab}"><div class="t"><b>${esc(p.t)}</b><span>${esc(p.hint)}</span></div><div class="end">${fp && fp.k === p.k ? '<span class="going">Фокус</span>' : ""}</div></button>`).join("")}</div>
-    <div class="btns"><button class="btn sm" data-tab="profile">${w.focus && w.goal ? "Изменить цель" : "Задать цель"}</button><a class="btn sm ghost" href="/static/monthly.html" style="text-align:center;text-decoration:none">Итоги месяца</a></div>`;
+  el.innerHTML = `<div class="t"><span class="eyebrow">Ваш месяц</span><b>${fp ? "Фокус: " + esc(fp.t) : "Задайте фокус и цель на месяц"}</b>${w.goal ? `<span class="sub">${esc(w.goal)}</span>` : ""}</div><i>&#8250;</i>`;
 }
 function refreshHome() { renderWeekAction(); renderMonth(); }
 
