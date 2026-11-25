@@ -385,6 +385,8 @@ async def poll_loop():
 
 
 SUPPORT_URL = os.environ.get("SUPPORT_URL", "https://t.me/edinenie_support").strip()
+# куда ведет кнопка «Перейти на годовой тариф»
+YEAR_BUY_URL = os.environ.get("YEAR_BUY_URL", "https://t.me/m/-3doU5bbMGYy").strip()
 # кому пишут участники годового тарифа, чтобы провести свой эфир в клубе (ник в Telegram, без @)
 STREAM_CONTACT = os.environ.get("STREAM_CONTACT", SUPPORT_URL.rstrip("/").rsplit("/", 1)[-1]).strip().lstrip("@")
 
@@ -1748,7 +1750,7 @@ def events(m=Depends(member), con=Depends(get_con)):
         if e["locked"]:
             e["recording_url"] = e["podcast_url"] = ""
     return {"soon": soon, "records": recs, "guest": {"year": is_year(m), "left": guest_left(con, m), "total": GUEST_PASSES},
-            "stream_contact": STREAM_CONTACT, "buy_url": JOIN_URL}
+            "stream_contact": STREAM_CONTACT, "buy_url": YEAR_BUY_URL}
 
 
 @app.post("/api/stream-request")
