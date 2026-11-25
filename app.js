@@ -568,8 +568,9 @@ function fillProfile() {
   renderYear();
   $("#lvTag").textContent = (m.level === "inside" ? "Амбассадор" : "Резидент") + (S.year ? " · партнер" : ""); $("#lvTag").classList.toggle("in", m.level === "inside");
   $("#meCard").innerHTML = `<div class="person"><div class="ava" style="background:${m.photo ? `url(/botpic/${esc(m.photo)}) center/cover` : avaBg(m.tg_id)}">${m.photo ? "" : esc(initials(m))}</div>
-    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div></div>
-    <div class="photo-nudge">${m.photo ? "" : '<p class="sub">Добавьте фото: людям легче знакомиться с теми, кого они видят. Это займет минуту.</p>'}<label class="btn ghost sm" style="display:inline-block;cursor:pointer">${m.photo ? "Сменить фото" : "Добавить фото"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>`;
+    <div class="t"><b>${esc(fullName(m))}</b><span>${m.level === "inside" ? "Амбассадор" : "Резидент"}${S.year ? " · Партнер" : ""}${m.paid_until ? " · до " + new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : ""}</span></div>
+    <label class="btn ghost sm photo-btn">${m.photo ? "Сменить" : "Добавить"}<input type="file" id="photoIn" accept="image/*" hidden></label></div>
+    ${m.photo ? "" : '<p class="sub" style="margin:10px 0 0">Добавьте фото: людям легче знакомиться с теми, кого они видят.</p>'}`;
   const pin = $("#photoIn"); if (pin) pin.onchange = () => uploadPhoto(pin.files[0]);
   renderLevels();
   renderWants();
