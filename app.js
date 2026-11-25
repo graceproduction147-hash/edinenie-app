@@ -61,7 +61,7 @@ $("#sheetWrap").onclick = e => { if (e.target.id === "sheetWrap") closeSheet(); 
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSheet(); $("#matchOv").hidden = true; } });
 
 /* ---------- навигация ---------- */
-const TITLES = {home:["Клуб","Главная"], events:["Встречи и предложения","События"], lib:["Знания клуба","Библиотека"], people:["Круг","Люди"], profile:["Ваше участие","Профиль"]};
+const TITLES = {home:["Клуб","Главная"], events:["Встречи и витрина","События"], lib:["Знания клуба","Библиотека"], people:["Круг","Люди"], profile:["Ваше участие","Профиль"]};
 /* ---------- уровни Резидент и Амбассадор (внутри кода уровень Амбассадора по-прежнему называется inside) ---------- */
 const LVL_NOTE = {
   home: null,
@@ -167,8 +167,7 @@ function feedItems() {
 }
 function renderFeed() {
   const c = S.cal, items = feedItems();
-  $("#evSoon").innerHTML = `<div class="seg sm" role="group" aria-label="Вид"><button data-cv="list" aria-pressed="${S.evView !== "cal"}">Список</button><button data-cv="cal" aria-pressed="${S.evView === "cal"}">Календарь</button></div>`
-    + (S.evView === "cal" ? calView() : `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`)
+  $("#evSoon").innerHTML = `<div class="list">${items.length ? items.map(x => x.html).join("") : '<p class="empty-line">Ближайшие события появятся здесь, как только команда их назначит.</p>'}</div>`
     + ((c && (c.intro || c.outro)) || (S.events && S.events.soon.length) ? `<details class="more"><summary>О событиях</summary>${c && c.intro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.intro)}</p>` : ""}${S.events && S.events.soon.length ? '<p class="sub">Бот напомнит об эфирах клуба за день и за час до начала.</p>' : ""}${c && c.outro ? `<p class="sub" style="white-space:pre-wrap">${esc(c.outro)}</p>` : ""}</details>` : "");
   if (!$("#homeCal")) return;
   $("#homeCal").innerHTML = items.length ? `<div class="row2"><span>Ближайшие события</span></div>
@@ -353,13 +352,13 @@ function offerRow(o) {
 }
 function renderOffers() {
   const all = S.offers || [], mine = all.filter(o => o.mine), rest = all.filter(o => !o.mine && o.status === "active");
-  const sl = S.slots || {free: 0, invited: 0};
+  const sl = S.slots || {free: 0, invited: 0}, can = (S.me && S.me.level === "inside") || !!S.year || sl.free > 0;
   $("#evOff").innerHTML = `<p class="sub">Участники клуба предлагают свои услуги и продукты по специальной цене или в обмен. Выберите предложение и отправьте заявку: автор получит ее в Telegram.</p>
-    <button class="btn" id="offNew">${sl.free > 0 ? "Опубликовать свое предложение" : "Получить место: пригласить друга"}</button>
+    ${can ? `<button class="btn" id="offNew">${sl.free > 0 ? "Опубликовать свое предложение" : "Получить место: пригласить друга"}</button>` : ""}
     ${mine.length ? `<h2 class="sec">Мои предложения</h2><div class="list">${mine.map(offerRow).join("")}</div>` : ""}
-    <h2 class="sec">Предложения клуба</h2>
+    <h2 class="sec">Витрина клуба</h2>
     <div class="list">${rest.length ? rest.map(offerRow).join("") : '<p class="empty-line">Первые предложения появятся здесь после проверки командой.</p>'}</div>`;
-  $("#offNew").onclick = () => { if (sl.free > 0) newOfferSheet(); else taskSheet(S.rules.find(k => k.code === "invite")); };
+  const on_ = $("#offNew"); if (on_) on_.onclick = () => { if (sl.free > 0) newOfferSheet(); else taskSheet(S.rules.find(k => k.code === "invite")); };
   $$("[data-off]").forEach(b => b.onclick = () => offerSheet(all.find(o => o.id == b.dataset.off)));
 }
 function offerSheet(o) {
