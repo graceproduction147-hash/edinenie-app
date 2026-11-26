@@ -119,6 +119,8 @@ TEXTS = {
                    "default": "Донат через Tribute ({event}): id {id}, {amount} ₽. Доступ в клуб не выдан."},
     "t_cancel": {"title": "Отмена подписки", "group": "team", "max": 1000, "vars": "{who}, {id}", "hint": "Команде.",
                  "default": "Отмена подписки: {who}, id {id}. Доступ сохранится до конца оплаченного периода."},
+    "t_left_paid": {"title": "Оплата от вышедшего участника", "group": "team", "max": 1000, "vars": "{who}, {id}", "hint": "Команде.",
+                    "default": "Продление от участника, которого вы отметили как вышедшего: {who}, id {id}. Доступ не открыт. Если человек вернулся, снимите отметку в карточке."},
     "t_badsign": {"title": "Оплата с неверной подписью", "group": "team", "max": 1000, "vars": "", "hint": "Команде.",
                   "default": "Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."},
     "t_birthday": {"title": "День рождения участника, сегодня", "group": "team", "max": 1000, "vars": "{who}, {age} (возраст или пусто), {wish} (готовое поздравление)", "hint": "Команде, утром в день рождения. Поздравить лично.",
@@ -617,6 +619,7 @@ async def lifespan(app):
         log.exception("миграция текстов бота")
     ensure_points()
     ensure_norm()
+    ensure_left()
     ensure_recap()
     task = asyncio.create_task(coffee.scheduler())
     setup = asyncio.create_task(setup_bot())
@@ -756,7 +759,7 @@ def current_user(x_init_data: str = Header(""), x_dev_user: str = Header(""), x_
     tg_id = upsert_member(con, {"id": u["id"], "username": u.get("username")} if exists else u)
     m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
     m["status"] = refresh_status(con, m)
-    if m["status"] != "active" and u.get("username"):
+    if m["status"] not in ("active", "left") and u.get("username"):
         try:  # человек платил через Tribute, но в базе у него только ник из выгрузки: подтягиваем оплату по нику
             if tribute_claim(con, tg_id, u["username"]):
                 m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
@@ -780,6 +783,19 @@ def is_inside(m):
 NORM_DAYS = 30
 # норма месяца: приглашенный друг (оплатил), два упоминания клуба в сторис (#делюсь), подробный инсайт после эфира (#инсайт)
 NORM_PARTS = (("invite", ("invite",), 1), ("story", ("story",), 2), ("insight", ("insight",), 1))
+
+
+def ensure_left():
+    """Отметка «вышел из клуба»: ее ставит команда в кабинете, потому что Tribute показывает уход не всегда."""
+    con = db.connect()
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(members)")}
+        for c in ("left_at", "left_reason"):
+            if c not in cols:
+                con.execute(f"ALTER TABLE members ADD COLUMN {c} TEXT")
+        con.commit()
+    finally:
+        con.close()
 
 
 def ensure_norm():
@@ -2316,6 +2332,15 @@ async def tribute(req: Request, con=Depends(get_con)):
     if not tg_id:
         return {"ok": True, "note": "нет telegram_user_id"}
     tg_id = int(tg_id)
+    left_row = con.execute("SELECT status, first_name, username FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if left_row and left_row["status"] == "left":
+        if event in RENEW_SUB:
+            who_l = f"{html.escape(left_row['first_name'] or '')} {'@' + html.escape(left_row['username']) if left_row['username'] else ''}".strip()
+            spawn(team_notify(render(con, "t_left_paid", who=Raw(who_l), id=tg_id), "t_left_paid"))
+            return {"ok": True, "note": "участник отмечен как вышедший"}
+        if event in NEW_SUB:  # новая оплата значит, что человек вернулся
+            con.execute("UPDATE members SET left_at=NULL, left_reason=NULL WHERE tg_id=?", (tg_id,))
+            con.commit()
     if event in NEW_SUB or event in RENEW_SUB:
         until = expires or (datetime.now(timezone.utc) + timedelta(days=31 * (months or 1))).isoformat()
         # Inside не продается: уровень остается прежним, новый участник начинает с club
@@ -3251,6 +3276,24 @@ async def admin_member_update(tg_id: int, req: Request, _=Depends(admin), con=De
     return {"ok": True}
 
 
+@app.post("/admin/api/members/{tg_id}/left")
+async def admin_member_left(tg_id: int, req: Request, _=Depends(admin), con=Depends(get_con)):
+    """Отметить, что участник вышел из клуба (или вернуть его). Доступ закрывается сразу, оплаты и история остаются."""
+    data = await req.json()
+    r = con.execute("SELECT status, paid_until FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if not r:
+        raise HTTPException(404, "Нет такого участника")
+    if data.get("left"):
+        reason = str(data.get("reason") or "").strip()[:300]
+        con.execute("UPDATE members SET status='left', left_at=?, left_reason=?, updated_at=? WHERE tg_id=?", (db.now(), reason, db.now(), tg_id))
+    else:
+        end = _pdt(r["paid_until"]) if r["paid_until"] else None
+        back = "active" if end and end > datetime.now(timezone.utc) else ("expired" if end else "guest")
+        con.execute("UPDATE members SET status=?, left_at=NULL, left_reason=NULL, updated_at=? WHERE tg_id=?", (back, db.now(), tg_id))
+    con.commit()
+    return {"ok": True, "status": con.execute("SELECT status FROM members WHERE tg_id=?", (tg_id,)).fetchone()[0]}
+
+
 @app.get("/admin/api/claims")
 def admin_claims(status: str = "pending", _=Depends(admin), con=Depends(get_con)):
     return db.rows(con.execute("""SELECT c.*, r.title, m.first_name, m.last_name, m.username FROM claims c
@@ -3861,6 +3904,8 @@ async def import_tribute(req: Request, _=Depends(admin), con=Depends(get_con)):
             continue
         end = _pdt(last["expires_at"])
         cur = con.execute("SELECT paid_until,status FROM members WHERE tg_id=?", (tg,)).fetchone()
+        if cur and cur["status"] == "left":
+            continue
         cur_end = _pdt(cur["paid_until"]) if cur and cur["paid_until"] else None
         if cur_end and cur_end >= end:
             continue

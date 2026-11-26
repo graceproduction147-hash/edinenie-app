@@ -993,6 +993,7 @@ async function boot() {
     $("#boot").hidden = true;
     if (d.me.status !== "active") {
       $("#gate").hidden = false;
+      if (d.me.status === "left") { $("#gateTitle").textContent = "Участие завершено"; $("#gateText").textContent = "Вернуться в клуб можно в любой момент."; $("#gateJoin").textContent = "Вернуться в клуб"; }
       if (d.me.status === "expired") { $("#gateTitle").textContent = "Участие закончилось"; $("#gateText").textContent = "Продлите участие, и все ваши знакомства и материалы вернутся."; $("#gateJoin").textContent = "Продлить участие"; }
       return;
     }
