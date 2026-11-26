@@ -3309,8 +3309,15 @@ def admin_timeline(tg_id: int, _=Depends(admin), con=Depends(get_con)):
 @app.patch("/admin/api/members/{tg_id}")
 async def admin_member_update(tg_id: int, req: Request, _=Depends(admin), con=Depends(get_con)):
     data = await req.json()
-    allowed = {"level", "status", "paid_until", "manager", "engagement", "note", "sphere", "project", "city", "seek", "give"}
+    allowed = {"level", "status", "paid_until", "period_months", "manager", "engagement", "note", "sphere", "project", "city", "seek", "give"}
     upd = {k: v for k, v in data.items() if k in allowed}
+    if "period_months" in upd:  # тариф: 1, 3, 6 или 12 месяцев; пусто значит «не указан»
+        try:
+            upd["period_months"] = int(upd["period_months"]) if str(upd["period_months"]).strip() else None
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Тариф: число месяцев")
+    if "paid_until" in upd and upd["paid_until"] and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(upd["paid_until"])):
+        upd["paid_until"] = str(upd["paid_until"]) + "T23:59:59+03:00"
     if upd:
         con.execute(f"UPDATE members SET {', '.join(k + '=?' for k in upd)}, updated_at=? WHERE tg_id=?", (*upd.values(), db.now(), tg_id))
         con.commit()
