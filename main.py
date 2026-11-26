@@ -121,6 +121,8 @@ TEXTS = {
                  "default": "Отмена подписки: {who}, id {id}. Доступ сохранится до конца оплаченного периода."},
     "t_left_paid": {"title": "Оплата от вышедшего участника", "group": "team", "max": 1000, "vars": "{who}, {id}", "hint": "Команде.",
                     "default": "Продление от участника, которого вы отметили как вышедшего: {who}, id {id}. Доступ не открыт. Если человек вернулся, снимите отметку в карточке."},
+    "t_left_self": {"title": "Участник вышел из клуба", "group": "team", "max": 1000, "vars": "{who}, {id}, {date}", "hint": "Команде.",
+                    "default": "Участник сам отметил выход из клуба: {who}, id {id}. Доступ в приложении до {date}. Подписку в Tribute он отменяет сам."},
     "t_badsign": {"title": "Оплата с неверной подписью", "group": "team", "max": 1000, "vars": "", "hint": "Команде.",
                   "default": "Пришла оплата Tribute с неверной подписью. Проверьте в кабинете, раздел «Оплаты»."},
     "t_birthday": {"title": "День рождения участника, сегодня", "group": "team", "max": 1000, "vars": "{who}, {age} (возраст или пусто), {wish} (готовое поздравление)", "hint": "Команде, утром в день рождения. Поздравить лично.",
@@ -759,7 +761,7 @@ def current_user(x_init_data: str = Header(""), x_dev_user: str = Header(""), x_
     tg_id = upsert_member(con, {"id": u["id"], "username": u.get("username")} if exists else u)
     m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
     m["status"] = refresh_status(con, m)
-    if m["status"] not in ("active", "left") and u.get("username"):
+    if m["status"] not in ("active", "left") and not m.get("left_at") and u.get("username"):
         try:  # человек платил через Tribute, но в базе у него только ник из выгрузки: подтягиваем оплату по нику
             if tribute_claim(con, tg_id, u["username"]):
                 m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
@@ -1464,6 +1466,45 @@ async def me_photo(req: Request, m=Depends(member), con=Depends(get_con)):
         except OSError:
             pass
     return {"ok": True, "photo": name}
+
+
+def sync_access_from_payments(con, tg_id):
+    """Срок доступа по самой поздней подтвержденной оплате: нужен, когда участника вернули после отметки о выходе, а продление уже было."""
+    last = con.execute("SELECT period_months,amount,expires_at FROM payments WHERE tg_id=? AND verified=1 AND event IN ('new_subscription','renewed_subscription','subscription_renewed') "
+                       "AND expires_at IS NOT NULL ORDER BY expires_at DESC LIMIT 1", (int(tg_id),)).fetchone()
+    if not last:
+        return
+    end = _pdt(last["expires_at"])
+    cur = con.execute("SELECT paid_until FROM members WHERE tg_id=?", (int(tg_id),)).fetchone()
+    cur_end = _pdt(cur["paid_until"]) if cur and cur["paid_until"] else None
+    if end and (not cur_end or end > cur_end):
+        con.execute("UPDATE members SET paid_until=?, period_months=?, last_amount=?, status=?, updated_at=? WHERE tg_id=?",
+                    (end.isoformat(timespec="seconds"), last["period_months"], last["amount"],
+                     "active" if end > datetime.now(timezone.utc) else "expired", db.now(), int(tg_id)))
+        con.commit()
+
+
+@app.post("/api/leave")
+async def member_leave(req: Request, m=Depends(member), con=Depends(get_con)):
+    """Участник отмечает, что выходит из клуба (подписку в Tribute он отменяет сам). Доступ остается до конца оплаченного срока."""
+    data = await req.json()
+    if data.get("left", True):
+        if not m.get("left_at"):
+            con.execute("UPDATE members SET left_at=?, left_reason=?, updated_at=? WHERE tg_id=?", (db.now(), "вышел сам через приложение", db.now(), m["tg_id"]))
+            con.commit()
+            until = ""
+            try:
+                until = datetime.fromisoformat(m["paid_until"]).astimezone(MSK).strftime("%d.%m.%Y") if m.get("paid_until") else "конца оплаченного срока"
+            except ValueError:
+                until = "конца оплаченного срока"
+            who = f"{html.escape(m.get('first_name') or '')} {'@' + html.escape(m['username']) if m.get('username') else ''}".strip()
+            spawn(team_notify(render(con, "t_left_self", who=Raw(who), id=m["tg_id"], date=until), "t_left_self"))
+    else:
+        con.execute("UPDATE members SET left_at=NULL, left_reason=NULL, updated_at=? WHERE tg_id=?", (db.now(), m["tg_id"]))
+        con.commit()
+        sync_access_from_payments(con, m["tg_id"])
+    r = con.execute("SELECT left_at FROM members WHERE tg_id=?", (m["tg_id"],)).fetchone()
+    return {"ok": True, "left_at": r["left_at"]}
 
 
 @app.get("/api/me")
@@ -2332,8 +2373,8 @@ async def tribute(req: Request, con=Depends(get_con)):
     if not tg_id:
         return {"ok": True, "note": "нет telegram_user_id"}
     tg_id = int(tg_id)
-    left_row = con.execute("SELECT status, first_name, username FROM members WHERE tg_id=?", (tg_id,)).fetchone()
-    if left_row and left_row["status"] == "left":
+    left_row = con.execute("SELECT status, first_name, username, left_at FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+    if left_row and (left_row["status"] == "left" or left_row["left_at"]):
         if event in RENEW_SUB:
             who_l = f"{html.escape(left_row['first_name'] or '')} {'@' + html.escape(left_row['username']) if left_row['username'] else ''}".strip()
             spawn(team_notify(render(con, "t_left_paid", who=Raw(who_l), id=tg_id), "t_left_paid"))
@@ -3291,6 +3332,8 @@ async def admin_member_left(tg_id: int, req: Request, _=Depends(admin), con=Depe
         back = "active" if end and end > datetime.now(timezone.utc) else ("expired" if end else "guest")
         con.execute("UPDATE members SET status=?, left_at=NULL, left_reason=NULL, updated_at=? WHERE tg_id=?", (back, db.now(), tg_id))
     con.commit()
+    if not data.get("left"):
+        sync_access_from_payments(con, tg_id)
     return {"ok": True, "status": con.execute("SELECT status FROM members WHERE tg_id=?", (tg_id,)).fetchone()[0]}
 
 
@@ -3905,6 +3948,8 @@ async def import_tribute(req: Request, _=Depends(admin), con=Depends(get_con)):
         end = _pdt(last["expires_at"])
         cur = con.execute("SELECT paid_until,status FROM members WHERE tg_id=?", (tg,)).fetchone()
         if cur and cur["status"] == "left":
+            continue
+        if con.execute("SELECT 1 FROM members WHERE tg_id=? AND left_at IS NOT NULL", (tg,)).fetchone():
             continue
         cur_end = _pdt(cur["paid_until"]) if cur and cur["paid_until"] else None
         if cur_end and cur_end >= end:

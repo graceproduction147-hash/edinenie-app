@@ -616,6 +616,26 @@ function fillProfile() {
   $("#pCoffee").setAttribute("aria-pressed", m.coffee ? "true" : "false"); $("#pOff").setAttribute("aria-pressed", m.offline ? "true" : "false");
 }
 $("#supportBtn").onclick = () => { haptic(); openPay(S.support || "https://t.me/edinenie_support"); };
+function leaveSheet() {
+  const m = S.me || {}, until = m.paid_until ? new Date(m.paid_until).toLocaleDateString("ru-RU", {day: "numeric", month: "long"}) : "конца оплаченного срока";
+  if (m.left_at) {
+    openSheet(`<h3>Вы отметили выход</h3><p class="sub">Доступ в приложении сохранится до ${esc(until)}. Если еще не отменили подписку в Tribute, сделайте это, иначе она продлится сама.</p>
+      <div class="btns"><button class="btn solid" id="lvStay">Остаюсь в клубе</button><button class="btn ghost" id="lvTri">Открыть Tribute</button></div>`, s => {
+      s.querySelector("#lvTri").onclick = () => openPay("https://t.me/tribute");
+      s.querySelector("#lvStay").onclick = async () => { try { await api("/api/leave", {method: "POST", json: {left: false}}); S.me.left_at = null; closeSheet(); toast("Рады, что вы остаетесь"); } catch (e) { fail(e); } };
+    });
+    return;
+  }
+  openSheet(`<h3>Выйти из клуба</h3>
+    <p class="sub">Жаль расставаться. Участие продлевается автоматически, поэтому чтобы выйти, отмените подписку в Tribute. Доступ в приложении сохранится до ${esc(until)}.</p>
+    <ol class="lvsteps"><li>Откройте бота Tribute в Telegram.</li><li>Запустите мини-приложение Tribute: на главном экране появится список ваших подписок.</li><li>Выберите подписку на клуб «Единение».</li><li>Нажмите «Отменить подписку».</li></ol>
+    <div class="btns"><button class="btn solid" id="lvTri">Открыть Tribute</button><button class="btn" id="lvDone">Я отменил(а) подписку</button></div>
+    <p class="hint">Отметка нужна, чтобы мы знали о вашем решении. Вернуться в клуб можно в любой момент.</p>`, s => {
+    s.querySelector("#lvTri").onclick = () => openPay("https://t.me/tribute");
+    s.querySelector("#lvDone").onclick = async () => { try { await api("/api/leave", {method: "POST", json: {left: true}}); S.me.left_at = new Date().toISOString(); s.innerHTML = `<div class="grab"></div><h3>Спасибо, что были с нами</h3><p class="sub">Доступ в приложении сохранится до ${esc(until)}. Вернуться в клуб можно в любой момент.</p><button class="btn" id="lvClose">Хорошо</button>`; s.querySelector("#lvClose").onclick = closeSheet; } catch (e) { fail(e); } };
+  });
+}
+$("#leaveBtn").onclick = () => { haptic(); leaveSheet(); };
 $$(".toggle").forEach(t => t.onclick = () => t.setAttribute("aria-pressed", t.getAttribute("aria-pressed") === "true" ? "false" : "true"));
 $("#saveProfile").onclick = async () => {
   const data = {first_name: $("#pName").value.trim(), birthday: $("#pBirth").value || "", sphere: $("#pSphere").value.trim(), project: $("#pProject").value.trim(), city: $("#pCity").value.trim(), seek: $("#pSeek").value.trim(), give: $("#pGive").value.trim(),
