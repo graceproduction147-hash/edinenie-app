@@ -511,3 +511,9 @@ h1,h2,h3,h4{text-wrap:balance}
 #p-coffee [data-rec] .btn{margin-top:2px}
 .perks li b{font-size:15.5px}
 .perks li.ok b{color:var(--fg)}
+
+/* выход из клуба: пошаговая инструкция в шторке */
+.lvsteps{list-style:none;counter-reset:lv;margin:14px 0 18px;padding:0;display:flex;flex-direction:column;gap:12px}
+.lvsteps li{counter-increment:lv;position:relative;padding-left:40px;font-size:15px;line-height:1.45;color:var(--fg)}
+.lvsteps li::before{content:counter(lv);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:1px solid var(--line-strong);display:flex;align-items:center;justify-content:center;font:600 13px var(--font-body);color:var(--accent)}
+#leaveBtn .t b{font-weight:500;color:var(--muted)}
