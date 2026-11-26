@@ -3321,7 +3321,52 @@ async def admin_member_update(tg_id: int, req: Request, _=Depends(admin), con=De
     if upd:
         con.execute(f"UPDATE members SET {', '.join(k + '=?' for k in upd)}, updated_at=? WHERE tg_id=?", (*upd.values(), db.now(), tg_id))
         con.commit()
+    if upd.get("paid_until"):  # дата оплаты задана руками: доступ открывается или закрывается по ней, кроме вышедших
+        r = con.execute("SELECT status, left_at FROM members WHERE tg_id=?", (tg_id,)).fetchone()
+        end = _pdt(upd["paid_until"])
+        if r and end and r["status"] in ("guest", "expired", "active") and not r["left_at"]:
+            con.execute("UPDATE members SET status=? WHERE tg_id=?", ("active" if end > datetime.now(timezone.utc) else "expired", tg_id))
+            con.commit()
     return {"ok": True}
+
+
+@app.post("/admin/api/members/add")
+async def admin_member_add(req: Request, _=Depends(admin), con=Depends(get_con)):
+    """Завести участника по нику с тарифом и сроком: для тех, кого нет в Tribute-выгрузке (например, оплатили год раньше).
+    Если человек уже открывал бота, тариф записывается сразу; если нет, он подтянется при первом входе в приложение."""
+    d = await req.json()
+    uname = str(d.get("username") or "").strip().lstrip("@").lower()
+    if not re.fullmatch(r"[a-z0-9_]{3,32}", uname):
+        raise HTTPException(400, "Ник Telegram: латинские буквы, цифры и _")
+    until = str(d.get("paid_until") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", until):
+        raise HTTPException(400, "Укажите дату «Оплачено до»")
+    try:
+        months = int(d.get("period_months") or 0) or None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Тариф: число месяцев")
+    level = "inside" if d.get("level") == "inside" else "club"
+    end = until + "T23:59:59+03:00"
+    endd = _pdt(end)
+    name = str(d.get("name") or "").strip()[:80]
+    row = con.execute("SELECT tg_id, left_at, status FROM members WHERE lower(username)=?", (uname,)).fetchone()
+    if row:
+        st = row["status"]
+        if not row["left_at"] and st != "left":
+            st = "active" if endd > datetime.now(timezone.utc) else "expired"
+        con.execute("UPDATE members SET paid_until=?, period_months=?, level=?, status=?, updated_at=? WHERE tg_id=?",
+                    (end, months, level, st, db.now(), row["tg_id"]))
+        con.commit()
+        return {"ok": True, "existing": True, "tg_id": row["tg_id"]}
+    try:
+        L = json.loads(db.get_setting(con, "manual_members", "[]") or "[]")
+    except ValueError:
+        L = []
+    L = [x for x in L if x.get("u") != uname]
+    L.append({"u": uname, "end": end, "months": months, "level": level, "name": name, "added": db.now()})
+    db.set_setting(con, "manual_members", json.dumps(L, ensure_ascii=False))
+    con.commit()
+    return {"ok": True, "existing": False}
 
 
 @app.post("/admin/api/members/{tg_id}/left")
@@ -3824,12 +3869,35 @@ def _tribute_chat_events(text):
     return ev, payouts
 
 
+def manual_claim(con, tg_id, uname):
+    """Участник, которого команда завела в кабинете по нику: при первом входе получает тариф и срок, которые указала команда."""
+    try:
+        L = json.loads(db.get_setting(con, "manual_members", "[]") or "[]")
+    except ValueError:
+        return False
+    mine = [e for e in L if e.get("u") == uname]
+    if not mine:
+        return False
+    e = mine[-1]
+    end = _pdt(e["end"])
+    upsert_member(con, {"id": int(tg_id), "username": uname}, status="active" if end > datetime.now(timezone.utc) else "expired",
+                  paid_until=end.isoformat(timespec="seconds"), period_months=e.get("months"))
+    if e.get("level") == "inside":
+        con.execute("UPDATE members SET level='inside' WHERE tg_id=?", (int(tg_id),))
+    db.set_setting(con, "manual_members", json.dumps([x for x in L if x.get("u") != uname], ensure_ascii=False))
+    con.commit()
+    log.info("Доступ выдан при входе по нику @%s: завели вручную в кабинете (tg %s)", uname, tg_id)
+    return True
+
+
 def tribute_claim(con, tg_id, username):
     """При входе в приложение: оплаты из выгрузки Tribute, где был только ник, привязываем к человеку и выдаем доступ и срок тарифа.
     Возвращает True, если что-то изменилось. Команду и тестовые оплаты (до 100 рублей) пропускаем, как при обычном импорте."""
     uname = str(username or "").lstrip("@").lower()
     if not uname:
         return False
+    if manual_claim(con, tg_id, uname):
+        return True
     try:
         pend = json.loads(db.get_setting(con, "tribute_pending", "[]") or "[]")
     except ValueError:
@@ -3987,7 +4055,16 @@ def tribute_pending(_=Depends(admin), con=Depends(get_con)):
     try:
         pend = json.loads(db.get_setting(con, "tribute_pending", "[]") or "[]")
     except ValueError:
-        return []
+        pend = []
+    manual = []
+    try:
+        for e in json.loads(db.get_setting(con, "manual_members", "[]") or "[]"):
+            d = _pdt(e["end"])
+            if d and d > datetime.now(timezone.utc):
+                manual.append({"u": e["u"], "end": d.astimezone(MSK).strftime("%Y-%m-%d"), "months": e.get("months"), "amount": None,
+                               "first": str(e.get("added", ""))[:10], "cancel": "", "name": e.get("name", ""), "manual": True})
+    except ValueError:
+        pass
     by = {}
     for e in sorted(pend, key=lambda x: x["ts"]):
         by.setdefault(e["u"], []).append(e)
@@ -4018,7 +4095,8 @@ def tribute_pending(_=Depends(admin), con=Depends(get_con)):
             continue
         out.append({"u": u, "end": end.astimezone(MSK).strftime("%Y-%m-%d"), "months": last[0], "amount": last[1],
                     "first": first.astimezone(MSK).strftime("%Y-%m-%d"), "cancel": cancel.astimezone(MSK).strftime("%Y-%m-%d") if cancel else ""})
-    return out
+    have = {x["u"] for x in out}
+    return out + [x for x in manual if x["u"] not in have]
 
 
 @app.get("/admin/api/payouts")
