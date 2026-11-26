@@ -263,6 +263,37 @@ def migrate_texts_v4():
         con.close()
 
 
+# Слово «Inside» не должно попадать к участникам: сохраненные в кабинете тексты с ним возвращаются к стандартным.
+def migrate_texts_v5():
+    con = db.connect()
+    try:
+        if db.get_setting(con, "texts_v5_done"):
+            return
+        cleared, left = [], []
+        for k, meta in TEXTS.items():
+            if meta.get("group") == "team":
+                continue
+            cur = db.get_setting(con, "text:" + k, None)
+            if cur and re.search(r"inside", cur, re.I):
+                db.set_setting(con, "text:" + k, "")
+                cleared.append(k)
+        try:
+            ensure_funnels(con)
+            for r in con.execute("SELECT id, text FROM funnel_steps").fetchall():
+                if re.search(r"inside", r["text"] or "", re.I):
+                    left.append(r["id"])
+        except Exception:
+            log.exception("проверка шагов воронок на слово Inside")
+        db.set_setting(con, "texts_v5_done", "1")
+        con.commit()
+        if cleared:
+            log.warning("Тексты бота со словом Inside возвращены к стандартным: %s", ", ".join(cleared))
+        if left:
+            log.warning("В шагах воронок осталось слово Inside (поправьте в кабинете): %s", left)
+    finally:
+        con.close()
+
+
 def get_text(con, key, name="", link=""):
     """Текст сообщения из настроек (или стандартный): имя и ссылка подставлены, **жирный** превращен в HTML."""
     raw = text_raw(con, key)
@@ -553,6 +584,7 @@ async def lifespan(app):
         migrate_texts_v2()
         migrate_texts_v3()
         migrate_texts_v4()
+        migrate_texts_v5()
     except Exception:
         log.exception("миграция текстов бота")
     ensure_points()
