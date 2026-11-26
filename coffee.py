@@ -82,7 +82,7 @@ async def announce(pairs, left):
             await tg.send(me["tg_id"],
                           f"☕ <b>Random Coffee на эту неделю</b>\n\nВаша пара: <b>{other['first_name'] or ''} {other['last_name'] or ''}</b>"
                           f"{' (@' + other['username'] + ')' if other['username'] else ''}\n\n{why}\n\n"
-                          "Договоритесь о созвоне на 30 минут. В пятницу я спрошу, как прошло.",
+                          "Договоритесь о созвоне на 30 минут. В пятницу спросим, как прошло.",
                           tg.app_button("Открыть пару", "#coffee"))
     for p in left:
         await tg.send(p["tg_id"], "На этой неделе пары не хватило, вы первая в очереди на следующую.")
@@ -96,7 +96,7 @@ async def remind_feedback(con):
     for r in rs:
         for who, met in ((r["a"], r["met_a"]), (r["b"], r["met_b"])):
             if met is None:
-                await tg.send(who, "Как прошла встреча Random Coffee? Расскажите в двух словах, за отзыв начисляются баллы.",
+                await tg.send(who, "Как прошла встреча Random Coffee? Расскажите в двух словах.",
                               tg.app_button("Оставить отзыв", "#coffee"))
 
 
