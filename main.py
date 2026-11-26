@@ -745,10 +745,10 @@ def refresh_status(con, m):
     return m["status"]
 
 
-def current_user(x_init_data: str = Header(""), x_dev_user: str = Header(""), con=Depends(get_con)):
+def current_user(x_init_data: str = Header(""), x_dev_user: str = Header(""), x_dev_username: str = Header(""), con=Depends(get_con)):
     u = tg.check_init_data(x_init_data)
     if not u and DEV_MODE and x_dev_user:
-        u = {"id": int(x_dev_user), "first_name": "Тест"}
+        u = {"id": int(x_dev_user), "first_name": "Тест", "username": x_dev_username or None}
     if not u:
         raise HTTPException(401, "Откройте приложение через бота клуба")
     exists = con.execute("SELECT 1 FROM members WHERE tg_id=?", (int(u["id"]),)).fetchone()
@@ -756,6 +756,13 @@ def current_user(x_init_data: str = Header(""), x_dev_user: str = Header(""), co
     tg_id = upsert_member(con, {"id": u["id"], "username": u.get("username")} if exists else u)
     m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
     m["status"] = refresh_status(con, m)
+    if m["status"] != "active" and u.get("username"):
+        try:  # человек платил через Tribute, но в базе у него только ник из выгрузки: подтягиваем оплату по нику
+            if tribute_claim(con, tg_id, u["username"]):
+                m = db.row(con.execute("SELECT * FROM members WHERE tg_id=?", (tg_id,)).fetchone())
+                m["status"] = refresh_status(con, m)
+        except Exception:
+            log.exception("tribute_claim")
     return m
 
 
@@ -3722,6 +3729,62 @@ def _tribute_chat_events(text):
         amt = float(a.group(1)) if a else 0.0
         ev.append({"ts": ts, "k": k, "u": u.group(1).lower(), "tg": None, "a": amt, "mo": _PRICE_MO.get(int(amt), 1) if k != "cancel" else 0})
     return ev, payouts
+
+
+def tribute_claim(con, tg_id, username):
+    """При входе в приложение: оплаты из выгрузки Tribute, где был только ник, привязываем к человеку и выдаем доступ и срок тарифа.
+    Возвращает True, если что-то изменилось. Команду и тестовые оплаты (до 100 рублей) пропускаем, как при обычном импорте."""
+    uname = str(username or "").lstrip("@").lower()
+    if not uname:
+        return False
+    try:
+        pend = json.loads(db.get_setting(con, "tribute_pending", "[]") or "[]")
+    except ValueError:
+        return False
+    mine = [e for e in pend if e.get("u") == uname and not e.get("tg")]
+    if not mine:
+        return False
+    mm = con.execute("SELECT role FROM members WHERE tg_id=?", (int(tg_id),)).fetchone()
+    if int(tg_id) in ADMIN_IDS or (mm and (mm["role"] or "") == "team"):
+        return False
+    changed = False
+    for e in sorted(mine, key=lambda x: x["ts"]):
+        if e["k"] != "cancel" and e["a"] <= 100:
+            continue
+        evname = {"new": "new_subscription", "renew": "renewed_subscription", "cancel": "cancelled_subscription"}[e["k"]]
+        ts = _pdt(e["ts"])
+        near = con.execute("SELECT id FROM payments WHERE tg_id=? AND event=? AND created_at BETWEEN ? AND ?",
+                           (int(tg_id), evname, (ts - timedelta(hours=30)).isoformat(timespec="seconds"),
+                            (ts + timedelta(hours=30)).isoformat(timespec="seconds"))).fetchone()
+        if near:
+            continue
+        mo = e["mo"] or (_PRICE_MO.get(int(e["a"]), 1) if e["k"] != "cancel" else 0)
+        exp = _addm(ts, mo).isoformat(timespec="seconds") if mo else None
+        con.execute("INSERT INTO payments(tg_id,event,amount,currency,period_months,expires_at,verified,raw,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (int(tg_id), evname, e["a"] if e["k"] != "cancel" else None, "RUB", mo or None, exp, 1, "import:tribute:login", e["ts"]))
+        changed = True
+    rest = [e for e in pend if not (e.get("u") == uname and not e.get("tg"))]
+    db.set_setting(con, "tribute_pending", json.dumps(rest))
+    try:
+        idmap = json.loads(db.get_setting(con, "tribute_ids", "{}") or "{}")
+    except ValueError:
+        idmap = {}
+    idmap[uname] = int(tg_id)
+    db.set_setting(con, "tribute_ids", json.dumps(idmap))
+    con.commit()
+    last = con.execute("SELECT period_months,amount,expires_at FROM payments WHERE tg_id=? AND verified=1 AND event IN ('new_subscription','renewed_subscription','subscription_renewed') "
+                       "AND expires_at IS NOT NULL ORDER BY expires_at DESC LIMIT 1", (int(tg_id),)).fetchone()
+    if not last:
+        return changed
+    end = _pdt(last["expires_at"])
+    cur = con.execute("SELECT paid_until FROM members WHERE tg_id=?", (int(tg_id),)).fetchone()
+    cur_end = _pdt(cur["paid_until"]) if cur and cur["paid_until"] else None
+    if cur_end and cur_end >= end:
+        return changed
+    upsert_member(con, {"id": int(tg_id), "username": uname}, status="active" if end > datetime.now(timezone.utc) else "expired",
+                  paid_until=end.isoformat(timespec="seconds"), period_months=last["period_months"], last_amount=last["amount"])
+    log.info("Tribute: доступ выдан при входе по нику @%s (tg %s, срок %s мес.)", uname, tg_id, last["period_months"])
+    return True
 
 
 @app.post("/admin/api/import-tribute")
