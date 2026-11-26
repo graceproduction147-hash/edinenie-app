@@ -97,7 +97,7 @@ function levelsSheet() {
   const amb = S.me && S.me.level === "inside", yr = !!S.year, n = S.norm;
   const items = n ? [["invite", "Привести друга в клуб", "Он должен оплатить участие"], ["story", "Два раза рассказать о клубе в сторис", `С хештегом #делюсь в чате клуба. Подтверждено: ${n.story_n || 0} из 2`], ["insight", "Написать инсайт после эфира", "С хештегом #инсайт в чате клуба"]] : [];
   const blk = (t, sub, items, mine, plus) => `<div class="lv${mine ? " mine" : ""}"><div class="lh"><b>${t}</b><span>${sub}</span>${mine ? "<em>у вас</em>" : ""}</div><ul>${items.map(i => `<li>${plus ? "+ " : ""}${i}</li>`).join("")}</ul></div>`;
-  const grid = blk("Резидент", "по оплате", ["Жизнь клуба и чат", "Приложение и Random Coffee", "2 знакомства в месяц", "Скидки до 50% на события", "Место на витрине за приглашенного друга"], !amb && !yr)
+  const grid = blk("Резидент", "по оплате", ["Жизнь клуба и чат", "Приложение и подбор знакомств", "2 знакомства в месяц", "Скидки до 50% на события", "Место на витрине за приглашенного друга"], !amb && !yr)
     + blk("Амбассадор", "за вклад", ["4 знакомства в месяц", "Персональные знакомства", "Свой эфир в клубе", "Место на витрине на 1 месяц"], amb, true)
     + blk("Годовой тариф", "к любому уровню", ["Место на витрине на весь год", "Ментор клуба и своя рубрика", "2 гостевых пропуска на эфиры", "Для Амбассадоров на годовом: выступление на сцене и кэшбек 50% за приглашение друзей"], yr, true);
   openSheet(`<h3>Возможности клуба</h3>${grid}
@@ -531,7 +531,7 @@ function recAsk(c) {
     <div class="btns"><button class="btn" id="raYes">Да, списались</button><button class="btn ghost" id="raNo">Пока нет</button></div>`, s => {
     s.querySelector("#raNo").onclick = async () => { try { await api("/api/recs/refresh", {json: {met: false}}); closeSheet(); toast("Хорошо, ждем вашего сообщения"); } catch (e) { fail(e); } };
     s.querySelector("#raYes").onclick = async () => { try { const r = await api("/api/recs/refresh", {json: {met: true}}); 
-      s.innerHTML = `<h3>Спасибо!</h3><p class="sub">Оставьте короткий отзыв о знакомстве в чате клуба с хештегом <b>${esc(r.tag || "#знакомство")}</b>. Нам важно знать, что получилось.</p>
+      s.innerHTML = `<h3>Спасибо!</h3><p class="sub">Подберем вам новых людей.</p>
         <button class="btn" id="raDone">Хорошо</button>`; s.querySelector("#raDone").onclick = () => { closeSheet(); loadCoffee(); }; } catch (e) { fail(e); } };
   });
 }
