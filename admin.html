@@ -2126,7 +2126,7 @@ function fIdeas(d,f){const a=[];
   if(String(d.random_coffee||"")&&!/без/i.test(d.random_coffee))a.push(["Random Coffee","Включить в пары. Формат встреч: "+(d.meet_format||"не указан")]);
   if(d.contribute)a.push(["Хочет делать в клубе",d.contribute]);
   if(d.talk_topics)a.push(["Эфир со спикером","Предложить выступить. Темы: "+d.talk_topics]);
-  if(d.offer_for_points)a.push(["Продукт за баллы",d.offer_for_points]);
+  if(d.offer_for_points)a.push(["Предложение для участников",d.offer_for_points]);
   if(d.consent_circle)a.push(["Круг знакомств","Дал(а) согласие на показ в круге: можно показывать другим участникам"]);
   if(d.blocker)a.push(["Спросить при первом разговоре","Что мешает: "+d.blocker]);
   if(/офлайн|очно|оффлайн/i.test(String(d.meet_format||"")+String(d.formats||"")))a.push(["Офлайн","Пригласить на очные встречи и выезды"]);

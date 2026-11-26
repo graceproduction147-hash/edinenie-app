@@ -89,7 +89,7 @@ def build_card_data(cur, prev, level, month_no, name=None, when=None, base=None)
         "top3": order[:3], "archetype": ARCH[tuple(top2)], "stage": pick_stage(cur, prev),
         "strong": order[:2], "scores": [cur[s] for s in SPHERES],
         "prev": [(prev or base)[s] for s in SPHERES] if (prev or base) else None,
-        "status": "Inside" if level == "inside" else "Club", "month_no": month_no,
+        "status": "Амбассадор" if level == "inside" else "Резидент", "month_no": month_no,
     }
 
 
