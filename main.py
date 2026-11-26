@@ -294,8 +294,11 @@ def migrate_texts_v5():
         con.close()
 
 
-# Единая чистка: все сохраненные в кабинете тексты участникам возвращаются к стандартным (они приведены к редакторским правилам,
-# без баллов и слова Inside). Прежние значения сохраняются в настройке texts_backup_v6, чтобы ничего не потерять.
+# Единая чистка: сохраненные в кабинете тексты участникам со старыми словами (баллы, Inside, штампы вроде «рады за ваше проявление»)
+# возвращаются к стандартным, приведенным к редакторским правилам. Остальные правки менеджера не трогаем. Прежние значения сохраняются в настройке texts_backup_v6, чтобы ничего не потерять.
+_OLD_WORDS_V6 = r"балл|inside|проявлен|благодарим вас|нам очень важно|очень рады|включенност|—|встречу Random Coffee"
+
+
 def migrate_texts_v6():
     con = db.connect()
     try:
@@ -306,7 +309,7 @@ def migrate_texts_v6():
             if meta.get("group") == "team":
                 continue
             cur = db.get_setting(con, "text:" + k, None)
-            if cur and cur.strip():
+            if cur and cur.strip() and re.search(_OLD_WORDS_V6, cur, re.I):
                 backup[k] = cur
                 db.set_setting(con, "text:" + k, "")
         db.set_setting(con, "texts_backup_v6", json.dumps(backup, ensure_ascii=False))
